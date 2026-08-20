@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Bell, Box, CircleDollarSign, Clock3, Copy, Gem, Home, LogOut, Menu, Plus, Settings, Users, Wallet, X, Zap } from "lucide-react";
+import { Activity, Bell, Box, CircleDollarSign, ChevronDown, Clock3, Copy, Gem, Home, LogOut, Menu, Plus, Settings, Users, Wallet, X, Zap } from "lucide-react";
 
 const nav = [
   ["Inicio", "/dashboard", Home], ["Activar nodos", "/dashboard/activate", Gem], ["Mis nodos", "/dashboard/nodes", Box], ["Mi red", "/dashboard/network", Users], ["Depositar", "/dashboard/deposit", Plus], ["Retirar", "/dashboard/withdraw", Wallet], ["Historial", "/dashboard/history", Clock3], ["Perfil", "/dashboard/profile", Settings],
@@ -51,7 +51,7 @@ export default function Dashboard() {
       <button className="logout" onClick={() => { showNotice("Sesión demostrativa cerrada."); navigate("/"); }}><LogOut size={19} /><span>Cerrar sesión</span></button>
     </aside>
     <div className="dashboard-main">
-      <header className="dash-topbar"><button className="dash-mobile-toggle" onClick={() => setMobileOpen(!mobileOpen)}>{mobileOpen ? <X /> : <Menu />}</button><h1>{activeLabel}</h1><div className="dash-tools"><button onClick={() => showNotice("No tienes notificaciones nuevas.")} aria-label="Notificaciones"><Bell size={19} /></button><button className="dash-balance" onClick={() => navigate("/dashboard/deposit")}><span>BALANCE</span><strong>$0.00</strong></button></div></header>
+      <header className="dash-topbar"><button className="dash-mobile-toggle" onClick={() => setMobileOpen(!mobileOpen)}>{mobileOpen ? <X /> : <Menu />}</button><h1>{activeLabel}</h1><div className="dash-tools"><button className="dash-locale" onClick={() => showNotice("Idioma activo: Español")}>ES <ChevronDown size={14} /></button><button onClick={() => showNotice("No tienes notificaciones nuevas.")} aria-label="Notificaciones"><Bell size={19} /></button><button className="dash-balance" onClick={() => navigate("/dashboard/deposit")}><span>BALANCE</span><strong>$0.00</strong></button></div></header>
       <main className="dash-content">{content()}</main>
     </div>
   </div>;
