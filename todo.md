@@ -24,3 +24,21 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Mostrar un diálogo de confirmación antes de procesar cada operación.
 - [x] Permitir cancelar la operación sin modificar el balance.
 - [x] Mostrar mensajes diferenciados de éxito, error y estado pendiente.
+
+## Mejora actual: retiros, wallets y Supabase
+
+- [x] Definir límite diario local inicial de retiros y suma de retiros confirmados del día.
+- [x] Calcular comisión automática antes de abrir la confirmación.
+- [x] Validar formato de wallet según la red seleccionada.
+- [x] Añadir selector de red y mostrar resumen bruto, comisión y neto.
+- [x] Diseñar registro de transacción para depósito y retiro.
+- [x] Conectar persistencia real con Supabase; tabla y RLS aplicadas, escritura y lectura verificadas con la publishable key moderna.
+- [ ] Verificar historial, errores, límites y responsive.
+
+## Mejora actual: RLS, prueba e historial remoto
+
+- [x] Aplicar políticas RLS de inserción y lectura para `transactions`.
+- [x] Crear índice por usuario y fecha.
+- [x] Insertar un depósito de prueba controlado y comprobarlo por REST; registro `TEST-DEP-GENTECASH-006` confirmado con HTTP 201.
+- [x] Mostrar estado de conexión remota y transacciones en Historial.
+- [x] Verificar que no se dupliquen movimientos locales y remotos.

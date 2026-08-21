@@ -1,6 +1,6 @@
 /* Modelo local BitNode: adaptador temporal para reemplazar después con Supabase/tRPC. */
 export type Contract = { id: string; name: string; rate: string; amount: number; status: "active" | "pending"; createdAt: string; duration: string };
-export type Movement = { id: string; type: "deposit" | "withdraw" | "contract" | "yield"; label: string; amount: number; status: "completed" | "pending"; date: string };
+export type Movement = { id: string; type: "deposit" | "withdraw" | "contract" | "yield"; label: string; amount: number; status: "completed" | "pending"; date: string; network?: string; wallet?: string; fee?: number; netAmount?: number };
 export type LocalUserState = { username: string; email: string; balance: number; totalInvested: number; totalYield: number; quickBonus: number; binaryBonus: number; rankBonus: number; contracts: Contract[]; movements: Movement[]; referralCode: string };
 
 const KEY = "bitnode-local-user-v1";
