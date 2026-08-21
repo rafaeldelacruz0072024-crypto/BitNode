@@ -96,10 +96,10 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Fijar configuración inicial: directo 10% y binario 10% sobre contratos confirmados/pagados.
 - [x] Fijar patrocinador directo y dejar la asignación izquierda/derecha configurable para la primera versión.
 - [x] Fijar volumen válido como contratos confirmados, emparejamiento por mínimo de ambas piernas, arrastre del excedente y sin límite adicional inicial.
-- [ ] Diseñar tablas de red, volumen y ledger de comisiones con claves idempotentes.
-- [ ] Implementar funciones server-side y políticas RLS sin acreditar desde el cliente.
-- [ ] Añadir pruebas para directo, binario, duplicados, reversos y límites.
-- [ ] Integrar bonos calculados en dashboard e historial después de validar reglas.
+- [x] Diseñar tablas de red, volumen y ledger de comisiones con claves idempotentes.
+- [x] Implementar funciones server-side y políticas RLS sin acreditar desde el cliente.
+- [x] Añadir pruebas para directo, binario, duplicados, reversos y límites.
+- [x] Integrar bonos calculados en dashboard e historial después de validar reglas.
 
 ## Aplicación y verificación de migración de comisiones
 
@@ -111,6 +111,16 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 
 - [x] Crear helper server-side para invocar process_contract_commissions con credencial protegida.
 - [x] Crear procedimiento protegido para leer resumen y ledger propio de comisiones.
-- [ ] Conectar activación de contratos confirmados al motor idempotente.
+- [x] Conectar activación de contratos confirmados al motor idempotente.
 - [x] Añadir pruebas de validación, duplicados y errores del motor.
 - [x] Integrar el resumen de bonos directo/binario en el dashboard remoto.
+
+## Verificación final de Supabase pendiente
+
+- [x] Confirmar constraints CHECK, FOREIGN KEY y UNIQUE de las cuatro tablas mediante salida de information_schema.
+- [x] Confirmar explícitamente el GRANT EXECUTE de process_contract_commissions para service_role.
+
+## Corrección de permisos detectada en Supabase
+
+- [x] Revocar EXECUTE de anon y authenticated en process_contract_commissions y activate_contract_and_commissions.
+- [x] Repetir la consulta de grants y confirmar que solo service_role conserva EXECUTE operativo.

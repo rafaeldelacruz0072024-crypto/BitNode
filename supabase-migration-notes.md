@@ -30,3 +30,7 @@ El SQL Editor todavía produce el error de selección vacía al ejecutar consult
 La navegación al detalle de `network_nodes` queda en estado de carga y no expone columnas/constraints en el contenido extraído. Por ello, las constraints completas y el GRANT EXECUTE a service_role siguen confirmados por revisión del SQL aplicado, pero no por una consulta independiente ejecutada.
 
 El usuario confirmó la salida de `pg_indexes`: están presentes los índices de contrato, usuario, beneficiario, evento origen, patrocinador, padre, padre/pierna, volumen y las claves únicas primarias/compuestas. La verificación de índices queda confirmada.
+
+Corrección de seguridad aplicada y verificada: `anon` y `authenticated` ya no tienen EXECUTE sobre `activate_contract_and_commissions` ni `process_contract_commissions`. La salida final conserva EXECUTE únicamente para `postgres` y `service_role`.
+
+Verificación final confirmada por el usuario: commission_events, commission_ledger, network_nodes y network_volume contienen PRIMARY KEY, FOREIGN KEY, CHECK y UNIQUE esperados. El ledger tiene unicidad compuesta para idempotencia; network_nodes limita padre/pierna; network_volume valida volumen y matched_volume. Los grants finales de ambas funciones conservan EXECUTE solo para postgres y service_role.

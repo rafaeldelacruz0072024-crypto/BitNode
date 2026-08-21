@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processContractCommissionsWithClient, summarizeCommissionRows, validateCommissionEventInput } from "./commissions";
+import { processConfirmedContractCommissions, processContractCommissionsWithClient, summarizeCommissionRows, validateCommissionEventInput } from "./commissions";
 
 describe("commission helpers", () => {
   it("requires trusted event identifiers and a positive amount", () => {
@@ -20,6 +20,20 @@ describe("commission helpers", () => {
         amount: 0,
       }),
     ).toBe(false);
+  });
+
+  it("rejects non-completed contract transactions before the RPC", async () => {
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { id: "contract-1", user_id: "user-1", type: "contract", status: "pending", amount: -100 }, error: null }) }),
+          }),
+        }),
+      }),
+      rpc: async () => ({ data: { status: "credited" }, error: null }),
+    };
+    await expect(processConfirmedContractCommissions(client as never, "user-1", "contract-1")).rejects.toThrow("Only completed contract transactions");
   });
 
   it("returns the idempotent duplicate response from the RPC", async () => {
