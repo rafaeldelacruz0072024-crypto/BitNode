@@ -1,10 +1,18 @@
-# Revisión dashboard user
+# Integración full-stack de BitNode
 
-- [x] Igualar la estructura de dos columnas de la referencia: sidebar fijo de 286 px y área principal amplia.
-- [x] Ajustar el header interno con título, selector ES, campana y tarjeta de balance.
-- [x] Replicar el bloque de bienvenida con etiqueta PANEL DE CONTROL y saludo `Hola, gentecash`.
-- [x] Replicar las cuatro métricas superiores y la fila secundaria de bonos con alturas y jerarquía similares.
-- [x] Afinar la sección `Mis contratos` con tarjeta vacía grande e isotipo centrado.
-- [x] Afinar la tarjeta `Granja en vivo` con resumen de nodos, uptime y primeras filas de actividad.
-- [x] Verificar responsive móvil y navegación del sidebar.
-- [x] Ejecutar build y guardar checkpoint final.
+## Alcance
+
+El proyecto debe evolucionar desde una réplica estática hacia una aplicación interactiva con cuentas de usuario, dashboard persistente, contratos, movimientos y una integración de pago segura. El orden acordado es repositorio GitHub, despliegue Vercel, backend Supabase y pasarela de pago al final.
+
+## Tareas pendientes
+
+- [x] Leer las guías de conectores y automatización aplicables.
+- [x] Auditar las conexiones disponibles para GitHub, Vercel, Supabase y pagos.
+- [x] Confirmar que las integraciones externas quedan pospuestas temporalmente y que el trabajo continúa localmente.
+- [x] Preparar la aplicación local con interfaces desacopladas para backend, sin perder la réplica visual.
+- [x] Definir el modelo local de usuarios, perfiles, contratos, nodos, movimientos, bonos y rangos.
+- [ ] Pospuesto: configurar el repositorio GitHub y documentar el flujo de ramas.
+- [ ] Pospuesto: configurar Vercel y variables de entorno sin exponer secretos.
+- [ ] Pospuesto: integrar Supabase Auth, tablas, políticas RLS y funciones de servidor.
+- [ ] Pospuesto: diseñar la pasarela de pago y validar primero en modo sandbox/test.
+- [ ] Verificar seguridad, responsive, errores y flujos críticos antes de publicar; pendiente de backend real.
