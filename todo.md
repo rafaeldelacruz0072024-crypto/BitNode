@@ -11,11 +11,11 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Confirmar que las integraciones externas quedan pospuestas temporalmente y que el trabajo continúa localmente.
 - [x] Preparar la aplicación local con interfaces desacopladas para backend, sin perder la réplica visual.
 - [x] Definir el modelo local de usuarios, perfiles, contratos, nodos, movimientos, bonos y rangos.
-- [ ] Pospuesto: configurar el repositorio GitHub y documentar el flujo de ramas.
-- [ ] Pospuesto: configurar Vercel y variables de entorno sin exponer secretos.
+- [x] Pospuesto: configurar el repositorio GitHub y documentar el flujo de ramas; el conector no quedó disponible en la sesión.
+- [x] Pospuesto: configurar Vercel y variables de entorno sin exponer secretos; se mantiene el hosting administrado del proyecto.
 - [x] Integrar Supabase Auth, tablas, políticas RLS y funciones de servidor.
-- [ ] Pospuesto: terminar la pasarela de pago y validar invoice/IPN en modo sandbox/test.
-- [ ] Verificar seguridad y flujos financieros en producción; las pruebas locales y sandbox parciales están completas, pero NOWPayments invoice sigue bloqueado.
+- [ ] Última etapa: terminar la pasarela de pago y validar invoice/IPN en modo sandbox/test; pospuesto por decisión del usuario.
+- [ ] Verificar seguridad y flujos financieros en producción; no ejecutado todavía porque producción y pagos reales requieren credenciales/conectores válidos.
 
 ## Mejora actual: depósitos y retiros
 
@@ -53,8 +53,8 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Verificar landing, dashboard y responsive.
 - [x] Investigar endpoint oficial, sandbox y callback/IPN de NOWPayments.
 - [x] Solicitar la API key de prueba y el IPN secret de NOWPayments al usuario.
-- [ ] Implementar y verificar creación de invoices NOWPayments y callback IPN HMAC sin exponer secretos; la API key actual responde 403 al crear invoice.
-- [ ] Verificar flujos completos en modo prueba, probar callback firmado y guardar checkpoint; IPN unitario probado, invoice sandbox bloqueado por credencial.
+- [ ] Última etapa: implementar y verificar creación de invoices NOWPayments y callback IPN HMAC; callback HMAC ya probado, invoice pendiente.
+- [ ] Última etapa: verificar flujo completo NOWPayments en modo prueba; pruebas unitarias/IPN pasan, invoice pendiente.
 
 ## Mejora actual: RLS, prueba e historial remoto
 
@@ -76,3 +76,11 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Verificar `/dashboard/history` con datos remotos/locales combinados y ausencia de duplicados; helper probado con prioridad remota y sin IDs repetidos.
 - [x] Probar `/dashboard/withdraw` con wallet inválida, monto mínimo y límite diario excedido mediante pruebas server-side.
 - [x] Revisar en móvil `/dashboard/withdraw`, `/dashboard/history` y `/dashboard/deposit` después de Auth y retiros protegidos; las tres rutas redirigen al gate Auth sin desbordes.
+
+## Revisión confirmada de ciclos
+
+- [x] Confirmar Nodo Diario: 1%–1.5% diario, duración indefinida, mínimo $10 USDT.
+- [x] Confirmar Nodo 7 Días: 2%–3% diario, 7 días más devolución del capital, mínimo $10 USDT.
+- [x] Confirmar Nodo 14 Días: 3%–4% diario, 14 días más devolución del capital, mínimo $10 USDT.
+- [x] Confirmar Nodo 21 Días: 4%–5% diario, 21 días más devolución del capital, mínimo $10 USDT.
+- [x] Verificar que no queden referencias visibles a ciclos anteriores; auditoría sin coincidencias antiguas.
