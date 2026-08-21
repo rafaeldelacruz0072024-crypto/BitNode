@@ -106,3 +106,11 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Aplicar en Supabase la migración PostgreSQL de network_nodes, commission_events, network_volume y commission_ledger.
 - [x] Verificar RLS, índices y función server-side; constraints y service_role quedaron definidos en la migración, pendientes de consulta independiente.
 - [x] Documentar que la migración quedó aplicada; el SQL Editor sigue requiriendo verificación manual por el error de selección vacía.
+
+## Integración server-side del motor de comisiones
+
+- [x] Crear helper server-side para invocar process_contract_commissions con credencial protegida.
+- [x] Crear procedimiento protegido para leer resumen y ledger propio de comisiones.
+- [ ] Conectar activación de contratos confirmados al motor idempotente.
+- [x] Añadir pruebas de validación, duplicados y errores del motor.
+- [x] Integrar el resumen de bonos directo/binario en el dashboard remoto.

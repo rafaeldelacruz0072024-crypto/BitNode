@@ -28,3 +28,5 @@ Verificación visual en el proyecto correcto `bitnode` (`kmiuwbnduedaqpaytbhz`):
 El SQL Editor todavía produce el error de selección vacía al ejecutar consultas automatizadas, pero la verificación por Table Editor, Functions, Policies e Indexes confirma estructuralmente la migración.
 
 La navegación al detalle de `network_nodes` queda en estado de carga y no expone columnas/constraints en el contenido extraído. Por ello, las constraints completas y el GRANT EXECUTE a service_role siguen confirmados por revisión del SQL aplicado, pero no por una consulta independiente ejecutada.
+
+El usuario confirmó la salida de `pg_indexes`: están presentes los índices de contrato, usuario, beneficiario, evento origen, patrocinador, padre, padre/pierna, volumen y las claves únicas primarias/compuestas. La verificación de índices queda confirmada.
