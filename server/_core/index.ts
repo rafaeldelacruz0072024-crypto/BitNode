@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import { createApiRateLimiter, createFinancialRateLimiter } from "../security";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -35,9 +37,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.disable("x-powered-by");
+  app.set("trust proxy", 1);
+  app.use(helmet({ contentSecurityPolicy: false }));
+  const apiLimiter = createApiRateLimiter();
+  const financialLimiter = createFinancialRateLimiter();
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "64kb", extended: true }));
+  app.use("/api", apiLimiter);
+  app.use(["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions"], financialLimiter);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerNowPaymentsRoutes(app);

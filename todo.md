@@ -135,3 +135,18 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 
 - [x] Evitar que el cliente acredite balance con un depósito marcado completed; registrar depósitos manuales como pending desde un endpoint protegido.
 - [x] Añadir prueba de que el depósito pendiente no muta el balance disponible.
+
+## Auditoría de seguridad y carga
+
+- [x] Definir matriz de amenazas, endpoints y límites de prueba sin modificar datos financieros reales.
+- [x] Auditar autenticación, autorización, RLS, validaciones, secretos y exposición de errores.
+- [x] Ejecutar pruebas de carga locales sobre funciones puras y endpoints sin escrituras financieras.
+- [x] Ejecutar pruebas de concurrencia/idempotencia con dobles controlados, no con usuarios reales.
+- [x] Corregir hallazgos críticos y añadir regresiones automatizadas.
+- [x] Documentar métricas, riesgos residuales y límites de la auditoría.
+
+## Hardening detectado
+
+- [x] Reducir límites de body y añadir headers de seguridad HTTP.
+- [x] Añadir rate limiting específico para rutas financieras y de autenticación.
+- [x] Añadir pruebas de rechazo por exceso de solicitudes y payloads inválidos.

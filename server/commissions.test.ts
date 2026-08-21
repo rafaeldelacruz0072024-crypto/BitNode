@@ -27,6 +27,14 @@ describe("commission helpers", () => {
     await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "", label: "Nodo", amount: 10 })).rejects.toThrow("Invalid contract activation input");
   });
 
+  it("handles parallel duplicate commission events idempotently", async () => {
+    let calls = 0;
+    const client = { rpc: async () => { calls += 1; return { data: calls === 1 ? { status: "credited" } : { status: "duplicate" }, error: null }; } };
+    const results = await Promise.all(Array.from({ length: 12 }, () => processContractCommissionsWithClient(client as never, { sourceEventId: "event-1", contractId: "contract-1", userId: "user-1", amount: 100 })));
+    expect(results.filter(result => result.status === "credited")).toHaveLength(1);
+    expect(results.filter(result => result.status === "duplicate")).toHaveLength(11);
+  });
+
   it("surfaces atomic activation RPC failures", async () => {
     const client = { rpc: async () => ({ data: null, error: { message: "Insufficient available balance" } }) };
     await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "contract-1", label: "Nodo", amount: 10 })).rejects.toThrow("Contract activation RPC failed");

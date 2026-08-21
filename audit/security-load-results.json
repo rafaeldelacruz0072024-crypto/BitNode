@@ -1,0 +1,17 @@
+{
+  "baseUrl": "http://127.0.0.1:3000",
+  "total": 120,
+  "concurrency": 20,
+  "statuses": {
+    "ok": 0,
+    "unauthorized": 0,
+    "rateLimited": 120,
+    "other": 0
+  },
+  "latencyMs": {
+    "p50": 10.83,
+    "p95": 34.69,
+    "max": 80.51
+  },
+  "errors": []
+}
