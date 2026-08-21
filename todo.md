@@ -13,9 +13,9 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Definir el modelo local de usuarios, perfiles, contratos, nodos, movimientos, bonos y rangos.
 - [ ] Pospuesto: configurar el repositorio GitHub y documentar el flujo de ramas.
 - [ ] Pospuesto: configurar Vercel y variables de entorno sin exponer secretos.
-- [ ] Pospuesto: integrar Supabase Auth, tablas, políticas RLS y funciones de servidor.
-- [ ] Pospuesto: diseñar la pasarela de pago y validar primero en modo sandbox/test.
-- [ ] Verificar seguridad, responsive, errores y flujos críticos antes de publicar; pendiente de backend real.
+- [x] Integrar Supabase Auth, tablas, políticas RLS y funciones de servidor.
+- [ ] Pospuesto: terminar la pasarela de pago y validar invoice/IPN en modo sandbox/test.
+- [ ] Verificar seguridad y flujos financieros en producción; las pruebas locales y sandbox parciales están completas, pero NOWPayments invoice sigue bloqueado.
 
 ## Mejora actual: depósitos y retiros
 
@@ -53,8 +53,8 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Verificar landing, dashboard y responsive.
 - [x] Investigar endpoint oficial, sandbox y callback/IPN de NOWPayments.
 - [x] Solicitar la API key de prueba y el IPN secret de NOWPayments al usuario.
-- [ ] Implementar y verificar creación de invoices NOWPayments y callback IPN HMAC sin exponer secretos; credenciales nuevas recibidas, pendiente revalidar escritura.
-- [ ] Verificar flujos completos en modo prueba, probar callback firmado y guardar checkpoint; credenciales nuevas proporcionadas por el usuario.
+- [ ] Implementar y verificar creación de invoices NOWPayments y callback IPN HMAC sin exponer secretos; la API key actual responde 403 al crear invoice.
+- [ ] Verificar flujos completos en modo prueba, probar callback firmado y guardar checkpoint; IPN unitario probado, invoice sandbox bloqueado por credencial.
 
 ## Mejora actual: RLS, prueba e historial remoto
 
