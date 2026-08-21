@@ -84,3 +84,25 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Confirmar Nodo 14 Días: 3%–4% diario, 14 días más devolución del capital, mínimo $10 USDT.
 - [x] Confirmar Nodo 21 Días: 4%–5% diario, 21 días más devolución del capital, mínimo $10 USDT.
 - [x] Verificar que no queden referencias visibles a ciclos anteriores; auditoría sin coincidencias antiguas.
+
+## Auditoría actual: comisiones directo y binario
+
+- [x] Localizar cálculos reales de comisión directa y binaria.
+- [x] Distinguir datos visuales, estado local y persistencia remota.
+- [x] Documentar fórmulas, fuentes de datos y limitaciones actuales.
+
+## Nueva etapa: bonos directo y binario en Supabase
+
+- [x] Fijar configuración inicial: directo 10% y binario 10% sobre contratos confirmados/pagados.
+- [x] Fijar patrocinador directo y dejar la asignación izquierda/derecha configurable para la primera versión.
+- [x] Fijar volumen válido como contratos confirmados, emparejamiento por mínimo de ambas piernas, arrastre del excedente y sin límite adicional inicial.
+- [ ] Diseñar tablas de red, volumen y ledger de comisiones con claves idempotentes.
+- [ ] Implementar funciones server-side y políticas RLS sin acreditar desde el cliente.
+- [ ] Añadir pruebas para directo, binario, duplicados, reversos y límites.
+- [ ] Integrar bonos calculados en dashboard e historial después de validar reglas.
+
+## Aplicación y verificación de migración de comisiones
+
+- [x] Aplicar en Supabase la migración PostgreSQL de network_nodes, commission_events, network_volume y commission_ledger.
+- [x] Verificar RLS, índices y función server-side; constraints y service_role quedaron definidos en la migración, pendientes de consulta independiente.
+- [x] Documentar que la migración quedó aplicada; el SQL Editor sigue requiriendo verificación manual por el error de selección vacía.
