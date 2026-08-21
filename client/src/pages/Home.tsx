@@ -2,6 +2,7 @@
  * Estilo BitNode: infraestructura nocturna editorial; azul índigo eléctrico,
  * datos monoespaciados, numeración de secciones y movimiento orbital contenido.
  */
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { Link as WouterLink } from "wouter";
 import { ArrowRight, ChevronDown, Menu, X, Zap, Activity, ShieldCheck, Cpu, CircleDollarSign } from "lucide-react";
@@ -9,9 +10,10 @@ import { ArrowRight, ChevronDown, Menu, X, Zap, Activity, ShieldCheck, Cpu, Circ
 const networks = ["Bitcoin", "Ethereum", "BNB Chain", "Solana", "Polygon", "Avalanche", "Arbitrum", "Tron", "Optimism", "Base"];
 
 const plans = [
-  { tag: "SIN PLAZO FIJO", name: "Nodo Diario", rate: "0.3% – 0.5%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable acreditado cada día hábil, disponible de inmediato.", min: "$10 USDT", duration: "Indefinida", action: "Activar nodo diario" },
-  { tag: "PLAZO DE 17 DÍAS", name: "Nodo 17 Días", rate: "0.7% – 1%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 17 días hábiles. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "17 días + capital de vuelta", action: "Activar nodo 17 días", featured: true },
-  { tag: "PLAZO DE 33 DÍAS", name: "Nodo 33 Días", rate: "1.2% – 2%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 33 días hábiles. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "33 días + capital de vuelta", action: "Activar nodo 33 días" },
+  { tag: "SIN PLAZO FIJO", name: "Nodo Diario", rate: "1% – 1.5%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable acreditado cada día hábil, disponible de inmediato.", min: "$10 USDT", duration: "Indefinida", action: "Activar nodo diario" },
+  { tag: "PLAZO DE 7 DÍAS", name: "Nodo 7 Días", rate: "2% – 3%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 7 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "7 días + capital de vuelta", action: "Activar nodo 7 días", featured: true },
+  { tag: "PLAZO DE 14 DÍAS", name: "Nodo 14 Días", rate: "3% – 4%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 14 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "14 días + capital de vuelta", action: "Activar nodo 14 días" },
+  { tag: "PLAZO DE 21 DÍAS", name: "Nodo 21 Días", rate: "4% – 5%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 21 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "21 días + capital de vuelta", action: "Activar nodo 21 días" },
 ];
 
 const rows = [
@@ -38,6 +40,13 @@ function Action({ children, secondary = false, onClick }: { children: React.Reac
 }
 
 export default function Home() {
+  // The useAuth hook provides authentication state.
+  // To implement login/logout, call logout(), or start login from an event
+  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
+  // startLogin() during render (no href={startLogin()}) — it mints a one-time
+  // nonce cookie and must run only at the moment of navigation.
+  let { user, loading, error, isAuthenticated, logout } = useAuth();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [live, setLive] = useState(15017);
@@ -64,7 +73,7 @@ export default function Home() {
           <a href="#actividad" onClick={() => setMenuOpen(false)}>Actividad</a>
           <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
           <button className="locale" onClick={() => showNotice("Selector de idioma: Español")}>ES <ChevronDown size={14} /></button>
-          <button className="panel-link" onClick={() => showNotice("El panel estará disponible al conectar una cuenta.")}>Mi panel</button>
+          <WouterLink className="panel-link" href="/auth">Mi panel</WouterLink>
         </nav>
         <button className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </header>
@@ -77,7 +86,7 @@ export default function Home() {
             <p className="eyebrow">INFRAESTRUCTURA DE VALIDACIÓN · 2026</p>
             <h1>La infraestructura<br />trabaja. <em>Tú cobras.</em></h1>
             <p className="hero-copy">BitNode opera una granja de nodos de validación en las principales redes blockchain. Adquiere un contrato de nodo y recibe tu parte de las comisiones que la granja cobra por validar operaciones, cada día hábil.</p>
-            <div className="hero-actions"><Action onClick={() => showNotice("Registro demostrativo: conecta una cuenta para continuar.")}>Activar un nodo</Action><Action secondary onClick={() => document.querySelector("#contratos")?.scrollIntoView({ behavior: "smooth" })}>Comparar contratos</Action></div>
+            <div className="hero-actions"><WouterLink className="action action-primary" href="/auth">Activar un nodo <ArrowRight size={15} /></WouterLink><Action secondary onClick={() => document.querySelector("#contratos")?.scrollIntoView({ behavior: "smooth" })}>Comparar contratos</Action></div>
           </div>
           <div className="hero-grid" aria-hidden="true"><span>01 / NODES</span><span>VALIDATION LAYER</span><span>UPTIME 99.81%</span></div>
         </section>
@@ -93,7 +102,7 @@ export default function Home() {
 
         <section className="section contracts container" id="contratos">
           <div className="section-head"><div className="section-index">02 — CONTRATOS DE NODO</div><div className="section-rule" /></div>
-          <div className="split-heading"><h2>Tres plazos,<br /><span>tú decides el ritmo.</span></h2><p>Todos los contratos generan de lunes a viernes, los días en que la granja liquida comisiones. La tasa del día varía según el rendimiento real de los nodos.</p></div>
+          <div className="split-heading"><h2>Cuatro ciclos,<br /><span>tú decides el ritmo.</span></h2><p>Todos los contratos generan de lunes a viernes, los días en que la granja liquida comisiones. La tasa del día varía según el rendimiento real de los nodos.</p></div>
           <div className="plan-grid">{plans.map((plan) => <article className={`plan-card ${plan.featured ? "featured" : ""}`} key={plan.name}>{plan.featured && <div className="featured-label">MÁS ELEGIDO</div>}<div className="plan-tag">{plan.tag}</div><h3>{plan.name}</h3><div className="rate">{plan.rate}</div><div className="cadence">{plan.cadence}</div><p>{plan.copy}</p><dl><div><dt>Inversión mínima</dt><dd>{plan.min}</dd></div><div><dt>Generación</dt><dd>Lunes a viernes</dd></div><div><dt>Duración</dt><dd>{plan.duration}</dd></div></dl><button className="plan-action" onClick={() => showNotice("Acción demostrativa: el registro estará disponible al conectar una cuenta.")}>{plan.action}<ArrowRight size={15} /></button></article>)}</div>
           <div className="contract-note"><Zap size={16} /> Bono inicio rápido 10% <span>·</span> Bono binario 10% <span>·</span> Sistema de rangos con recompensas</div>
         </section>
@@ -104,7 +113,7 @@ export default function Home() {
 
         <section className="section faq-section container" id="faq"><div className="section-head"><div className="section-index">05 — FAQ</div><div className="section-rule" /></div><div className="split-heading"><h2>Preguntas<br /><span>frecuentes.</span></h2><p>¿Algo más? Escríbenos desde tu panel una vez registrado.</p></div><div className="faq-list">{faqs.map(([question, answer], index) => <div className={`faq-item ${openFaq === index ? "is-open" : ""}`} key={question}><button onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><ChevronDown size={18} /></button>{openFaq === index && <p>{answer}</p>}</div>)}</div></section>
 
-        <section className="closing"><div className="closing-orbit" aria-hidden="true" /><div className="container closing-inner"><div className="status-pill"><span className="live-dot" /> REGISTRO GRATUITO</div><h2>Pon un nodo a trabajar<br /><em>para ti hoy.</em></h2><p>Registro gratuito. Contratos desde $10 USDT. Rendimientos de lunes a viernes.</p><div className="hero-actions"><Action onClick={() => showNotice("Registro demostrativo: conecta una cuenta para continuar.")}>Crear cuenta gratis</Action><Action secondary onClick={() => showNotice("Inicio de sesión demostrativo.")}>Ya tengo cuenta</Action></div></div></section>
+        <section className="closing"><div className="closing-orbit" aria-hidden="true" /><div className="container closing-inner"><div className="status-pill"><span className="live-dot" /> REGISTRO GRATUITO</div><h2>Pon un nodo a trabajar<br /><em>para ti hoy.</em></h2><p>Registro gratuito. Contratos desde $10 USDT. Rendimientos de lunes a viernes.</p><div className="hero-actions"><WouterLink className="action action-primary" href="/auth">Crear cuenta gratis <ArrowRight size={15} /></WouterLink><WouterLink className="action action-secondary" href="/auth">Ya tengo cuenta <ArrowRight size={15} /></WouterLink></div></div></section>
       </main>
       <footer className="footer container"><a className="brand" href="#top"><img src="/manus-storage/bitnode-isotipo_1381181d.png" alt="" /><span>bitnode<span className="brand-dot">.</span></span></a><span>Infraestructura que trabaja.</span><span>© 2026 BitNode</span></footer>
     </div>

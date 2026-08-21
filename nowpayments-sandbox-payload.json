@@ -1,0 +1,11 @@
+{
+  "price_amount": 10,
+  "price_currency": "usd",
+  "pay_currency": "usdttrc20",
+  "order_id": "BITNODE-SANDBOX-TEST-002",
+  "order_description": "BitNode sandbox deposit verification",
+  "ipn_callback_url": "https://example.com/api/payments/nowpayments/ipn",
+  "success_url": "https://example.com/dashboard/deposit?payment=success",
+  "cancel_url": "https://example.com/dashboard/deposit?payment=cancelled",
+  "case": "finished"
+}

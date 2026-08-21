@@ -32,8 +32,29 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Validar formato de wallet según la red seleccionada.
 - [x] Añadir selector de red y mostrar resumen bruto, comisión y neto.
 - [x] Diseñar registro de transacción para depósito y retiro.
-- [x] Conectar persistencia real con Supabase; tabla y RLS aplicadas, escritura y lectura verificadas con la publishable key moderna.
+- [x] Conectar persistencia real con Supabase; tabla, RLS y migración por `user_id` aplicadas, escritura y lectura base verificadas.
 - [ ] Verificar historial, errores, límites y responsive.
+
+## Nueva etapa: Auth, retiros reales y NOWPayments
+
+- [x] Confirmar disponibilidad de Supabase Auth y definir migración de `username` a `user_id`.
+- [x] Preparar upgrade full-stack y variables seguras de servidor.
+- [x] Añadir login, registro, sesión y protección de rutas.
+- [x] Migrar transacciones y políticas RLS para usar `auth.uid()`; migración ejecutada con éxito en Supabase.
+- [x] Crear formulario de retiro con wallet, red, comisión y estado auditable; queda como pre-solicitud pendiente hasta integrar payout server-side.
+
+## Actualización actual: ciclos y porcentajes
+
+- [x] Actualizar catálogo a Nodo Diario 1%–1.5% diario, indefinido, mínimo $10 USDT.
+- [x] Añadir Nodo 7 Días 2%–3% diario, devolución del capital, mínimo $10 USDT.
+- [x] Añadir Nodo 14 Días 3%–4% diario, devolución del capital, mínimo $10 USDT.
+- [x] Añadir Nodo 21 Días 4%–5% diario, devolución del capital, mínimo $10 USDT.
+- [x] Retirar los ciclos anteriores de 17 y 33 días de las interfaces visibles.
+- [x] Verificar landing, dashboard y responsive.
+- [x] Investigar endpoint oficial, sandbox y callback/IPN de NOWPayments.
+- [x] Solicitar la API key de prueba y el IPN secret de NOWPayments al usuario.
+- [ ] Implementar y verificar creación de invoices NOWPayments y callback IPN HMAC sin exponer secretos; credenciales nuevas recibidas, pendiente revalidar escritura.
+- [ ] Verificar flujos completos en modo prueba, probar callback firmado y guardar checkpoint; credenciales nuevas proporcionadas por el usuario.
 
 ## Mejora actual: RLS, prueba e historial remoto
 
