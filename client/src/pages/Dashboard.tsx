@@ -49,5 +49,18 @@ function SectionPanel({ section, user, showNotice, deposit, withdraw, activate }
   return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p><div className="dash-card profile-card"><span className="dash-eyebrow">USUARIO LOCAL</span><h3>{user.username}</h3><p>{user.email}</p><button className="dash-primary" onClick={() => showNotice("Perfil local listo para conectar con Supabase.")}>Guardar cambios <Zap size={15} /></button></div></div>;
 }
 
-function MoneyForm({ title, copy, label, button, onSubmit, max }: { title: string; copy: string; label: string; button: string; onSubmit: (amount: number) => void; max?: number }) { const [amount, setAmount] = useState(10); return <div className="generic-panel"><span className="dash-eyebrow">BALANCE LOCAL</span><h2>{title}</h2><p>{copy}</p><section className="dash-card money-form"><label>{label}<input type="number" min="10" max={max} value={amount} onChange={(e) => setAmount(Number(e.target.value))} /></label>{max !== undefined && <small>Disponible: {money(max)}</small>}<button className="dash-primary" onClick={() => onSubmit(amount)}> {button} <Zap size={15} /></button></section></div>; }
+function MoneyForm({ title, copy, label, button, onSubmit, max }: { title: string; copy: string; label: string; button: string; onSubmit: (amount: number) => void; max?: number }) {
+  const [amount, setAmount] = useState(10);
+  const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const validate = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return "Introduce un monto válido mayor que cero.";
+    if (value < 10) return "El monto mínimo es de $10.00 USDT.";
+    if (max !== undefined && value > max) return `No puedes retirar más de ${money(max)} disponibles.`;
+    return "";
+  };
+  const handleChange = (value: number) => { setAmount(value); setError(validate(value)); };
+  const requestConfirmation = () => { const nextError = validate(amount); setError(nextError); if (!nextError) setConfirming(true); };
+  return <div className="generic-panel"><span className="dash-eyebrow">BALANCE LOCAL</span><h2>{title}</h2><p>{copy}</p><section className="dash-card money-form"><label>{label}<input type="number" min="10" max={max} step="0.01" value={Number.isFinite(amount) ? amount : ""} aria-invalid={Boolean(error)} aria-describedby={error ? "money-error" : undefined} onChange={(e) => handleChange(Number(e.target.value))} /></label>{max !== undefined && <small>Disponible: {money(max)}</small>}{error && <div className="form-error" id="money-error" role="alert">{error}</div>}<button className="dash-primary" disabled={Boolean(error) || !amount} onClick={requestConfirmation}> {button} <Zap size={15} /></button></section>{confirming && <div className="confirm-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span><h3 id="confirm-title">¿Confirmar {title.toLowerCase()}?</h3><p>Vas a procesar <strong>{money(amount)} USDT</strong> en el modo local. Revisa el monto antes de continuar.</p><div className="confirm-actions"><button className="confirm-cancel" onClick={() => setConfirming(false)}>Cancelar</button><button className="dash-primary" onClick={() => { setConfirming(false); onSubmit(amount); }}>Confirmar operación <Zap size={15} /></button></div></section></div>}</div>;
+}
 function EmptyState({ text }: { text: string }) { return <div className="empty-ledger"><Activity size={26} /><span>{text}</span><small>Esta vista se conectará con Supabase en la siguiente etapa.</small></div>; }

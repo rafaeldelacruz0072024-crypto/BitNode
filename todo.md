@@ -16,3 +16,11 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [ ] Pospuesto: integrar Supabase Auth, tablas, políticas RLS y funciones de servidor.
 - [ ] Pospuesto: diseñar la pasarela de pago y validar primero en modo sandbox/test.
 - [ ] Verificar seguridad, responsive, errores y flujos críticos antes de publicar; pendiente de backend real.
+
+## Mejora actual: depósitos y retiros
+
+- [x] Validar monto numérico, mínimo de depósito y balance disponible para retiros.
+- [x] Bloquear el envío mientras el formulario tenga errores.
+- [x] Mostrar un diálogo de confirmación antes de procesar cada operación.
+- [x] Permitir cancelar la operación sin modificar el balance.
+- [x] Mostrar mensajes diferenciados de éxito, error y estado pendiente.
