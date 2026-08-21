@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerNowPaymentsRoutes } from "../nowpayments";
+import { registerWithdrawalRoutes } from "../withdrawals";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerNowPaymentsRoutes(app);
+  registerWithdrawalRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

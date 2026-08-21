@@ -30,7 +30,7 @@ function sortObject(value: unknown): unknown {
   }, {});
 }
 
-function validIpnSignature(body: unknown, signature: string | undefined) {
+export function validIpnSignature(body: unknown, signature: string | undefined) {
   const secret = process.env.NOWPAYMENTS_IPN_SECRET;
   if (!secret || !signature) return false;
   const digest = crypto.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");

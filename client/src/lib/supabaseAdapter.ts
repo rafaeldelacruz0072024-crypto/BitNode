@@ -50,6 +50,11 @@ export async function persistTransaction(payload: TransactionPayload): Promise<"
   return "remote";
 }
 
+export function mergeTransactions(local: Movement[], remote: Movement[]) {
+  const remoteIds = new Set(remote.map((item) => item.id));
+  return [...remote, ...local.filter((item) => !remoteIds.has(item.id))];
+}
+
 export async function fetchTransactions(userId: string): Promise<Movement[] | null> {
   const { url } = config();
   const headers = await requestHeaders();

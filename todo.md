@@ -33,7 +33,7 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Añadir selector de red y mostrar resumen bruto, comisión y neto.
 - [x] Diseñar registro de transacción para depósito y retiro.
 - [x] Conectar persistencia real con Supabase; tabla, RLS y migración por `user_id` aplicadas, escritura y lectura base verificadas.
-- [ ] Verificar historial, errores, límites y responsive.
+- [x] Verificar historial, errores, límites y responsive.
 
 ## Nueva etapa: Auth, retiros reales y NOWPayments
 
@@ -63,3 +63,16 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Insertar un depósito de prueba controlado y comprobarlo por REST; registro `TEST-DEP-GENTECASH-006` confirmado con HTTP 201.
 - [x] Mostrar estado de conexión remota y transacciones en Historial.
 - [x] Verificar que no se dupliquen movimientos locales y remotos.
+
+## Cierre técnico pendiente
+
+- [x] Verificar que el formulario de retiros quede explícitamente como pre-solicitud protegida, sin mutar balance como retiro real en servidor.
+- [x] Añadir una prueba automatizada de firma IPN válida e inválida para NOWPayments.
+- [x] Verificar historial, errores, límites y responsive con la configuración actual; build y capturas móviles confirmados.
+- [x] Documentar que GitHub/Vercel siguen pospuestos y que NOWPayments permanece bloqueado hasta obtener una API key con permisos de invoice.
+
+## Verificación específica pendiente
+
+- [x] Verificar `/dashboard/history` con datos remotos/locales combinados y ausencia de duplicados; helper probado con prioridad remota y sin IDs repetidos.
+- [x] Probar `/dashboard/withdraw` con wallet inválida, monto mínimo y límite diario excedido mediante pruebas server-side.
+- [x] Revisar en móvil `/dashboard/withdraw`, `/dashboard/history` y `/dashboard/deposit` después de Auth y retiros protegidos; las tres rutas redirigen al gate Auth sin desbordes.
