@@ -124,3 +124,14 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 
 - [x] Revocar EXECUTE de anon y authenticated en process_contract_commissions y activate_contract_and_commissions.
 - [x] Repetir la consulta de grants y confirmar que solo service_role conserva EXECUTE operativo.
+
+## Auditoría local mientras NOWPayments queda pospuesto
+
+- [x] Auditar rutas de depósitos, retiros, contratos y comisiones para detectar confianza indebida en el cliente.
+- [x] Añadir pruebas de autenticación, balance insuficiente, duplicados y respuestas de error.
+- [x] Documentar límites de la validación local frente a una auditoría de producción.
+
+## Hallazgo de auditoría: depósitos
+
+- [x] Evitar que el cliente acredite balance con un depósito marcado completed; registrar depósitos manuales como pending desde un endpoint protegido.
+- [x] Añadir prueba de que el depósito pendiente no muta el balance disponible.

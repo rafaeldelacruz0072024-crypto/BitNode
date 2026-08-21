@@ -11,5 +11,6 @@ export function loadLocalUser(): LocalUserState {
   try { const saved = window.localStorage.getItem(KEY); return saved ? { ...initialLocalUser, ...JSON.parse(saved) } : initialLocalUser; } catch { return initialLocalUser; }
 }
 export function saveLocalUser(state: LocalUserState) { if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(state)); }
+export function addPendingDeposit(state: LocalUserState, movement: Movement): LocalUserState { return { ...state, movements: [movement, ...state.movements] }; }
 export function money(value: number) { return `$${value.toFixed(2)}`; }
 export function newId(prefix: string) { return `${prefix}-${Date.now().toString(36).toUpperCase()}`; }

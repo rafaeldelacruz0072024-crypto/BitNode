@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processConfirmedContractCommissions, processContractCommissionsWithClient, summarizeCommissionRows, validateCommissionEventInput } from "./commissions";
+import { activateContractAndCommissions, processConfirmedContractCommissions, processContractCommissionsWithClient, summarizeCommissionRows, validateCommissionEventInput } from "./commissions";
 
 describe("commission helpers", () => {
   it("requires trusted event identifiers and a positive amount", () => {
@@ -20,6 +20,16 @@ describe("commission helpers", () => {
         amount: 0,
       }),
     ).toBe(false);
+  });
+
+  it("rejects an invalid atomic activation before calling Supabase", async () => {
+    const client = { rpc: async () => ({ data: null, error: null }) };
+    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "", label: "Nodo", amount: 10 })).rejects.toThrow("Invalid contract activation input");
+  });
+
+  it("surfaces atomic activation RPC failures", async () => {
+    const client = { rpc: async () => ({ data: null, error: { message: "Insufficient available balance" } }) };
+    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "contract-1", label: "Nodo", amount: 10 })).rejects.toThrow("Contract activation RPC failed");
   });
 
   it("rejects non-completed contract transactions before the RPC", async () => {
