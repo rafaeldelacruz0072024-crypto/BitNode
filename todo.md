@@ -79,15 +79,15 @@
 - [x] Confirmar rama actual, commit final y remoto GitHub sin cambios pendientes.
 - [x] Subir `feature/admin-vercel-native` al repositorio GitHub configurado; rama creada en GitHub desde la copia Windows.
 - [x] Verificar que Vercel detecte la rama; el preview fue creado y la landing carga, pero requiere redeploy con el fallback SPA.
-- [ ] Probar landing, `/admin` y endpoints nativos en el nuevo deployment de Vercel después del fix SPA.
+- [ ] Probar landing, `/admin` y endpoints nativos en el nuevo deployment de Vercel después del fix SPA: landing carga; `/admin` sirve React; falta repetir `/api/commissions/summary` tras la corrección de runtime.
 
 ## Publicación desde copia local de Windows
 
-- [ ] Comparar ramas y commits de `C:\Users\TECH-G\Documents\GitHub\BitNode` con la rama experimental del proyecto.
-- [ ] Recuperar la rama experimental sin sobrescribir cambios locales ni usar `reset --hard`.
-- [ ] Publicar la rama correcta a GitHub y verificar que Vercel la detecte.
+- [x] Comparar ramas y commits de `C:\Users\TECH-G\Documents\GitHub\BitNode` con la rama experimental del proyecto.
+- [x] Recuperar la rama experimental sin sobrescribir cambios locales ni usar `reset --hard`.
+- [x] Publicar la rama correcta a GitHub y verificar que Vercel la detecte.
 
 ## Corrección de rutas SPA en Vercel
 
 - [x] Añadir fallback SPA específico para `/admin`, `/dashboard` y `/auth` sin interceptar `/api/*`.
-- [ ] Publicar la corrección en la rama experimental y volver a probar el preview.
+- [ ] Publicar la corrección del endpoint de resumen y volver a probar el preview.

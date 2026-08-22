@@ -1,5 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { BINARY_COMMISSION_RATE, binaryPairingStatus } from "../../server/binaryCommission";
+const BINARY_COMMISSION_RATE = 0.1;
+
+function binaryPairingStatus(left: number, right: number) {
+  if (left < 0 || right < 0 || !Number.isFinite(left) || !Number.isFinite(right)) {
+    throw new Error("binary volumes must be non-negative");
+  }
+  return Math.min(left, right) > 0 ? "paired" : left > 0 || right > 0 ? "awaiting_pair" : "no_volume";
+}
 
 function respond(res: VercelResponse, status: number, body: Record<string, unknown>) {
   res.status(status).json(body);
