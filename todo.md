@@ -21,3 +21,12 @@
 - [x] Crear `api/admin.ts` como función nativa de Vercel, sin Express, `listen()` ni bundle ESM incompatible.
 - [x] Añadir cuatro pruebas Vitest para autorización, método HTTP y respuesta read-only de la función API.
 - [x] Validar `pnpm check`, `pnpm test`, `pnpm build`, preview de landing/panel y responsive móvil; el endpoint local queda bloqueado sin credencial, como estaba diseñado.
+
+## Protección del panel con Supabase Auth y roles
+
+- [x] Crear cliente Supabase browser usando únicamente variables públicas VITE.
+- [x] Validar la integración server-side contra la estructura real: `profiles.role` ya existe; ningún usuario ha sido promovido automáticamente, por lo que el acceso seguirá en 403 hasta asignar un admin explícitamente.
+- [x] Sustituir el formulario de API key por login/logout de Supabase y estados de acceso 401/403/503.
+- [x] Añadir pruebas mock para sesión ausente, token inválido, usuario no admin y admin autorizado.
+- [ ] Ejecutar smoke test real con una sesión Supabase admin después de promover explícitamente un perfil.
+- [x] Verificar build, pruebas, flujo responsive y esquema Supabase real.

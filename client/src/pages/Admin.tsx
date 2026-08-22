@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import { supabase } from "@/lib/supabase";
 import { Link } from "wouter";
 import { ArrowLeft, BarChart3, CheckCircle2, CircleDollarSign, LayoutDashboard, LockKeyhole, Menu, Server, ShieldCheck, Users, X } from "lucide-react";
 
@@ -17,22 +19,48 @@ export default function Admin() {
   const [open, setOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("Resumen");
   const [apiState, setApiState] = useState<ApiState>("locked");
-  const [adminKey, setAdminKey] = useState("");
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [authError, setAuthError] = useState("");
 
-  useEffect(() => { setApiState("locked"); }, []);
+  useEffect(() => {
+    if (!supabase) { setApiState("offline"); setAuthError("Faltan las variables públicas de Supabase."); return; }
+    let mounted = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted && session) validateSession(session.access_token);
+      else if (mounted) setApiState("locked");
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) validateSession(session.access_token);
+      else { setIsAuthorized(false); setApiState("locked"); }
+    });
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
 
-  async function authorize(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAuthError("");
+  async function validateSession(accessToken: string) {
     setApiState("checking");
     try {
-      const response = await fetch("/api/admin", { headers: { Accept: "application/json", Authorization: `Bearer ${adminKey}` } });
-      if (response.ok) { setIsAuthorized(true); setApiState("ready"); }
-      else { setApiState(response.status === 401 || response.status === 503 ? "locked" : "offline"); setAuthError(response.status === 503 ? "ADMIN_API_KEY todavía no está configurada en Vercel." : "La credencial no fue aceptada."); }
-    } catch { setApiState("offline"); setAuthError("No se pudo conectar con la función nativa."); }
+      const response = await fetch("/api/admin", { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` } });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok) { setIsAuthorized(true); setUserEmail(body.user?.email ?? ""); setUserRole(body.user?.role ?? "admin"); setApiState("ready"); }
+      else { setIsAuthorized(false); setApiState(response.status === 401 || response.status === 403 ? "locked" : "offline"); setAuthError(body.error ?? "La sesión no tiene permisos administrativos."); }
+    } catch { setIsAuthorized(false); setApiState("offline"); setAuthError("No se pudo conectar con la función nativa."); }
   }
+
+  async function authorize(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    if (!supabase) { setAuthError("Supabase no está configurado en este entorno."); return; }
+    setApiState("checking");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.session) { setApiState("locked"); setAuthError(error?.message ?? "No se pudo iniciar sesión."); return; }
+    await validateSession(data.session.access_token);
+  }
+
+  async function signOut() { await supabase?.auth.signOut(); setIsAuthorized(false); setUserEmail(""); setUserRole(""); setApiState("locked"); }
 
   const apiLabel = apiState === "checking" ? "Verificando función" : apiState === "ready" ? "Función protegida activa" : apiState === "locked" ? "API protegida · credencial requerida" : "API no disponible";
 
@@ -42,11 +70,13 @@ export default function Admin() {
         <div className="admin-brand-mark">B<span>·</span></div>
         <p className="admin-kicker">BITNODE / PRIVATE OPERATIONS</p>
         <h1>Acceso administrativo</h1>
-        <p>Esta consola experimental usa una función nativa de Vercel. Introduce la credencial configurada como <code>ADMIN_API_KEY</code> para abrirla.</p>
+        <p>Inicia sesión con Supabase. La función server-side verificará el token y consultará el rol administrativo en `profiles`.</p>
         <form onSubmit={authorize} className="admin-gate-form">
-          <label htmlFor="admin-key">Credencial administrativa</label>
-          <input id="admin-key" type="password" value={adminKey} onChange={(event) => setAdminKey(event.target.value)} placeholder="Bearer secret" autoComplete="off" required />
-          <button type="submit" disabled={apiState === "checking"}>{apiState === "checking" ? "Verificando…" : "Entrar a la consola"}</button>
+          <label htmlFor="admin-email">Correo administrativo</label>
+          <input id="admin-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@bitnode.space" autoComplete="username" required />
+          <label htmlFor="admin-password">Contraseña</label>
+          <input id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contraseña de Supabase" autoComplete="current-password" required />
+          <button type="submit" disabled={apiState === "checking"}>{apiState === "checking" ? "Verificando sesión…" : "Entrar a la consola"}</button>
         </form>
         {authError && <p className="admin-auth-error" role="alert">{authError}</p>}
         <Link href="/" className="admin-back"><ArrowLeft size={15} /> Volver a BitNode</Link>
@@ -78,7 +108,7 @@ export default function Admin() {
         <header className="admin-header">
           <button className="admin-menu" aria-label="Abrir menú" onClick={() => setOpen(true)}><Menu size={20} /></button>
           <div><p className="admin-kicker">ADMIN / {activeSection.toUpperCase()}</p><h1>Panel de administración</h1></div>
-          <div className="admin-header-right"><span className={`api-badge ${apiState}`}><i />{apiLabel}</span><div className="admin-avatar">OP</div></div>
+          <div className="admin-header-right"><span className={`api-badge ${apiState}`}><i />{apiLabel}</span><span className="admin-user">{userEmail} · {userRole}</span><button className="admin-logout" onClick={signOut}>Salir</button><div className="admin-avatar">OP</div></div>
         </header>
 
         <div className="admin-warning"><ShieldCheck size={17} /><span><strong>Modo seguro de prueba.</strong> Esta rama no muta balances, contratos ni comisiones. Las funciones nativas devuelven datos únicamente después de validar la credencial administrativa.</span></div>
