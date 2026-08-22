@@ -1,0 +1,1365 @@
+[1mdiff --git a/api/admin/data.test.ts b/api/admin/data.test.ts[m
+[1mindex 5e1d08a..008c856 100644[m
+[1m--- a/api/admin/data.test.ts[m
+[1m+++ b/api/admin/data.test.ts[m
+[36m@@ -55,4 +55,18 @@[m [mdescribe("admin data endpoint", () => {[m
+     }));[m
+     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");[m
+   });[m
+[32m+[m
+[32m+[m[32m  it("returns a controlled 503 when a protected dataset cannot be queried", async () => {[m
+[32m+[m[32m    const fetchMock = vi.fn();[m
+[32m+[m[32m    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "admin-1", email: "admin@example.com" }));[m
+[32m+[m[32m    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: "admin-1", username: "admin", role: "admin" }]));[m
+[32m+[m[32m    fetchMock.mockRejectedValueOnce(new Error("network failure"));[m
+[32m+[m[32m    vi.stubGlobal("fetch", fetchMock);[m
+[32m+[m[32m    const res = responseMock();[m
+[32m+[m
+[32m+[m[32m    await handler({ method: "GET", headers: { authorization: "Bearer token" } } as any, res);[m
+[32m+[m
+[32m+[m[32m    expect(res.status).toHaveBeenCalledWith(503);[m
+[32m+[m[32m    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: "unavailable" }));[m
+[32m+[m[32m  });[m
+ });[m
+[1mdiff --git a/api/admin/data.ts b/api/admin/data.ts[m
+[1mindex 4bd4712..19d371b 100644[m
+[1m--- a/api/admin/data.ts[m
+[1m+++ b/api/admin/data.ts[m
+[36m@@ -14,6 +14,8 @@[m [mtype AuthUser = {[m
+   email?: string | null;[m
+   last_sign_in_at?: string | null;[m
+   created_at?: string | null;[m
+[32m+[m[32m  email_confirmed_at?: string | null;[m
+[32m+[m[32m  banned_until?: string | null;[m
+ };[m
+ [m
+ type Profile = {[m
+[36m@@ -167,6 +169,9 @@[m [mexport default async function handler(req: VercelRequest, res: VercelResponse) {[m
+         sponsorId: row.sponsor_id ?? null,[m
+         createdAt: row.created_at ?? authUser?.created_at ?? null,[m
+         lastSignInAt: authUser?.last_sign_in_at ?? null,[m
+[32m+[m[32m        emailConfirmedAt: authUser?.email_confirmed_at ?? null,[m
+[32m+[m[32m        bannedUntil: authUser?.banned_until ?? null,[m
+[32m+[m[32m        status: authUser?.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "suspendido" : authUser?.email_confirmed_at ? "activo" : "pendiente",[m
+       };[m
+     });[m
+ [m
+[36m@@ -183,6 +188,9 @@[m [mexport default async function handler(req: VercelRequest, res: VercelResponse) {[m
+       fee: round(numberValue(row.fee)),[m
+       netAmount: round(numberValue(row.net_amount)),[m
+       providerStatus: row.provider_status ?? null,[m
+[32m+[m[32m      cycle: row.type === "contract" ? row.label ?? null : null,[m
+[32m+[m[32m      startAt: row.type === "contract" ? row.created_at ?? null : null,[m
+[32m+[m[32m      endAt: null,[m
+       createdAt: row.created_at ?? null,[m
+     }));[m
+ [m
+[1mdiff --git a/client/src/pages/Admin.test.tsx b/client/src/pages/Admin.test.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..16377a7[m
+[1m--- /dev/null[m
+[1m+++ b/client/src/pages/Admin.test.tsx[m
+[36m@@ -0,0 +1,85 @@[m
+[32m+[m[32m// @vitest-environment jsdom[m
+[32m+[m[32mimport "@testing-library/jest-dom/vitest";[m
+[32m+[m[32mimport React from "react";[m
+[32m+[m[32mimport { fireEvent, render, screen, waitFor } from "@testing-library/react";[m
+[32m+[m[32mimport { afterEach, beforeEach, describe, expect, it, vi } from "vitest";[m
+[32m+[m[32mimport Admin, { UsersSection } from "./Admin";[m
+[32m+[m
+[32m+[m[32mconst mocks = vi.hoisted(() => ({[m
+[32m+[m[32m  auth: {[m
+[32m+[m[32m    getSession: vi.fn(),[m
+[32m+[m[32m    onAuthStateChange: vi.fn(),[m
+[32m+[m[32m    signInWithPassword: vi.fn(),[m
+[32m+[m[32m    signOut: vi.fn(),[m
+[32m+[m[32m  },[m
+[32m+[m[32m}));[m
+[32m+[m
+[32m+[m[32mvi.mock("@/lib/supabase", () => ({ supabase: mocks }));[m
+[32m+[m
+[32m+[m[32mconst baseData = {[m
+[32m+[m[32m  status: "ready" as const,[m
+[32m+[m[32m  readOnly: true,[m
+[32m+[m[32m  lastUpdated: "2026-08-22T12:00:00Z",[m
+[32m+[m[32m  metrics: { users: 1, contracts: 1, contractVolume: 100, transactions: 1, pendingTransactions: 0, pendingCommissions: 0, creditedCommissions: 10, networkVolumes: 2 },[m
+[32m+[m[32m  users: [{ id: "user-1", username: "admin", displayName: "Admin", email: "admin@example.com", role: "admin", sponsorId: null, createdAt: "2026-08-20T00:00:00Z", lastSignInAt: "2026-08-22T11:00:00Z", emailConfirmedAt: "2026-08-20T00:00:00Z", bannedUntil: null, status: "activo" }],[m
+[32m+[m[32m  contracts: [{ id: "contract-1", userId: "user-1", username: "admin", type: "contract", label: "Nodo 7 Días", cycle: "Nodo 7 Días", amount: 100, status: "confirmed", network: null, wallet: null, fee: 0, netAmount: 100, providerStatus: null, startAt: "2026-08-22T00:00:00Z", endAt: null, createdAt: "2026-08-22T00:00:00Z" }],[m
+[32m+[m[32m  transactions: [{ id: "tx-1", userId: "user-1", username: "admin", type: "deposit", label: "Depósito", amount: 100, status: "completed", network: "TRC20", wallet: "TAbc…xyz", fee: 0, netAmount: 100, providerStatus: "confirmed", cycle: null, startAt: null, endAt: null, createdAt: "2026-08-22T00:00:00Z" }],[m
+[32m+[m[32m  commissions: { configuredDirectRate: 0.1, configuredBinaryRate: 0.1, direct: 10, binary: 0, total: 10, pending: 0, entries: [] },[m
+[32m+[m[32m  binaryVolume: { left: 100, right: 60, matched: 60, status: "paired" },[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32mfunction okResponse(body: unknown, status = 200) {[m
+[32m+[m[32m  return Promise.resolve({ ok: status >= 200 && status < 300, status, json: async () => body });[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction prepareAuthorized(fetchMock: ReturnType<typeof vi.fn>, data: unknown = baseData) {[m
+[32m+[m[32m  mocks.auth.getSession.mockResolvedValue({ data: { session: { access_token: "admin-token" } } });[m
+[32m+[m[32m  mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });[m
+[32m+[m[32m  fetchMock.mockResolvedValueOnce(okResponse({ user: { email: "admin@example.com", role: "admin" } }));[m
+[32m+[m[32m  fetchMock.mockResolvedValueOnce(okResponse(data));[m
+[32m+[m[32m  vi.stubGlobal("fetch", fetchMock);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mdescribe("Admin panel UI", () => {[m
+[32m+[m[32m  beforeEach(() => {[m
+[32m+[m[32m    vi.clearAllMocks();[m
+[32m+[m[32m    mocks.auth.signOut.mockResolvedValue({});[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  afterEach(() => {[m
+[32m+[m[32m    vi.unstubAllGlobals();[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("renders real sections and filters users in the UI", async () => {[m
+[32m+[m[32m    const fetchMock = vi.fn();[m
+[32m+[m[32m    prepareAuthorized(fetchMock);[m
+[32m+[m[32m    render(<Admin />);[m
+[32m+[m
+[32m+[m[32m    expect(await screen.findByRole("heading", { name: "Resumen" })).toBeInTheDocument();[m
+[32m+[m[32m    fireEvent.click(screen.getAllByRole("button", { name: "Usuarios" })[0]);[m
+[32m+[m[32m    expect(await screen.findByRole("heading", { name: "Usuarios registrados" })).toBeInTheDocument();[m
+[32m+[m[32m    expect(screen.getByText("admin@example.com")).toBeInTheDocument();[m
+[32m+[m
+[32m+[m[32m    fireEvent.change(screen.getByRole("textbox", { name: "Buscar usuarios" }), { target: { value: "nobody" } });[m
+[32m+[m[32m    expect(screen.getByText("Sin coincidencias")).toBeInTheDocument();[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("renders the empty state for a section with no rows", () => {[m
+[32m+[m[32m    render(<UsersSection users={[]} />);[m
+[32m+[m[32m    expect(screen.getByText("0 perfiles")).toBeInTheDocument();[m
+[32m+[m[32m    expect(screen.getByText("Sin usuarios")).toBeInTheDocument();[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("renders the server error state without exposing implementation details", async () => {[m
+[32m+[m[32m    const fetchMock = vi.fn();[m
+[32m+[m[32m    mocks.auth.getSession.mockResolvedValue({ data: { session: { access_token: "admin-token" } } });[m
+[32m+[m[32m    mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });[m
+[32m+[m[32m    fetchMock.mockResolvedValueOnce(okResponse({ user: { email: "admin@example.com", role: "admin" } }));[m
+[32m+[m[32m    fetchMock.mockResolvedValueOnce(okResponse({ error: "No se pudieron cargar los datos administrativos.", status: "unavailable" }, 503));[m
+[32m+[m[32m    vi.stubGlobal("fetch", fetchMock);[m
+[32m+[m[32m    render(<Admin />);[m
+[32m+[m
+[32m+[m[32m    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar los datos administrativos.");[m
+[32m+[m[32m    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));[m
+[32m+[m[32m  });[m
+[32m+[m[32m});[m
+[1mdiff --git a/client/src/pages/Admin.tsx b/client/src/pages/Admin.tsx[m
+[1mindex a00fcaf..dcbc581 100644[m
+[1m--- a/client/src/pages/Admin.tsx[m
+[1m+++ b/client/src/pages/Admin.tsx[m
+[36m@@ -1,5 +1,6 @@[m
+[31m-import { useEffect, useMemo, useState, type FormEvent } from "react";[m
+[32m+[m[32mimport React, { useEffect, useMemo, useState, type FormEvent } from "react";[m
+ import { supabase } from "@/lib/supabase";[m
+[32m+[m[32mimport { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";[m
+ import { Link } from "wouter";[m
+ import {[m
+   ArrowLeft,[m
+[36m@@ -32,6 +33,9 @@[m [mtype AdminUser = {[m
+   sponsorId: string | null;[m
+   createdAt: string | null;[m
+   lastSignInAt: string | null;[m
+[32m+[m[32m  emailConfirmedAt: string | null;[m
+[32m+[m[32m  bannedUntil: string | null;[m
+[32m+[m[32m  status: string;[m
+ };[m
+ [m
+ type AdminTransaction = {[m
+[36m@@ -47,6 +51,9 @@[m [mtype AdminTransaction = {[m
+   fee: number;[m
+   netAmount: number;[m
+   providerStatus: string | null;[m
+[32m+[m[32m  cycle: string | null;[m
+[32m+[m[32m  startAt: string | null;[m
+[32m+[m[32m  endAt: string | null;[m
+   createdAt: string | null;[m
+ };[m
+ [m
+[36m@@ -175,25 +182,17 @@[m [mfunction SummarySection({ data }: { data: AdminData | null }) {[m
+   </>;[m
+ }[m
+ [m
+[31m-function UsersSection({ users }: { users: AdminUser[] }) {[m
+[32m+[m[32mexport function UsersSection({ users }: { users: AdminUser[] }) {[m
+   const [query, setQuery] = useState("");[m
+[31m-  const filtered = useMemo(() => {[m
+[31m-    const normalized = query.trim().toLowerCase();[m
+[31m-    if (!normalized) return users;[m
+[31m-    return users.filter((user) => [user.username, user.displayName, user.email, user.role].some((value) => value?.toLowerCase().includes(normalized)));[m
+[31m-  }, [query, users]);[m
+[31m-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{users.length === 0 ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;[m
+[32m+[m[32m  const filtered = useMemo(() => users.filter((user) => matchesAdminSearch([user.username, user.displayName, user.email, user.role, user.status], query)), [query, users]);[m
+[32m+[m[32m  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario, estado o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(users) ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro correo, usuario, estado o rol." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Estado</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={userStatusLabel(user)} /></td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;[m
+ }[m
+ [m
+ function TransactionsSection({ rows, contractsOnly = false }: { rows: AdminTransaction[]; contractsOnly?: boolean }) {[m
+   const [query, setQuery] = useState("");[m
+[31m-  const filtered = useMemo(() => {[m
+[31m-    const normalized = query.trim().toLowerCase();[m
+[31m-    if (!normalized) return rows;[m
+[31m-    return rows.filter((row) => [row.id, row.username, row.type, row.status, row.network, row.providerStatus].some((value) => value?.toLowerCase().includes(normalized)));[m
+[31m-  }, [query, rows]);[m
+[32m+[m[32m  const filtered = useMemo(() => rows.filter((row) => matchesAdminSearch([row.id, row.username, row.type, row.status, row.network, row.providerStatus, row.cycle], query)), [query, rows]);[m
+   const title = contractsOnly ? "Contratos" : "Transacciones";[m
+[31m-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{rows.length === 0 ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : <DataTable label={title}><thead><tr><th>ID</th><th>Usuario</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></tr>)}</tbody></DataTable>}</article>;[m
+[32m+[m[32m  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(rows) ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro identificador, usuario, tipo o estado." /> : <DataTable label={title}><thead><tr>{contractsOnly ? <><th>ID</th><th>Usuario</th><th>Ciclo</th><th>Monto</th><th>Estado</th><th>Fechas</th></> : <><th>ID</th><th>Usuario</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></>}</tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td>{contractsOnly ? <><td>{row.cycle || row.label || "Ciclo no registrado"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : ""}</small></td><td><StatusPill value={row.status} /></td><td><span>Inicio {dateLabel(row.startAt)}</span><small>Fin {dateLabel(row.endAt)}</small></td></> : <><td>{statusLabel(row.type)}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></>}</tr>)}</tbody></DataTable>}</article>;[m
+ }[m
+ [m
+ function CommissionsSection({ data }: { data: AdminData }) {[m
+[1mdiff --git a/client/src/pages/adminUtils.test.ts b/client/src/pages/adminUtils.test.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e1b0c9a[m
+[1m--- /dev/null[m
+[1m+++ b/client/src/pages/adminUtils.test.ts[m
+[36m@@ -0,0 +1,23 @@[m
+[32m+[m[32mimport { describe, expect, it } from "vitest";[m
+[32m+[m[32mimport { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";[m
+[32m+[m
+[32m+[m[32mdescribe("admin UI utilities", () => {[m
+[32m+[m[32m  it("matches a query across the visible administrative fields", () => {[m
+[32m+[m[32m    expect(matchesAdminSearch(["gentecash", "admin@example.com", "activo"], "ADMIN@EXAMPLE")).toBe(true);[m
+[32m+[m[32m    expect(matchesAdminSearch(["gentecash", "admin@example.com", "activo"], "pendiente")).toBe(false);[m
+[32m+[m[32m    expect(matchesAdminSearch(["gentecash"], "")).toBe(true);[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("derives user status from confirmation and active ban timestamps", () => {[m
+[32m+[m[32m    const now = Date.parse("2026-08-22T12:00:00Z");[m
+[32m+[m[32m    expect(userStatusLabel({ emailConfirmedAt: "2026-08-20T00:00:00Z" }, now)).toBe("activo");[m
+[32m+[m[32m    expect(userStatusLabel({ emailConfirmedAt: null }, now)).toBe("pendiente");[m
+[32m+[m[32m    expect(userStatusLabel({ emailConfirmedAt: "2026-08-20T00:00:00Z", bannedUntil: "2026-08-23T00:00:00Z" }, now)).toBe("suspendido");[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("distinguishes an empty dataset from a populated dataset", () => {[m
+[32m+[m[32m    expect(hasRows([])).toBe(false);[m
+[32m+[m[32m    expect(hasRows(undefined)).toBe(false);[m
+[32m+[m[32m    expect(hasRows([{ id: "row-1" }])).toBe(true);[m
+[32m+[m[32m  });[m
+[32m+[m[32m});[m
+[1mdiff --git a/client/src/pages/adminUtils.ts b/client/src/pages/adminUtils.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..4cef89e[m
+[1m--- /dev/null[m
+[1m+++ b/client/src/pages/adminUtils.ts[m
+[36m@@ -0,0 +1,17 @@[m
+[32m+[m[32mexport function matchesAdminSearch(values: Array<string | null | undefined>, query: string) {[m
+[32m+[m[32m  const normalizedQuery = query.trim().toLowerCase();[m
+[32m+[m[32m  if (!normalizedQuery) return true;[m
+[32m+[m[32m  return values.some((value) => value?.toLowerCase().includes(normalizedQuery));[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport function userStatusLabel(user: { status?: string | null; emailConfirmedAt?: string | null; bannedUntil?: string | null }, now = Date.now()) {[m
+[32m+[m[32m  if (user.bannedUntil) {[m
+[32m+[m[32m    const bannedUntil = new Date(user.bannedUntil).getTime();[m
+[32m+[m[32m    if (Number.isFinite(bannedUntil) && bannedUntil > now) return "suspendido";[m
+[32m+[m[32m  }[m
+[32m+[m[32m  return user.emailConfirmedAt ? "activo" : "pendiente";[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport function hasRows<T>(rows: T[] | null | undefined) {[m
+[32m+[m[32m  return Array.isArray(rows) && rows.length > 0;[m
+[32m+[m[32m}[m
+[1mdiff --git a/package.json b/package.json[m
+[1mindex f6c4dc4..e48f6d9 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -70,6 +70,8 @@[m
+     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",[m
+     "@tailwindcss/typography": "^0.5.15",[m
+     "@tailwindcss/vite": "^4.1.3",[m
+[32m+[m[32m    "@testing-library/jest-dom": "^7.0.1",[m
+[32m+[m[32m    "@testing-library/react": "^16.3.2",[m
+     "@types/express": "4.17.21",[m
+     "@types/google.maps": "^3.58.1",[m
+     "@types/node": "^24.7.0",[m
+[36m@@ -79,6 +81,7 @@[m
+     "add": "^2.0.6",[m
+     "autoprefixer": "^10.4.20",[m
+     "esbuild": "^0.25.0",[m
+[32m+[m[32m    "jsdom": "^30.0.1",[m
+     "pnpm": "^10.15.1",[m
+     "postcss": "^8.4.47",[m
+     "prettier": "^3.6.2",[m
+[1mdiff --git a/pnpm-lock.yaml b/pnpm-lock.yaml[m
+[1mindex c01c4d2..7d4b8c3 100644[m
+[1m--- a/pnpm-lock.yaml[m
+[1m+++ b/pnpm-lock.yaml[m
+[36m@@ -182,6 +182,12 @@[m [mimporters:[m
+       '@tailwindcss/vite':[m
+         specifier: ^4.1.3[m
+         version: 4.1.14(vite@7.1.9(@types/node@24.7.0)(jiti@2.6.1)(lightningcss@1.30.1)(tsx@4.20.6))[m
+[32m+[m[32m      '@testing-library/jest-dom':[m
+[32m+[m[32m        specifier: ^7.0.1[m
+[32m+[m[32m        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1))[m
+[32m+[m[32m      '@testing-library/react':[m
+[32m+[m[32m        specifier: ^16.3.2[m
+[32m+[m[32m        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.1(@types/react@19.2.1))(@types/react@19.2.1)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)[m
+       '@types/express':[m
+         specifier: 4.17.21[m
+         version: 4.17.21[m
+[36m@@ -209,6 +215,9 @@[m [mimporters:[m
+       esbuild:[m
+         specifier: ^0.25.0[m
+         version: 0.25.10[m
+[32m+[m[32m      jsdom:[m
+[32m+[m[32m        specifier: ^30.0.1[m
+[32m+[m[32m        version: 30.0.1[m
+       pnpm:[m
+         specifier: ^10.15.1[m
+         version: 10.18.1[m
+[36m@@ -238,16 +247,27 @@[m [mimporters:[m
+         version: 0.0.58[m
+       vitest:[m
+         specifier: ^2.1.4[m
+[31m-        version: 2.1.9(@types/node@24.7.0)(lightningcss@1.30.1)[m
+[32m+[m[32m        version: 2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1)[m
+ [m
+ packages:[m
+ [m
+[32m+[m[32m  '@adobe/css-tools@4.5.0':[m
+[32m+[m[32m    resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}[m
+[32m+[m
+   '@antfu/install-pkg@1.1.0':[m
+     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}[m
+ [m
+   '@antfu/utils@9.3.0':[m
+     resolution: {integrity: sha512-9hFT4RauhcUzqOE4f1+frMKLZrgNog5b06I7VmZQV1BkvwvqrbC8EBZf3L1eEL2AKb6rNKjER0sEvJiSP1FXEA==}[m
+ [m
+[32m+[m[32m  '@asamuzakjp/css-color@6.0.7':[m
+[32m+[m[32m    resolution: {integrity: sha512-vC/bk1Lz7Tn/EfU9/apOTBk80/8dyGyWMowPoV1tJ52muDGsDqt2HPT2klrFUiY60MQmQv9q8yIht15JnBgDGw==}[m
+[32m+[m[32m    engines: {node: ^22.13.0 || >=24.0.0}[m
+[32m+[m
+[32m+[m[32m  '@asamuzakjp/dom-selector@8.3.2':[m
+[32m+[m[32m    resolution: {integrity: sha512-93Z1N+BQNXysodoicpOIyNh2drHfz/CTf9nnT0FEx72GJcIiwgydD7tGAr78j41LsYn3hlRn+LdGPuBLn1Bl8Q==}[m
+[32m+[m[32m    engines: {node: ^22.13.0 || >=24.0.0}[m
+[32m+[m
+   '@babel/code-frame@7.27.1':[m
+     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}[m
+     engines: {node: '>=6.9.0'}[m
+[36m@@ -338,6 +358,10 @@[m [mpackages:[m
+   '@braintree/sanitize-url@7.1.1':[m
+     resolution: {integrity: sha512-i1L7noDNxtFyL5DmZafWy1wRVhGehQmzZaz1HiN5e7iylJMSZR7ekOV7NsIqa5qBldlLrsKv4HbgFUVlQrz8Mw==}[m
+ [m
+[32m+[m[32m  '@bramus/specificity@2.4.2':[m
+[32m+[m[32m    resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}[m
+[32m+[m[32m    hasBin: true[m
+[32m+[m
+   '@builder.io/jsx-loc-internals@0.0.1':[m
+     resolution: {integrity: sha512-cSADapVCi07DDhcuDmcAVItqSVmji7DNyD3xxYTHyNCwhWMNnTpZjyvDIWwYFJLleyDCJ9VUtbaXtUjjqBiRqw==}[m
+ [m
+[36m@@ -361,6 +385,42 @@[m [mpackages:[m
+   '@chevrotain/utils@11.0.3':[m
+     resolution: {integrity: sha512-YslZMgtJUyuMbZ+aKvfF3x1f5liK4mWNxghFRv7jqRR9C3R3fAOGTTKvxXDa2Y1s9zSbcpuO0cAxDYsc9SrXoQ==}[m
+ [m
+[32m+[m[32m  '@csstools/color-helpers@6.1.1':[m
+[32m+[m[32m    resolution: {integrity: sha512-gLNsunvwf3mCi5u5o46/Z/JcJMnhbHSaZ69rkgPzNM3J4s8hWwpPUQB6/tt0EDFyCiWzxANlx+2LJwpYj4zS1w==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-calc@3.3.0':[m
+[32m+[m[32m    resolution: {integrity: sha512-c5ihYsPkdG6JCkU2zTMm4+k6r7RXuGxtWYhu5DHMIiF1FHzrfmHL5so11AoFpUv/tu61xfcmT4AmKoFfMPoqdQ==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@csstools/css-parser-algorithms': ^4.0.0[m
+[32m+[m[32m      '@csstools/css-tokenizer': ^4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-color-parser@4.2.0':[m
+[32m+[m[32m    resolution: {integrity: sha512-5+5LEmFuY1AjXdYhmgjTJogtQnP1evJ1zrBZGUNZ0thkpwnnmKxcHdAMn/OtFjAb25zA+jKDVYVRl+5G7rjv1A==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@csstools/css-parser-algorithms': ^4.0.0[m
+[32m+[m[32m      '@csstools/css-tokenizer': ^4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-parser-algorithms@4.0.0':[m
+[32m+[m[32m    resolution: {integrity: sha512-+B87qS7fIG3L5h3qwJ/IFbjoVoOe/bpOdh9hAjXbvx0o8ImEmUsGXN0inFOnk2ChCFgqkkGFQ+TpM5rbhkKe4w==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@csstools/css-tokenizer': ^4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-syntax-patches-for-csstree@1.1.8':[m
+[32m+[m[32m    resolution: {integrity: sha512-CpMLjAvwQg3BL5S0IeqsZNMH7EQrEWi0kLKOC13ZBF0ZwERiLWlibNPJr8G1kdU3Ms/r2KiNrF81pUh2HwAHdg==}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      css-tree: ^3.2.1[m
+[32m+[m[32m    peerDependenciesMeta:[m
+[32m+[m[32m      css-tree:[m
+[32m+[m[32m        optional: true[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-tokenizer@4.0.0':[m
+[32m+[m[32m    resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m
+   '@date-fns/tz@1.4.1':[m
+     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}[m
+ [m
+[36m@@ -658,6 +718,15 @@[m [mpackages:[m
+     cpu: [x64][m
+     os: [win32][m
+ [m
+[32m+[m[32m  '@exodus/bytes@1.15.1':[m
+[32m+[m[32m    resolution: {integrity: sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q==}[m
+[32m+[m[32m    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@noble/hashes': ^1.8.0 || ^2.0.0[m
+[32m+[m[32m    peerDependenciesMeta:[m
+[32m+[m[32m      '@noble/hashes':[m
+[32m+[m[32m        optional: true[m
+[32m+[m
+   '@floating-ui/core@1.7.3':[m
+     resolution: {integrity: sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w==}[m
+ [m
+[36m@@ -1586,6 +1655,38 @@[m [mpackages:[m
+     peerDependencies:[m
+       vite: ^5.2.0 || ^6 || ^7[m
+ [m
+[32m+[m[32m  '@testing-library/dom@10.4.1':[m
+[32m+[m[32m    resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}[m
+[32m+[m[32m    engines: {node: '>=18'}[m
+[32m+[m
+[32m+[m[32m  '@testing-library/jest-dom@7.0.1':[m
+[32m+[m[32m    resolution: {integrity: sha512-oMDTC3oA+6CXSO2JZnvOI7CA6oVub6kij5ggk9ohwye5slmkwxYDXcPOVxgMw/RQlticjtO0C1RZkR97HgrWMw==}[m
+[32m+[m[32m    engines: {node: '>=22', npm: '>=6', yarn: '>=1'}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@testing-library/dom': '>=10 <11'[m
+[32m+[m[32m      vitest: '>= 0.32'[m
+[32m+[m[32m    peerDependenciesMeta:[m
+[32m+[m[32m      vitest:[m
+[32m+[m[32m        optional: true[m
+[32m+[m
+[32m+[m[32m  '@testing-library/react@16.3.2':[m
+[32m+[m[32m    resolution: {integrity: sha512-XU5/SytQM+ykqMnAnvB2umaJNIOsLF3PVv//1Ew4CTcpz0/BRyy/af40qqrt7SjKpDdT1saBMc42CUok5gaw+g==}[m
+[32m+[m[32m    engines: {node: '>=18'}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@testing-library/dom': ^10.0.0[m
+[32m+[m[32m      '@types/react': ^18.0.0 || ^19.0.0[m
+[32m+[m[32m      '@types/react-dom': ^18.0.0 || ^19.0.0[m
+[32m+[m[32m      react: ^18.0.0 || ^19.0.0[m
+[32m+[m[32m      react-dom: ^18.0.0 || ^19.0.0[m
+[32m+[m[32m    peerDependenciesMeta:[m
+[32m+[m[32m      '@types/react':[m
+[32m+[m[32m        optional: true[m
+[32m+[m[32m      '@types/react-dom':[m
+[32m+[m[32m        optional: true[m
+[32m+[m
+[32m+[m[32m  '@types/aria-query@5.0.4':[m
+[32m+[m[32m    resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}[m
+[32m+[m
+   '@types/babel__core@7.20.5':[m
+     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}[m
+ [m
+[36m@@ -1822,10 +1923,25 @@[m [mpackages:[m
+   add@2.0.6:[m
+     resolution: {integrity: sha512-j5QzrmsokwWWp6kUcJQySpbG+xfOBqqKnup3OIk1pz+kB/80SLorZ9V8zHFLO92Lcd+hbvq8bT+zOGoPkmBV0Q==}[m
+ [m
+[32m+[m[32m  ansi-regex@5.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}[m
+[32m+[m[32m    engines: {node: '>=8'}[m
+[32m+[m
+[32m+[m[32m  ansi-styles@5.2.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}[m
+[32m+[m[32m    engines: {node: '>=10'}[m
+[32m+[m
+   aria-hidden@1.2.6:[m
+     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}[m
+     engines: {node: '>=10'}[m
+ [m
+[32m+[m[32m  aria-query@5.3.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}[m
+[32m+[m
+[32m+[m[32m  aria-query@5.3.2:[m
+[32m+[m[32m    resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}[m
+[32m+[m[32m    engines: {node: '>= 0.4'}[m
+[32m+[m
+   array-flatten@1.1.1:[m
+     resolution: {integrity: sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg==}[m
+ [m
+[36m@@ -1853,6 +1969,9 @@[m [mpackages:[m
+     resolution: {integrity: sha512-7s16KR8io8nIBWQyCYhmFhd+ebIzb9VKTzki+wOJXHTxTnV6+mFGH3+Jwn1zoKaY9/H9T/0BcKCZnzXljPnpSQ==}[m
+     hasBin: true[m
+ [m
+[32m+[m[32m  bidi-js@1.0.3:[m
+[32m+[m[32m    resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}[m
+[32m+[m
+   body-parser@1.20.3:[m
+     resolution: {integrity: sha512-7rAxByjUMqQ3/bHJy7D6OGXvx/MMc4IqBn/X0fcM1QUcAItpZrBEYhWGem+tzXH90c+G01ypMcYJBO9Y30203g==}[m
+     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}[m
+[36m@@ -1974,6 +2093,13 @@[m [mpackages:[m
+   cose-base@2.2.0:[m
+     resolution: {integrity: sha512-AzlgcsCbUMymkADOJtQm3wO9S3ltPfYOFD5033keQn9NJzIbtnZj+UdBJe7DYml/8TdbtHJW3j58SOnKhWY/5g==}[m
+ [m
+[32m+[m[32m  css-tree@3.2.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}[m
+[32m+[m[32m    engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0}[m
+[32m+[m
+[32m+[m[32m  css.escape@1.5.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-YUifsXXuknHlUsmlgyY0PKzgPOr7/FjCePfHNt0jxm83wHZi44VDMQ7/fGNkjY3/jV1MC+1CmZbaHzugyeRtpg==}[m
+[32m+[m
+   cssesc@3.0.0:[m
+     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}[m
+     engines: {node: '>=4'}[m
+[36m@@ -2138,6 +2264,10 @@[m [mpackages:[m
+   dagre-d3-es@7.0.11:[m
+     resolution: {integrity: sha512-tvlJLyQf834SylNKax8Wkzco/1ias1OPw8DcUMDE7oUIoSEW25riQVuiu/0OWEFqT0cxHT3Pa9/D82Jr47IONw==}[m
+ [m
+[32m+[m[32m  data-urls@7.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-23XHcCF+coGYevirZceTVD7NdJOqVn+49IHyxgszm+JIiHLoB2TkmPtsYkNWT1pvRSGkc35L6NHs0yHkN2SumA==}[m
+[32m+[m[32m    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}[m
+[32m+[m
+   date-fns-jalali@4.1.0-0:[m
+     resolution: {integrity: sha512-hTIP/z+t+qKwBDcmmsnmjWTduxCg+5KfdqWQvb2X/8C9+knYY6epN/pfxdDuyVlSVeFz0sM5eEfwIUQ70U4ckg==}[m
+ [m
+[36m@@ -2167,6 +2297,9 @@[m [mpackages:[m
+   decimal.js-light@2.5.1:[m
+     resolution: {integrity: sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==}[m
+ [m
+[32m+[m[32m  decimal.js@10.6.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==}[m
+[32m+[m
+   decode-named-character-reference@1.2.0:[m
+     resolution: {integrity: sha512-c6fcElNV6ShtZXmsgNgFFV5tVX2PaV4g+MOAkb8eXHvn6sryJBrZa9r0zV6+dtTyoCKxtDy5tyQ5ZwQuidtd+Q==}[m
+ [m
+[36m@@ -2203,6 +2336,12 @@[m [mpackages:[m
+   devlop@1.1.0:[m
+     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}[m
+ [m
+[32m+[m[32m  dom-accessibility-api@0.5.16:[m
+[32m+[m[32m    resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}[m
+[32m+[m
+[32m+[m[32m  dom-accessibility-api@0.6.3:[m
+[32m+[m[32m    resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}[m
+[32m+[m
+   dom-helpers@5.2.1:[m
+     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}[m
+ [m
+[36m@@ -2248,6 +2387,10 @@[m [mpackages:[m
+     resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}[m
+     engines: {node: '>=0.12'}[m
+ [m
+[32m+[m[32m  entities@8.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-zwfzJecQ/Uej6tusMqwAqU/6KL2XaB2VZ2Jg54Je6ahNBGNH6Ek6g3jjNCF0fG9EWQKGZNddNjU5F1ZQn/sBnA==}[m
+[32m+[m[32m    engines: {node: '>=20.19.0'}[m
+[32m+[m
+   es-define-property@1.0.1:[m
+     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}[m
+     engines: {node: '>= 0.4'}[m
+[36m@@ -2465,6 +2608,10 @@[m [mpackages:[m
+   hastscript@9.0.1:[m
+     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}[m
+ [m
+[32m+[m[32m  html-encoding-sniffer@6.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}[m
+[32m+[m[32m    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}[m
+[32m+[m
+   html-url-attributes@3.0.1:[m
+     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}[m
+ [m
+[36m@@ -2487,6 +2634,10 @@[m [mpackages:[m
+     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}[m
+     engines: {node: '>=0.10.0'}[m
+ [m
+[32m+[m[32m  indent-string@4.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg==}[m
+[32m+[m[32m    engines: {node: '>=8'}[m
+[32m+[m
+   inherits@2.0.4:[m
+     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}[m
+ [m
+[36m@@ -2526,6 +2677,9 @@[m [mpackages:[m
+     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}[m
+     engines: {node: '>=12'}[m
+ [m
+[32m+[m[32m  is-potential-custom-element-name@1.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}[m
+[32m+[m
+   jiti@2.6.1:[m
+     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}[m
+     hasBin: true[m
+[36m@@ -2533,6 +2687,15 @@[m [mpackages:[m
+   js-tokens@4.0.0:[m
+     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}[m
+ [m
+[32m+[m[32m  jsdom@30.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-52v7mUVUfNQVYYqE1lcdaymWL0njO7lTLUog6ZvW2U5KsbiLk/GnZlVJ+qx0xfNJZ6Gn+KSpPNE52vurbxZwrA==}[m
+[32m+[m[32m    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      canvas: ^3.2.3[m
+[32m+[m[32m    peerDependenciesMeta:[m
+[32m+[m[32m      canvas:[m
+[32m+[m[32m        optional: true[m
+[32m+[m
+   jsesc@3.1.0:[m
+     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}[m
+     engines: {node: '>=6'}[m
+[36m@@ -2647,6 +2810,10 @@[m [mpackages:[m
+   loupe@3.2.1:[m
+     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}[m
+ [m
+[32m+[m[32m  lru-cache@11.5.2:[m
+[32m+[m[32m    resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}[m
+[32m+[m[32m    engines: {node: 20 || >=22}[m
+[32m+[m
+   lru-cache@5.1.1:[m
+     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}[m
+ [m
+[36m@@ -2660,6 +2827,10 @@[m [mpackages:[m
+     peerDependencies:[m
+       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0[m
+ [m
+[32m+[m[32m  lz-string@1.5.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}[m
+[32m+[m[32m    hasBin: true[m
+[32m+[m
+   magic-string@0.30.19:[m
+     resolution: {integrity: sha512-2N21sPY9Ws53PZvsEpVtNuSW+ScYbQdp4b9qUaL+9QkHUrGFKo56Lg9Emg5s9V/qrtNBmiR01sYhUOwu3H+VOw==}[m
+ [m
+[36m@@ -2723,6 +2894,9 @@[m [mpackages:[m
+   mdast-util-to-string@4.0.0:[m
+     resolution: {integrity: sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==}[m
+ [m
+[32m+[m[32m  mdn-data@2.27.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}[m
+[32m+[m
+   media-typer@0.3.0:[m
+     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}[m
+     engines: {node: '>= 0.6'}[m
+[36m@@ -2837,6 +3011,10 @@[m [mpackages:[m
+     engines: {node: '>=4'}[m
+     hasBin: true[m
+ [m
+[32m+[m[32m  min-indent@1.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}[m
+[32m+[m[32m    engines: {node: '>=4'}[m
+[32m+[m
+   minipass@7.1.2:[m
+     resolution: {integrity: sha512-qOOzS1cBTWYF4BH8fVePDBOO9iptMnGUEZwNc/cMWnTV2nVLZ7VoNWEPHkYczZA0pdoA7dl6e7FL659nX9S2aw==}[m
+     engines: {node: '>=16 || 14 >=14.17'}[m
+[36m@@ -2920,6 +3098,9 @@[m [mpackages:[m
+   parse5@7.3.0:[m
+     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}[m
+ [m
+[32m+[m[32m  parse5@8.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}[m
+[32m+[m
+   parseurl@1.3.3:[m
+     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}[m
+     engines: {node: '>= 0.8'}[m
+[36m@@ -2980,6 +3161,10 @@[m [mpackages:[m
+     engines: {node: '>=14'}[m
+     hasBin: true[m
+ [m
+[32m+[m[32m  pretty-format@27.5.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}[m
+[32m+[m[32m    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}[m
+[32m+[m
+   prop-types@15.8.1:[m
+     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}[m
+ [m
+[36m@@ -2996,6 +3181,10 @@[m [mpackages:[m
+   proxy-from-env@1.1.0:[m
+     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}[m
+ [m
+[32m+[m[32m  punycode@2.3.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}[m
+[32m+[m[32m    engines: {node: '>=6'}[m
+[32m+[m
+   qs@6.13.0:[m
+     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}[m
+     engines: {node: '>=0.6'}[m
+[36m@@ -3031,6 +3220,9 @@[m [mpackages:[m
+   react-is@16.13.1:[m
+     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}[m
+ [m
+[32m+[m[32m  react-is@17.0.2:[m
+[32m+[m[32m    resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}[m
+[32m+[m
+   react-is@18.3.1:[m
+     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}[m
+ [m
+[36m@@ -3107,6 +3299,10 @@[m [mpackages:[m
+       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0[m
+       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0[m
+ [m
+[32m+[m[32m  redent@3.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}[m
+[32m+[m[32m    engines: {node: '>=8'}[m
+[32m+[m
+   regex-recursion@6.0.2:[m
+     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}[m
+ [m
+[36m@@ -3144,6 +3340,10 @@[m [mpackages:[m
+   remark-stringify@11.0.0:[m
+     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}[m
+ [m
+[32m+[m[32m  require-from-string@2.0.2:[m
+[32m+[m[32m    resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}[m
+[32m+[m[32m    engines: {node: '>=0.10.0'}[m
+[32m+[m
+   resolve-pkg-maps@1.0.0:[m
+     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}[m
+ [m
+[36m@@ -3167,6 +3367,10 @@[m [mpackages:[m
+   safer-buffer@2.1.2:[m
+     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}[m
+ [m
+[32m+[m[32m  saxes@6.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}[m
+[32m+[m[32m    engines: {node: '>=v12.22.7'}[m
+[32m+[m
+   scheduler@0.27.0:[m
+     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}[m
+ [m
+[36m@@ -3238,6 +3442,10 @@[m [mpackages:[m
+   stringify-entities@4.0.4:[m
+     resolution: {integrity: sha512-IwfBptatlO+QCJUo19AqvrPNqlVMpW9YEL2LIVY+Rpv2qsjCGxaDLNRgeGsQWJhfItebuJhsGSLjaBbNSQ+ieg==}[m
+ [m
+[32m+[m[32m  strip-indent@3.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-laJTa3Jb+VQpaC6DseHhF7dXVqHTfJPCRDaEbid/drOhgitgYku/letMUqOXFoWV0zIIUbjpdH2t+tYj4bQMRQ==}[m
+[32m+[m[32m    engines: {node: '>=8'}[m
+[32m+[m
+   style-to-js@1.1.18:[m
+     resolution: {integrity: sha512-JFPn62D4kJaPTnhFUI244MThx+FEGbi+9dw1b9yBBQ+1CZpV7QAT8kUtJ7b7EUNdHajjF/0x8fT+16oLJoojLg==}[m
+ [m
+[36m@@ -3247,6 +3455,9 @@[m [mpackages:[m
+   stylis@4.3.6:[m
+     resolution: {integrity: sha512-yQ3rwFWRfwNUY7H5vpU0wfdkNSnvnJinhF9830Swlaxl03zsOjCfmX0ugac+3LtK0lYSgwL/KXc8oYL3mG4YFQ==}[m
+ [m
+[32m+[m[32m  symbol-tree@3.2.4:[m
+[32m+[m[32m    resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}[m
+[32m+[m
+   tailwind-merge@3.3.1:[m
+     resolution: {integrity: sha512-gBXpgUm/3rp1lMZZrM/w7D8GKqshif0zAymAhbCyIt8KMe+0v9DQ7cdYLR4FHH/cKpdTXb+A/tKKU3eolfsI+g==}[m
+ [m
+[36m@@ -3295,10 +3506,25 @@[m [mpackages:[m
+     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}[m
+     engines: {node: '>=14.0.0'}[m
+ [m
+[32m+[m[32m  tldts-core@7.4.10:[m
+[32m+[m[32m    resolution: {integrity: sha512-KnQjp53ZekKgm/r3l+u8kJGGzYgrWdP8+Mql7a4vijh2WE0IrZWspQj/TpTxDho/YxO+AnOZnIjQcCD+q6iJsw==}[m
+[32m+[m
+[32m+[m[32m  tldts@7.4.10:[m
+[32m+[m[32m    resolution: {integrity: sha512-GgouD1B+sWwvkaEq8vXC15DjQitxbvs12oIXELpconwm+Tg3zfcEv4jgzq3vtKverDXsg3VI8aRgNL2Nra0Iog==}[m
+[32m+[m[32m    hasBin: true[m
+[32m+[m
+   toidentifier@1.0.1:[m
+     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}[m
+     engines: {node: '>=0.6'}[m
+ [m
+[32m+[m[32m  tough-cookie@6.0.2:[m
+[32m+[m[32m    resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}[m
+[32m+[m[32m    engines: {node: '>=16'}[m
+[32m+[m
+[32m+[m[32m  tr46@6.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw==}[m
+[32m+[m[32m    engines: {node: '>=20'}[m
+[32m+[m
+   trim-lines@3.0.1:[m
+     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}[m
+ [m
+[36m@@ -3335,6 +3561,10 @@[m [mpackages:[m
+   undici-types@7.14.0:[m
+     resolution: {integrity: sha512-QQiYxHuyZ9gQUIrmPo3IA+hUl4KYk8uSA7cHrcKd/l3p1OTpZcM0Tbp9x7FAtXdAYhlasd60ncPpgu6ihG6TOA==}[m
+ [m
+[32m+[m[32m  undici@8.10.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}[m
+[32m+[m[32m    engines: {node: '>=22.19.0'}[m
+[32m+[m
+   unified@11.0.5:[m
+     resolution: {integrity: sha512-xKvGhPWw3k84Qjh8bI3ZeJjqnyadK+GEFtazSfZv/rKeTkTjOJho6mFqh2SM96iIcZokxiOpg78GazTSg8+KHA==}[m
+ [m
+[36m@@ -3551,9 +3781,29 @@[m [mpackages:[m
+   vscode-uri@3.0.8:[m
+     resolution: {integrity: sha512-AyFQ0EVmsOZOlAnxoFOGOq1SQDWAB7C6aqMGS23svWAllfOaxbuFvcT8D1i8z3Gyn8fraVeZNNmN6e9bxxXkKw==}[m
+ [m
+[32m+[m[32m  w3c-xmlserializer@5.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}[m
+[32m+[m[32m    engines: {node: '>=18'}[m
+[32m+[m
+   web-namespaces@2.0.1:[m
+     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}[m
+ [m
+[32m+[m[32m  webidl-conversions@8.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}[m
+[32m+[m[32m    engines: {node: '>=20'}[m
+[32m+[m
+[32m+[m[32m  whatwg-mimetype@5.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-sXcNcHOC51uPGF0P/D4NVtrkjSU2fNsm9iog4ZvZJsL3rjoDAzXZhkm2MWt1y+PUdggKAYVoMAIYcs78wJ51Cw==}[m
+[32m+[m[32m    engines: {node: '>=20'}[m
+[32m+[m
+[32m+[m[32m  whatwg-url@16.0.1:[m
+[32m+[m[32m    resolution: {integrity: sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw==}[m
+[32m+[m[32m    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}[m
+[32m+[m
+[32m+[m[32m  whatwg-url@17.1.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-3GeworPmc2ZfEEHP7lEbUfBX/L75wdEsi0rLNhXcXxnoN5jyq0SL5gCy06SGW2cyTIZdTvWIDQNQoza++vKeaw==}[m
+[32m+[m[32m    engines: {node: ^22.14.0 || >=24.0.0}[m
+[32m+[m
+   why-is-node-running@2.3.0:[m
+     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}[m
+     engines: {node: '>=8'}[m
+[36m@@ -3564,6 +3814,13 @@[m [mpackages:[m
+     peerDependencies:[m
+       react: '>=16.8.0'[m
+ [m
+[32m+[m[32m  xml-name-validator@5.0.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}[m
+[32m+[m[32m    engines: {node: '>=18'}[m
+[32m+[m
+[32m+[m[32m  xmlchars@2.2.0:[m
+[32m+[m[32m    resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}[m
+[32m+[m
+   yallist@3.1.1:[m
+     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}[m
+ [m
+[36m@@ -3579,6 +3836,8 @@[m [mpackages:[m
+ [m
+ snapshots:[m
+ [m
+[32m+[m[32m  '@adobe/css-tools@4.5.0': {}[m
+[32m+[m
+   '@antfu/install-pkg@1.1.0':[m
+     dependencies:[m
+       package-manager-detector: 1.5.0[m
+[36m@@ -3586,6 +3845,21 @@[m [msnapshots:[m
+ [m
+   '@antfu/utils@9.3.0': {}[m
+ [m
+[32m+[m[32m  '@asamuzakjp/css-color@6.0.7':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@csstools/css-calc': 3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-color-parser': 4.2.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-tokenizer': 4.0.0[m
+[32m+[m[32m      lru-cache: 11.5.2[m
+[32m+[m
+[32m+[m[32m  '@asamuzakjp/dom-selector@8.3.2':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      bidi-js: 1.0.3[m
+[32m+[m[32m      css-tree: 3.2.1[m
+[32m+[m[32m      is-potential-custom-element-name: 1.0.1[m
+[32m+[m[32m      lru-cache: 11.5.2[m
+[32m+[m
+   '@babel/code-frame@7.27.1':[m
+     dependencies:[m
+       '@babel/helper-validator-identifier': 7.27.1[m
+[36m@@ -3702,6 +3976,10 @@[m [msnapshots:[m
+ [m
+   '@braintree/sanitize-url@7.1.1': {}[m
+ [m
+[32m+[m[32m  '@bramus/specificity@2.4.2':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      css-tree: 3.2.1[m
+[32m+[m
+   '@builder.io/jsx-loc-internals@0.0.1':[m
+     dependencies:[m
+       '@babel/parser': 7.28.4[m
+[36m@@ -3730,6 +4008,30 @@[m [msnapshots:[m
+ [m
+   '@chevrotain/utils@11.0.3': {}[m
+ [m
+[32m+[m[32m  '@csstools/color-helpers@6.1.1': {}[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-calc@3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-tokenizer': 4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-color-parser@4.2.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@csstools/color-helpers': 6.1.1[m
+[32m+[m[32m      '@csstools/css-calc': 3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)[m
+[32m+[m[32m      '@csstools/css-tokenizer': 4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0)':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@csstools/css-tokenizer': 4.0.0[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-syntax-patches-for-csstree@1.1.8(css-tree@3.2.1)':[m
+[32m+[m[32m    optionalDependencies:[m
+[32m+[m[32m      css-tree: 3.2.1[m
+[32m+[m
+[32m+[m[32m  '@csstools/css-tokenizer@4.0.0': {}[m
+[32m+[m
+   '@date-fns/tz@1.4.1': {}[m
+ [m
+   '@esbuild/aix-ppc64@0.21.5':[m
+[36m@@ -3879,6 +4181,8 @@[m [msnapshots:[m
+   '@esbuild/win32-x64@0.25.10':[m
+     optional: true[m
+ [m
+[32m+[m[32m  '@exodus/bytes@1.15.1': {}[m
+[32m+[m
+   '@floating-ui/core@1.7.3':[m
+     dependencies:[m
+       '@floating-ui/utils': 0.2.10[m
+[36m@@ -4809,6 +5113,41 @@[m [msnapshots:[m
+       tailwindcss: 4.1.14[m
+       vite: 7.1.9(@types/node@24.7.0)(jiti@2.6.1)(lightningcss@1.30.1)(tsx@4.20.6)[m
+ [m
+[32m+[m[32m  '@testing-library/dom@10.4.1':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@babel/code-frame': 7.27.1[m
+[32m+[m[32m      '@babel/runtime': 7.28.4[m
+[32m+[m[32m      '@types/aria-query': 5.0.4[m
+[32m+[m[32m      aria-query: 5.3.0[m
+[32m+[m[32m      dom-accessibility-api: 0.5.16[m
+[32m+[m[32m      lz-string: 1.5.0[m
+[32m+[m[32m      picocolors: 1.1.1[m
+[32m+[m[32m      pretty-format: 27.5.1[m
+[32m+[m
+[32m+[m[32m  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1))':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@adobe/css-tools': 4.5.0[m
+[32m+[m[32m      '@testing-library/dom': 10.4.1[m
+[32m+[m[32m      aria-query: 5.3.2[m
+[32m+[m[32m      css.escape: 1.5.1[m
+[32m+[m[32m      dom-accessibility-api: 0.6.3[m
+[32m+[m[32m      picocolors: 1.1.1[m
+[32m+[m[32m      redent: 3.0.0[m
+[32m+[m[32m    optionalDependencies:[m
+[32m+[m[32m      vitest: 2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1)[m
+[32m+[m
+[32m+[m[32m  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.1(@types/react@19.2.1))(@types/react@19.2.1)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@babel/runtime': 7.28.4[m
+[32m+[m[32m      '@testing-library/dom': 10.4.1[m
+[32m+[m[32m      react: 19.2.1[m
+[32m+[m[32m      react-dom: 19.2.1(react@19.2.1)[m
+[32m+[m[32m    optionalDependencies:[m
+[32m+[m[32m      '@types/react': 19.2.1[m
+[32m+[m[32m      '@types/react-dom': 19.2.1(@types/react@19.2.1)[m
+[32m+[m
+[32m+[m[32m  '@types/aria-query@5.0.4': {}[m
+[32m+[m
+   '@types/babel__core@7.20.5':[m
+     dependencies:[m
+       '@babel/parser': 7.28.4[m
+[36m@@ -5101,10 +5440,20 @@[m [msnapshots:[m
+ [m
+   add@2.0.6: {}[m
+ [m
+[32m+[m[32m  ansi-regex@5.0.1: {}[m
+[32m+[m
+[32m+[m[32m  ansi-styles@5.2.0: {}[m
+[32m+[m
+   aria-hidden@1.2.6:[m
+     dependencies:[m
+       tslib: 2.8.1[m
+ [m
+[32m+[m[32m  aria-query@5.3.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      dequal: 2.0.3[m
+[32m+[m
+[32m+[m[32m  aria-query@5.3.2: {}[m
+[32m+[m
+   array-flatten@1.1.1: {}[m
+ [m
+   assertion-error@2.0.1: {}[m
+[36m@@ -5133,6 +5482,10 @@[m [msnapshots:[m
+ [m
+   baseline-browser-mapping@2.8.13: {}[m
+ [m
+[32m+[m[32m  bidi-js@1.0.3:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      require-from-string: 2.0.2[m
+[32m+[m
+   body-parser@1.20.3:[m
+     dependencies:[m
+       bytes: 3.1.2[m
+[36m@@ -5262,6 +5615,13 @@[m [msnapshots:[m
+     dependencies:[m
+       layout-base: 2.0.1[m
+ [m
+[32m+[m[32m  css-tree@3.2.1:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      mdn-data: 2.27.1[m
+[32m+[m[32m      source-map-js: 1.2.1[m
+[32m+[m
+[32m+[m[32m  css.escape@1.5.1: {}[m
+[32m+[m
+   cssesc@3.0.0: {}[m
+ [m
+   csstype@3.1.3: {}[m
+[36m@@ -5450,6 +5810,13 @@[m [msnapshots:[m
+       d3: 7.9.0[m
+       lodash-es: 4.17.21[m
+ [m
+[32m+[m[32m  data-urls@7.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      whatwg-mimetype: 5.0.0[m
+[32m+[m[32m      whatwg-url: 16.0.1[m
+[32m+[m[32m    transitivePeerDependencies:[m
+[32m+[m[32m      - '@noble/hashes'[m
+[32m+[m
+   date-fns-jalali@4.1.0-0: {}[m
+ [m
+   date-fns@4.1.0: {}[m
+[36m@@ -5466,6 +5833,8 @@[m [msnapshots:[m
+ [m
+   decimal.js-light@2.5.1: {}[m
+ [m
+[32m+[m[32m  decimal.js@10.6.0: {}[m
+[32m+[m
+   decode-named-character-reference@1.2.0:[m
+     dependencies:[m
+       character-entities: 2.0.2[m
+[36m@@ -5492,6 +5861,10 @@[m [msnapshots:[m
+     dependencies:[m
+       dequal: 2.0.3[m
+ [m
+[32m+[m[32m  dom-accessibility-api@0.5.16: {}[m
+[32m+[m
+[32m+[m[32m  dom-accessibility-api@0.6.3: {}[m
+[32m+[m
+   dom-helpers@5.2.1:[m
+     dependencies:[m
+       '@babel/runtime': 7.28.4[m
+[36m@@ -5534,6 +5907,8 @@[m [msnapshots:[m
+ [m
+   entities@6.0.1: {}[m
+ [m
+[32m+[m[32m  entities@8.0.0: {}[m
+[32m+[m
+   es-define-property@1.0.1: {}[m
+ [m
+   es-errors@1.3.0: {}[m
+[36m@@ -5878,6 +6253,12 @@[m [msnapshots:[m
+       property-information: 7.1.0[m
+       space-separated-tokens: 2.0.2[m
+ [m
+[32m+[m[32m  html-encoding-sniffer@6.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@exodus/bytes': 1.15.1[m
+[32m+[m[32m    transitivePeerDependencies:[m
+[32m+[m[32m      - '@noble/hashes'[m
+[32m+[m
+   html-url-attributes@3.0.1: {}[m
+ [m
+   html-void-elements@3.0.0: {}[m
+[36m@@ -5900,6 +6281,8 @@[m [msnapshots:[m
+     dependencies:[m
+       safer-buffer: 2.1.2[m
+ [m
+[32m+[m[32m  indent-string@4.0.0: {}[m
+[32m+[m
+   inherits@2.0.4: {}[m
+ [m
+   inline-style-parser@0.2.4: {}[m
+[36m@@ -5928,10 +6311,38 @@[m [msnapshots:[m
+ [m
+   is-plain-obj@4.1.0: {}[m
+ [m
+[32m+[m[32m  is-potential-custom-element-name@1.0.1: {}[m
+[32m+[m
+   jiti@2.6.1: {}[m
+ [m
+   js-tokens@4.0.0: {}[m
+ [m
+[32m+[m[32m  jsdom@30.0.1:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@asamuzakjp/css-color': 6.0.7[m
+[32m+[m[32m      '@asamuzakjp/dom-selector': 8.3.2[m
+[32m+[m[32m      '@bramus/specificity': 2.4.2[m
+[32m+[m[32m      '@csstools/css-syntax-patches-for-csstree': 1.1.8(css-tree@3.2.1)[m
+[32m+[m[32m      '@exodus/bytes': 1.15.1[m
+[32m+[m[32m      css-tree: 3.2.1[m
+[32m+[m[32m      data-urls: 7.0.0[m
+[32m+[m[32m      decimal.js: 10.6.0[m
+[32m+[m[32m      html-encoding-sniffer: 6.0.0[m
+[32m+[m[32m      is-potential-custom-element-name: 1.0.1[m
+[32m+[m[32m      lru-cache: 11.5.2[m
+[32m+[m[32m      parse5: 8.0.1[m
+[32m+[m[32m      saxes: 6.0.0[m
+[32m+[m[32m      symbol-tree: 3.2.4[m
+[32m+[m[32m      tough-cookie: 6.0.2[m
+[32m+[m[32m      undici: 8.10.0[m
+[32m+[m[32m      w3c-xmlserializer: 5.0.0[m
+[32m+[m[32m      webidl-conversions: 8.0.1[m
+[32m+[m[32m      whatwg-mimetype: 5.0.0[m
+[32m+[m[32m      whatwg-url: 17.1.0[m
+[32m+[m[32m      xml-name-validator: 5.0.0[m
+[32m+[m[32m    transitivePeerDependencies:[m
+[32m+[m[32m      - '@noble/hashes'[m
+[32m+[m
+   jsesc@3.1.0: {}[m
+ [m
+   json5@2.2.3: {}[m
+[36m@@ -6019,6 +6430,8 @@[m [msnapshots:[m
+ [m
+   loupe@3.2.1: {}[m
+ [m
+[32m+[m[32m  lru-cache@11.5.2: {}[m
+[32m+[m
+   lru-cache@5.1.1:[m
+     dependencies:[m
+       yallist: 3.1.1[m
+[36m@@ -6031,6 +6444,8 @@[m [msnapshots:[m
+     dependencies:[m
+       react: 19.2.1[m
+ [m
+[32m+[m[32m  lz-string@1.5.0: {}[m
+[32m+[m
+   magic-string@0.30.19:[m
+     dependencies:[m
+       '@jridgewell/sourcemap-codec': 1.5.5[m
+[36m@@ -6206,6 +6621,8 @@[m [msnapshots:[m
+     dependencies:[m
+       '@types/mdast': 4.0.4[m
+ [m
+[32m+[m[32m  mdn-data@2.27.1: {}[m
+[32m+[m
+   media-typer@0.3.0: {}[m
+ [m
+   merge-descriptors@1.0.3: {}[m
+[36m@@ -6446,6 +6863,8 @@[m [msnapshots:[m
+ [m
+   mime@1.6.0: {}[m
+ [m
+[32m+[m[32m  min-indent@1.0.1: {}[m
+[32m+[m
+   minipass@7.1.2: {}[m
+ [m
+   minizlib@3.1.0:[m
+[36m@@ -6520,6 +6939,10 @@[m [msnapshots:[m
+     dependencies:[m
+       entities: 6.0.1[m
+ [m
+[32m+[m[32m  parse5@8.0.1:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      entities: 8.0.0[m
+[32m+[m
+   parseurl@1.3.3: {}[m
+ [m
+   path-data-parser@0.1.0: {}[m
+[36m@@ -6572,6 +6995,12 @@[m [msnapshots:[m
+ [m
+   prettier@3.6.2: {}[m
+ [m
+[32m+[m[32m  pretty-format@27.5.1:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      ansi-regex: 5.0.1[m
+[32m+[m[32m      ansi-styles: 5.2.0[m
+[32m+[m[32m      react-is: 17.0.2[m
+[32m+[m
+   prop-types@15.8.1:[m
+     dependencies:[m
+       loose-envify: 1.4.0[m
+[36m@@ -6589,6 +7018,8 @@[m [msnapshots:[m
+ [m
+   proxy-from-env@1.1.0: {}[m
+ [m
+[32m+[m[32m  punycode@2.3.1: {}[m
+[32m+[m
+   qs@6.13.0:[m
+     dependencies:[m
+       side-channel: 1.1.0[m
+[36m@@ -6622,6 +7053,8 @@[m [msnapshots:[m
+ [m
+   react-is@16.13.1: {}[m
+ [m
+[32m+[m[32m  react-is@17.0.2: {}[m
+[32m+[m
+   react-is@18.3.1: {}[m
+ [m
+   react-markdown@10.1.0(@types/react@19.2.1)(react@19.2.1):[m
+[36m@@ -6712,6 +7145,11 @@[m [msnapshots:[m
+       tiny-invariant: 1.3.3[m
+       victory-vendor: 36.9.2[m
+ [m
+[32m+[m[32m  redent@3.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      indent-string: 4.0.0[m
+[32m+[m[32m      strip-indent: 3.0.0[m
+[32m+[m
+   regex-recursion@6.0.2:[m
+     dependencies:[m
+       regex-utilities: 2.3.0[m
+[36m@@ -6785,6 +7223,8 @@[m [msnapshots:[m
+       mdast-util-to-markdown: 2.1.2[m
+       unified: 11.0.5[m
+ [m
+[32m+[m[32m  require-from-string@2.0.2: {}[m
+[32m+[m
+   resolve-pkg-maps@1.0.0: {}[m
+ [m
+   robust-predicates@3.0.2: {}[m
+[36m@@ -6830,6 +7270,10 @@[m [msnapshots:[m
+ [m
+   safer-buffer@2.1.2: {}[m
+ [m
+[32m+[m[32m  saxes@6.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      xmlchars: 2.2.0[m
+[32m+[m
+   scheduler@0.27.0: {}[m
+ [m
+   semver@6.3.1: {}[m
+[36m@@ -6944,6 +7388,10 @@[m [msnapshots:[m
+       character-entities-html4: 2.1.0[m
+       character-entities-legacy: 3.0.0[m
+ [m
+[32m+[m[32m  strip-indent@3.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      min-indent: 1.0.1[m
+[32m+[m
+   style-to-js@1.1.18:[m
+     dependencies:[m
+       style-to-object: 1.0.11[m
+[36m@@ -6954,6 +7402,8 @@[m [msnapshots:[m
+ [m
+   stylis@4.3.6: {}[m
+ [m
+[32m+[m[32m  symbol-tree@3.2.4: {}[m
+[32m+[m
+   tailwind-merge@3.3.1: {}[m
+ [m
+   tailwindcss-animate@1.0.7(tailwindcss@4.1.14):[m
+[36m@@ -6991,8 +7441,22 @@[m [msnapshots:[m
+ [m
+   tinyspy@3.0.2: {}[m
+ [m
+[32m+[m[32m  tldts-core@7.4.10: {}[m
+[32m+[m
+[32m+[m[32m  tldts@7.4.10:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      tldts-core: 7.4.10[m
+[32m+[m
+   toidentifier@1.0.1: {}[m
+ [m
+[32m+[m[32m  tough-cookie@6.0.2:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      tldts: 7.4.10[m
+[32m+[m
+[32m+[m[32m  tr46@6.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      punycode: 2.3.1[m
+[32m+[m
+   trim-lines@3.0.1: {}[m
+ [m
+   trough@2.2.0: {}[m
+[36m@@ -7021,6 +7485,8 @@[m [msnapshots:[m
+ [m
+   undici-types@7.14.0: {}[m
+ [m
+[32m+[m[32m  undici@8.10.0: {}[m
+[32m+[m
+   unified@11.0.5:[m
+     dependencies:[m
+       '@types/unist': 3.0.3[m
+[36m@@ -7193,7 +7659,7 @@[m [msnapshots:[m
+       lightningcss: 1.30.1[m
+       tsx: 4.20.6[m
+ [m
+[31m-  vitest@2.1.9(@types/node@24.7.0)(lightningcss@1.30.1):[m
+[32m+[m[32m  vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1):[m
+     dependencies:[m
+       '@vitest/expect': 2.1.9[m
+       '@vitest/mocker': 2.1.9(vite@5.4.20(@types/node@24.7.0)(lightningcss@1.30.1))[m
+[36m@@ -7217,6 +7683,7 @@[m [msnapshots:[m
+       why-is-node-running: 2.3.0[m
+     optionalDependencies:[m
+       '@types/node': 24.7.0[m
+[32m+[m[32m      jsdom: 30.0.1[m
+     transitivePeerDependencies:[m
+       - less[m
+       - lightningcss[m
+[36m@@ -7245,8 +7712,32 @@[m [msnapshots:[m
+ [m
+   vscode-uri@3.0.8: {}[m
+ [m
+[32m+[m[32m  w3c-xmlserializer@5.0.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      xml-name-validator: 5.0.0[m
+[32m+[m
+   web-namespaces@2.0.1: {}[m
+ [m
+[32m+[m[32m  webidl-conversions@8.0.1: {}[m
+[32m+[m
+[32m+[m[32m  whatwg-mimetype@5.0.0: {}[m
+[32m+[m
+[32m+[m[32m  whatwg-url@16.0.1:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@exodus/bytes': 1.15.1[m
+[32m+[m[32m      tr46: 6.0.0[m
+[32m+[m[32m      webidl-conversions: 8.0.1[m
+[32m+[m[32m    transitivePeerDependencies:[m
+[32m+[m[32m      - '@noble/hashes'[m
+[32m+[m
+[32m+[m[32m  whatwg-url@17.1.0:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@exodus/bytes': 1.15.1[m
+[32m+[m[32m      tr46: 6.0.0[m
+[32m+[m[32m      webidl-conversions: 8.0.1[m
+[32m+[m[32m    transitivePeerDependencies:[m
+[32m+[m[32m      - '@noble/hashes'[m
+[32m+[m
+   why-is-node-running@2.3.0:[m
+     dependencies:[m
+       siginfo: 2.0.0[m
+[36m@@ -7259,6 +7750,10 @@[m [msnapshots:[m
+       regexparam: 3.0.0[m
+       use-sync-external-store: 1.6.0(react@19.2.1)[m
+ [m
+[32m+[m[32m  xml-name-validator@5.0.0: {}[m
+[32m+[m
+[32m+[m[32m  xmlchars@2.2.0: {}[m
+[32m+[m
+   yallist@3.1.1: {}[m
+ [m
+   yallist@5.0.0: {}[m
+[1mdiff --git a/todo.md b/todo.md[m
+[1mindex a081130..7ae6e5c 100644[m
+[1m--- a/todo.md[m
+[1m+++ b/todo.md[m
+[36m@@ -99,13 +99,21 @@[m
+ [m
+ ## Ampliación del panel administrativo solicitada[m
+ [m
+[31m-- [ ] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.[m
+[31m-- [ ] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.[m
+[31m-- [ ] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.[m
+[31m-- [ ] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.[m
+[31m-- [ ] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.[m
+[31m-- [ ] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.[m
+[31m-- [ ] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.[m
+[31m-- [ ] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.[m
+[31m-- [ ] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.[m
+[31m-- [ ] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint.[m
+[32m+[m[32m- [x] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.[m
+[32m+[m[32m- [x] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.[m
+[32m+[m[32m- [x] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.[m
+[32m+[m[32m- [x] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.[m
+[32m+[m[32m- [x] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.[m
+[32m+[m[32m- [x] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.[m
+[32m+[m[32m- [x] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.[m
+[32m+[m[32m- [x] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.[m
+[32m+[m[32m- [x] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.[m
+[32m+[m[32m- [x] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint; localmente pasan 25 pruebas y el Preview responde 401 controlado en `/api/admin/data`.[m
+[32m+[m[32m- [x] Añadir una columna/indicador de estado de usuario usando `email_confirmed_at` y `banned_until` de Supabase Auth.[m
+[32m+[m[32m- [x] Completar contratos con ciclo explícito y fechas disponibles; `cycle` usa el label real y `startAt` la fecha registrada; `endAt` queda `—` porque no existe en el esquema actual.[m
+[32m+[m[32m- [x] Mostrar el tipo como columna visible en la tabla general de transacciones.[m
+[32m+[m[32m- [x] Añadir pruebas verificables para filtros, estados vacíos y errores del panel; `adminUtils.test.ts` cubre filtros/estado vacío y `data.test.ts` cubre 503.[m
+[32m+[m[32m- [x] Validar el panel ampliado en viewport móvil/tablet y registrar evidencia; `/admin` y la landing se capturaron a 375×812.[m
+[32m+[m[32m- [x] Añadir pruebas UI/integración del panel `/admin` para filtro, estado vacío y error renderizado; 3 casos pasan en JSDOM.[m
+[32m+[m[32m- [x] Validar `/admin` en viewport tablet adicional de 768×1024 y registrar evidencia; la puerta de acceso fue capturada.[m
+[32m+[m[32m- [ ] Revisar visualmente la captura tablet y, si es posible, validar también la vista autenticada del panel ampliado en 768×1024 antes del checkpoint.[m
+[1mdiff --git a/vitest.config.ts b/vitest.config.ts[m
+[1mindex d6edd86..8929942 100644[m
+[1m--- a/vitest.config.ts[m
+[1m+++ b/vitest.config.ts[m
+[36m@@ -1,8 +1,15 @@[m
+[32m+[m[32mimport { fileURLToPath, URL } from "node:url";[m
+ import { defineConfig } from "vitest/config";[m
+ [m
+ export default defineConfig({[m
+[32m+[m[32m  resolve: {[m
+[32m+[m[32m    alias: {[m
+[32m+[m[32m      "@": fileURLToPath(new URL("./client/src", import.meta.url)),[m
+[32m+[m[32m      "@shared": fileURLToPath(new URL("./shared", import.meta.url)),[m
+[32m+[m[32m    },[m
+[32m+[m[32m  },[m
+   test: {[m
+[31m-    include: ["api/**/*.test.ts", "server/**/*.test.ts"],[m
+[32m+[m[32m    include: ["api/**/*.test.ts", "server/**/*.test.ts", "client/**/*.test.tsx"],[m
+     environment: "node",[m
+   },[m
+ });[m

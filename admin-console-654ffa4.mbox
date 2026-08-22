@@ -1,0 +1,1389 @@
+From 654ffa45351f8207839c6a6aa1095be23f8f1ebb Mon Sep 17 00:00:00 2001
+From: Manus <dev-agent@manus.ai>
+Date: Sat, 22 Aug 2026 20:35:34 +0000
+Subject: [PATCH] feat: extend admin console with read-only sections
+
+---
+ api/admin/data.test.ts              |  14 +
+ api/admin/data.ts                   |   8 +
+ client/src/pages/Admin.test.tsx     |  85 +++++
+ client/src/pages/Admin.tsx          |  27 +-
+ client/src/pages/adminUtils.test.ts |  23 ++
+ client/src/pages/adminUtils.ts      |  17 +
+ package.json                        |   3 +
+ pnpm-lock.yaml                      | 499 +++++++++++++++++++++++++++-
+ todo.md                             |  28 +-
+ vitest.config.ts                    |   9 +-
+ 10 files changed, 686 insertions(+), 27 deletions(-)
+ create mode 100644 client/src/pages/Admin.test.tsx
+ create mode 100644 client/src/pages/adminUtils.test.ts
+ create mode 100644 client/src/pages/adminUtils.ts
+
+diff --git a/api/admin/data.test.ts b/api/admin/data.test.ts
+index 5e1d08a..008c856 100644
+--- a/api/admin/data.test.ts
++++ b/api/admin/data.test.ts
+@@ -55,4 +55,18 @@ describe("admin data endpoint", () => {
+     }));
+     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
+   });
++
++  it("returns a controlled 503 when a protected dataset cannot be queried", async () => {
++    const fetchMock = vi.fn();
++    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "admin-1", email: "admin@example.com" }));
++    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: "admin-1", username: "admin", role: "admin" }]));
++    fetchMock.mockRejectedValueOnce(new Error("network failure"));
++    vi.stubGlobal("fetch", fetchMock);
++    const res = responseMock();
++
++    await handler({ method: "GET", headers: { authorization: "Bearer token" } } as any, res);
++
++    expect(res.status).toHaveBeenCalledWith(503);
++    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: "unavailable" }));
++  });
+ });
+diff --git a/api/admin/data.ts b/api/admin/data.ts
+index 4bd4712..19d371b 100644
+--- a/api/admin/data.ts
++++ b/api/admin/data.ts
+@@ -14,6 +14,8 @@ type AuthUser = {
+   email?: string | null;
+   last_sign_in_at?: string | null;
+   created_at?: string | null;
++  email_confirmed_at?: string | null;
++  banned_until?: string | null;
+ };
+ 
+ type Profile = {
+@@ -167,6 +169,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
+         sponsorId: row.sponsor_id ?? null,
+         createdAt: row.created_at ?? authUser?.created_at ?? null,
+         lastSignInAt: authUser?.last_sign_in_at ?? null,
++        emailConfirmedAt: authUser?.email_confirmed_at ?? null,
++        bannedUntil: authUser?.banned_until ?? null,
++        status: authUser?.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "suspendido" : authUser?.email_confirmed_at ? "activo" : "pendiente",
+       };
+     });
+ 
+@@ -183,6 +188,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
+       fee: round(numberValue(row.fee)),
+       netAmount: round(numberValue(row.net_amount)),
+       providerStatus: row.provider_status ?? null,
++      cycle: row.type === "contract" ? row.label ?? null : null,
++      startAt: row.type === "contract" ? row.created_at ?? null : null,
++      endAt: null,
+       createdAt: row.created_at ?? null,
+     }));
+ 
+diff --git a/client/src/pages/Admin.test.tsx b/client/src/pages/Admin.test.tsx
+new file mode 100644
+index 0000000..16377a7
+--- /dev/null
++++ b/client/src/pages/Admin.test.tsx
+@@ -0,0 +1,85 @@
++// @vitest-environment jsdom
++import "@testing-library/jest-dom/vitest";
++import React from "react";
++import { fireEvent, render, screen, waitFor } from "@testing-library/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import Admin, { UsersSection } from "./Admin";
++
++const mocks = vi.hoisted(() => ({
++  auth: {
++    getSession: vi.fn(),
++    onAuthStateChange: vi.fn(),
++    signInWithPassword: vi.fn(),
++    signOut: vi.fn(),
++  },
++}));
++
++vi.mock("@/lib/supabase", () => ({ supabase: mocks }));
++
++const baseData = {
++  status: "ready" as const,
++  readOnly: true,
++  lastUpdated: "2026-08-22T12:00:00Z",
++  metrics: { users: 1, contracts: 1, contractVolume: 100, transactions: 1, pendingTransactions: 0, pendingCommissions: 0, creditedCommissions: 10, networkVolumes: 2 },
++  users: [{ id: "user-1", username: "admin", displayName: "Admin", email: "admin@example.com", role: "admin", sponsorId: null, createdAt: "2026-08-20T00:00:00Z", lastSignInAt: "2026-08-22T11:00:00Z", emailConfirmedAt: "2026-08-20T00:00:00Z", bannedUntil: null, status: "activo" }],
++  contracts: [{ id: "contract-1", userId: "user-1", username: "admin", type: "contract", label: "Nodo 7 Días", cycle: "Nodo 7 Días", amount: 100, status: "confirmed", network: null, wallet: null, fee: 0, netAmount: 100, providerStatus: null, startAt: "2026-08-22T00:00:00Z", endAt: null, createdAt: "2026-08-22T00:00:00Z" }],
++  transactions: [{ id: "tx-1", userId: "user-1", username: "admin", type: "deposit", label: "Depósito", amount: 100, status: "completed", network: "TRC20", wallet: "TAbc…xyz", fee: 0, netAmount: 100, providerStatus: "confirmed", cycle: null, startAt: null, endAt: null, createdAt: "2026-08-22T00:00:00Z" }],
++  commissions: { configuredDirectRate: 0.1, configuredBinaryRate: 0.1, direct: 10, binary: 0, total: 10, pending: 0, entries: [] },
++  binaryVolume: { left: 100, right: 60, matched: 60, status: "paired" },
++};
++
++function okResponse(body: unknown, status = 200) {
++  return Promise.resolve({ ok: status >= 200 && status < 300, status, json: async () => body });
++}
++
++function prepareAuthorized(fetchMock: ReturnType<typeof vi.fn>, data: unknown = baseData) {
++  mocks.auth.getSession.mockResolvedValue({ data: { session: { access_token: "admin-token" } } });
++  mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
++  fetchMock.mockResolvedValueOnce(okResponse({ user: { email: "admin@example.com", role: "admin" } }));
++  fetchMock.mockResolvedValueOnce(okResponse(data));
++  vi.stubGlobal("fetch", fetchMock);
++}
++
++describe("Admin panel UI", () => {
++  beforeEach(() => {
++    vi.clearAllMocks();
++    mocks.auth.signOut.mockResolvedValue({});
++  });
++
++  afterEach(() => {
++    vi.unstubAllGlobals();
++  });
++
++  it("renders real sections and filters users in the UI", async () => {
++    const fetchMock = vi.fn();
++    prepareAuthorized(fetchMock);
++    render(<Admin />);
++
++    expect(await screen.findByRole("heading", { name: "Resumen" })).toBeInTheDocument();
++    fireEvent.click(screen.getAllByRole("button", { name: "Usuarios" })[0]);
++    expect(await screen.findByRole("heading", { name: "Usuarios registrados" })).toBeInTheDocument();
++    expect(screen.getByText("admin@example.com")).toBeInTheDocument();
++
++    fireEvent.change(screen.getByRole("textbox", { name: "Buscar usuarios" }), { target: { value: "nobody" } });
++    expect(screen.getByText("Sin coincidencias")).toBeInTheDocument();
++  });
++
++  it("renders the empty state for a section with no rows", () => {
++    render(<UsersSection users={[]} />);
++    expect(screen.getByText("0 perfiles")).toBeInTheDocument();
++    expect(screen.getByText("Sin usuarios")).toBeInTheDocument();
++  });
++
++  it("renders the server error state without exposing implementation details", async () => {
++    const fetchMock = vi.fn();
++    mocks.auth.getSession.mockResolvedValue({ data: { session: { access_token: "admin-token" } } });
++    mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
++    fetchMock.mockResolvedValueOnce(okResponse({ user: { email: "admin@example.com", role: "admin" } }));
++    fetchMock.mockResolvedValueOnce(okResponse({ error: "No se pudieron cargar los datos administrativos.", status: "unavailable" }, 503));
++    vi.stubGlobal("fetch", fetchMock);
++    render(<Admin />);
++
++    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar los datos administrativos.");
++    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
++  });
++});
+diff --git a/client/src/pages/Admin.tsx b/client/src/pages/Admin.tsx
+index a00fcaf..dcbc581 100644
+--- a/client/src/pages/Admin.tsx
++++ b/client/src/pages/Admin.tsx
+@@ -1,5 +1,6 @@
+-import { useEffect, useMemo, useState, type FormEvent } from "react";
++import React, { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { supabase } from "@/lib/supabase";
++import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
+ import { Link } from "wouter";
+ import {
+   ArrowLeft,
+@@ -32,6 +33,9 @@ type AdminUser = {
+   sponsorId: string | null;
+   createdAt: string | null;
+   lastSignInAt: string | null;
++  emailConfirmedAt: string | null;
++  bannedUntil: string | null;
++  status: string;
+ };
+ 
+ type AdminTransaction = {
+@@ -47,6 +51,9 @@ type AdminTransaction = {
+   fee: number;
+   netAmount: number;
+   providerStatus: string | null;
++  cycle: string | null;
++  startAt: string | null;
++  endAt: string | null;
+   createdAt: string | null;
+ };
+ 
+@@ -175,25 +182,17 @@ function SummarySection({ data }: { data: AdminData | null }) {
+   </>;
+ }
+ 
+-function UsersSection({ users }: { users: AdminUser[] }) {
++export function UsersSection({ users }: { users: AdminUser[] }) {
+   const [query, setQuery] = useState("");
+-  const filtered = useMemo(() => {
+-    const normalized = query.trim().toLowerCase();
+-    if (!normalized) return users;
+-    return users.filter((user) => [user.username, user.displayName, user.email, user.role].some((value) => value?.toLowerCase().includes(normalized)));
+-  }, [query, users]);
+-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{users.length === 0 ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;
++  const filtered = useMemo(() => users.filter((user) => matchesAdminSearch([user.username, user.displayName, user.email, user.role, user.status], query)), [query, users]);
++  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario, estado o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(users) ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro correo, usuario, estado o rol." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Estado</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={userStatusLabel(user)} /></td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;
+ }
+ 
+ function TransactionsSection({ rows, contractsOnly = false }: { rows: AdminTransaction[]; contractsOnly?: boolean }) {
+   const [query, setQuery] = useState("");
+-  const filtered = useMemo(() => {
+-    const normalized = query.trim().toLowerCase();
+-    if (!normalized) return rows;
+-    return rows.filter((row) => [row.id, row.username, row.type, row.status, row.network, row.providerStatus].some((value) => value?.toLowerCase().includes(normalized)));
+-  }, [query, rows]);
++  const filtered = useMemo(() => rows.filter((row) => matchesAdminSearch([row.id, row.username, row.type, row.status, row.network, row.providerStatus, row.cycle], query)), [query, rows]);
+   const title = contractsOnly ? "Contratos" : "Transacciones";
+-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{rows.length === 0 ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : <DataTable label={title}><thead><tr><th>ID</th><th>Usuario</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></tr>)}</tbody></DataTable>}</article>;
++  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(rows) ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro identificador, usuario, tipo o estado." /> : <DataTable label={title}><thead><tr>{contractsOnly ? <><th>ID</th><th>Usuario</th><th>Ciclo</th><th>Monto</th><th>Estado</th><th>Fechas</th></> : <><th>ID</th><th>Usuario</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></>}</tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td>{contractsOnly ? <><td>{row.cycle || row.label || "Ciclo no registrado"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : ""}</small></td><td><StatusPill value={row.status} /></td><td><span>Inicio {dateLabel(row.startAt)}</span><small>Fin {dateLabel(row.endAt)}</small></td></> : <><td>{statusLabel(row.type)}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></>}</tr>)}</tbody></DataTable>}</article>;
+ }
+ 
+ function CommissionsSection({ data }: { data: AdminData }) {
+diff --git a/client/src/pages/adminUtils.test.ts b/client/src/pages/adminUtils.test.ts
+new file mode 100644
+index 0000000..e1b0c9a
+--- /dev/null
++++ b/client/src/pages/adminUtils.test.ts
+@@ -0,0 +1,23 @@
++import { describe, expect, it } from "vitest";
++import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
++
++describe("admin UI utilities", () => {
++  it("matches a query across the visible administrative fields", () => {
++    expect(matchesAdminSearch(["gentecash", "admin@example.com", "activo"], "ADMIN@EXAMPLE")).toBe(true);
++    expect(matchesAdminSearch(["gentecash", "admin@example.com", "activo"], "pendiente")).toBe(false);
++    expect(matchesAdminSearch(["gentecash"], "")).toBe(true);
++  });
++
++  it("derives user status from confirmation and active ban timestamps", () => {
++    const now = Date.parse("2026-08-22T12:00:00Z");
++    expect(userStatusLabel({ emailConfirmedAt: "2026-08-20T00:00:00Z" }, now)).toBe("activo");
++    expect(userStatusLabel({ emailConfirmedAt: null }, now)).toBe("pendiente");
++    expect(userStatusLabel({ emailConfirmedAt: "2026-08-20T00:00:00Z", bannedUntil: "2026-08-23T00:00:00Z" }, now)).toBe("suspendido");
++  });
++
++  it("distinguishes an empty dataset from a populated dataset", () => {
++    expect(hasRows([])).toBe(false);
++    expect(hasRows(undefined)).toBe(false);
++    expect(hasRows([{ id: "row-1" }])).toBe(true);
++  });
++});
+diff --git a/client/src/pages/adminUtils.ts b/client/src/pages/adminUtils.ts
+new file mode 100644
+index 0000000..4cef89e
+--- /dev/null
++++ b/client/src/pages/adminUtils.ts
+@@ -0,0 +1,17 @@
++export function matchesAdminSearch(values: Array<string | null | undefined>, query: string) {
++  const normalizedQuery = query.trim().toLowerCase();
++  if (!normalizedQuery) return true;
++  return values.some((value) => value?.toLowerCase().includes(normalizedQuery));
++}
++
++export function userStatusLabel(user: { status?: string | null; emailConfirmedAt?: string | null; bannedUntil?: string | null }, now = Date.now()) {
++  if (user.bannedUntil) {
++    const bannedUntil = new Date(user.bannedUntil).getTime();
++    if (Number.isFinite(bannedUntil) && bannedUntil > now) return "suspendido";
++  }
++  return user.emailConfirmedAt ? "activo" : "pendiente";
++}
++
++export function hasRows<T>(rows: T[] | null | undefined) {
++  return Array.isArray(rows) && rows.length > 0;
++}
+diff --git a/package.json b/package.json
+index f6c4dc4..e48f6d9 100644
+--- a/package.json
++++ b/package.json
+@@ -70,6 +70,8 @@
+     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
+     "@tailwindcss/typography": "^0.5.15",
+     "@tailwindcss/vite": "^4.1.3",
++    "@testing-library/jest-dom": "^7.0.1",
++    "@testing-library/react": "^16.3.2",
+     "@types/express": "4.17.21",
+     "@types/google.maps": "^3.58.1",
+     "@types/node": "^24.7.0",
+@@ -79,6 +81,7 @@
+     "add": "^2.0.6",
+     "autoprefixer": "^10.4.20",
+     "esbuild": "^0.25.0",
++    "jsdom": "^30.0.1",
+     "pnpm": "^10.15.1",
+     "postcss": "^8.4.47",
+     "prettier": "^3.6.2",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index c01c4d2..7d4b8c3 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -182,6 +182,12 @@ importers:
+       '@tailwindcss/vite':
+         specifier: ^4.1.3
+         version: 4.1.14(vite@7.1.9(@types/node@24.7.0)(jiti@2.6.1)(lightningcss@1.30.1)(tsx@4.20.6))
++      '@testing-library/jest-dom':
++        specifier: ^7.0.1
++        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1))
++      '@testing-library/react':
++        specifier: ^16.3.2
++        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.1(@types/react@19.2.1))(@types/react@19.2.1)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+       '@types/express':
+         specifier: 4.17.21
+         version: 4.17.21
+@@ -209,6 +215,9 @@ importers:
+       esbuild:
+         specifier: ^0.25.0
+         version: 0.25.10
++      jsdom:
++        specifier: ^30.0.1
++        version: 30.0.1
+       pnpm:
+         specifier: ^10.15.1
+         version: 10.18.1
+@@ -238,16 +247,27 @@ importers:
+         version: 0.0.58
+       vitest:
+         specifier: ^2.1.4
+-        version: 2.1.9(@types/node@24.7.0)(lightningcss@1.30.1)
++        version: 2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1)
+ 
+ packages:
+ 
++  '@adobe/css-tools@4.5.0':
++    resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
++
+   '@antfu/install-pkg@1.1.0':
+     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
+ 
+   '@antfu/utils@9.3.0':
+     resolution: {integrity: sha512-9hFT4RauhcUzqOE4f1+frMKLZrgNog5b06I7VmZQV1BkvwvqrbC8EBZf3L1eEL2AKb6rNKjER0sEvJiSP1FXEA==}
+ 
++  '@asamuzakjp/css-color@6.0.7':
++    resolution: {integrity: sha512-vC/bk1Lz7Tn/EfU9/apOTBk80/8dyGyWMowPoV1tJ52muDGsDqt2HPT2klrFUiY60MQmQv9q8yIht15JnBgDGw==}
++    engines: {node: ^22.13.0 || >=24.0.0}
++
++  '@asamuzakjp/dom-selector@8.3.2':
++    resolution: {integrity: sha512-93Z1N+BQNXysodoicpOIyNh2drHfz/CTf9nnT0FEx72GJcIiwgydD7tGAr78j41LsYn3hlRn+LdGPuBLn1Bl8Q==}
++    engines: {node: ^22.13.0 || >=24.0.0}
++
+   '@babel/code-frame@7.27.1':
+     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}
+     engines: {node: '>=6.9.0'}
+@@ -338,6 +358,10 @@ packages:
+   '@braintree/sanitize-url@7.1.1':
+     resolution: {integrity: sha512-i1L7noDNxtFyL5DmZafWy1wRVhGehQmzZaz1HiN5e7iylJMSZR7ekOV7NsIqa5qBldlLrsKv4HbgFUVlQrz8Mw==}
+ 
++  '@bramus/specificity@2.4.2':
++    resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
++    hasBin: true
++
+   '@builder.io/jsx-loc-internals@0.0.1':
+     resolution: {integrity: sha512-cSADapVCi07DDhcuDmcAVItqSVmji7DNyD3xxYTHyNCwhWMNnTpZjyvDIWwYFJLleyDCJ9VUtbaXtUjjqBiRqw==}
+ 
+@@ -361,6 +385,42 @@ packages:
+   '@chevrotain/utils@11.0.3':
+     resolution: {integrity: sha512-YslZMgtJUyuMbZ+aKvfF3x1f5liK4mWNxghFRv7jqRR9C3R3fAOGTTKvxXDa2Y1s9zSbcpuO0cAxDYsc9SrXoQ==}
+ 
++  '@csstools/color-helpers@6.1.1':
++    resolution: {integrity: sha512-gLNsunvwf3mCi5u5o46/Z/JcJMnhbHSaZ69rkgPzNM3J4s8hWwpPUQB6/tt0EDFyCiWzxANlx+2LJwpYj4zS1w==}
++    engines: {node: '>=20.19.0'}
++
++  '@csstools/css-calc@3.3.0':
++    resolution: {integrity: sha512-c5ihYsPkdG6JCkU2zTMm4+k6r7RXuGxtWYhu5DHMIiF1FHzrfmHL5so11AoFpUv/tu61xfcmT4AmKoFfMPoqdQ==}
++    engines: {node: '>=20.19.0'}
++    peerDependencies:
++      '@csstools/css-parser-algorithms': ^4.0.0
++      '@csstools/css-tokenizer': ^4.0.0
++
++  '@csstools/css-color-parser@4.2.0':
++    resolution: {integrity: sha512-5+5LEmFuY1AjXdYhmgjTJogtQnP1evJ1zrBZGUNZ0thkpwnnmKxcHdAMn/OtFjAb25zA+jKDVYVRl+5G7rjv1A==}
++    engines: {node: '>=20.19.0'}
++    peerDependencies:
++      '@csstools/css-parser-algorithms': ^4.0.0
++      '@csstools/css-tokenizer': ^4.0.0
++
++  '@csstools/css-parser-algorithms@4.0.0':
++    resolution: {integrity: sha512-+B87qS7fIG3L5h3qwJ/IFbjoVoOe/bpOdh9hAjXbvx0o8ImEmUsGXN0inFOnk2ChCFgqkkGFQ+TpM5rbhkKe4w==}
++    engines: {node: '>=20.19.0'}
++    peerDependencies:
++      '@csstools/css-tokenizer': ^4.0.0
++
++  '@csstools/css-syntax-patches-for-csstree@1.1.8':
++    resolution: {integrity: sha512-CpMLjAvwQg3BL5S0IeqsZNMH7EQrEWi0kLKOC13ZBF0ZwERiLWlibNPJr8G1kdU3Ms/r2KiNrF81pUh2HwAHdg==}
++    peerDependencies:
++      css-tree: ^3.2.1
++    peerDependenciesMeta:
++      css-tree:
++        optional: true
++
++  '@csstools/css-tokenizer@4.0.0':
++    resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
++    engines: {node: '>=20.19.0'}
++
+   '@date-fns/tz@1.4.1':
+     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
+ 
+@@ -658,6 +718,15 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
++  '@exodus/bytes@1.15.1':
++    resolution: {integrity: sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q==}
++    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
++    peerDependencies:
++      '@noble/hashes': ^1.8.0 || ^2.0.0
++    peerDependenciesMeta:
++      '@noble/hashes':
++        optional: true
++
+   '@floating-ui/core@1.7.3':
+     resolution: {integrity: sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w==}
+ 
+@@ -1586,6 +1655,38 @@ packages:
+     peerDependencies:
+       vite: ^5.2.0 || ^6 || ^7
+ 
++  '@testing-library/dom@10.4.1':
++    resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
++    engines: {node: '>=18'}
++
++  '@testing-library/jest-dom@7.0.1':
++    resolution: {integrity: sha512-oMDTC3oA+6CXSO2JZnvOI7CA6oVub6kij5ggk9ohwye5slmkwxYDXcPOVxgMw/RQlticjtO0C1RZkR97HgrWMw==}
++    engines: {node: '>=22', npm: '>=6', yarn: '>=1'}
++    peerDependencies:
++      '@testing-library/dom': '>=10 <11'
++      vitest: '>= 0.32'
++    peerDependenciesMeta:
++      vitest:
++        optional: true
++
++  '@testing-library/react@16.3.2':
++    resolution: {integrity: sha512-XU5/SytQM+ykqMnAnvB2umaJNIOsLF3PVv//1Ew4CTcpz0/BRyy/af40qqrt7SjKpDdT1saBMc42CUok5gaw+g==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      '@testing-library/dom': ^10.0.0
++      '@types/react': ^18.0.0 || ^19.0.0
++      '@types/react-dom': ^18.0.0 || ^19.0.0
++      react: ^18.0.0 || ^19.0.0
++      react-dom: ^18.0.0 || ^19.0.0
++    peerDependenciesMeta:
++      '@types/react':
++        optional: true
++      '@types/react-dom':
++        optional: true
++
++  '@types/aria-query@5.0.4':
++    resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
++
+   '@types/babel__core@7.20.5':
+     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
+ 
+@@ -1822,10 +1923,25 @@ packages:
+   add@2.0.6:
+     resolution: {integrity: sha512-j5QzrmsokwWWp6kUcJQySpbG+xfOBqqKnup3OIk1pz+kB/80SLorZ9V8zHFLO92Lcd+hbvq8bT+zOGoPkmBV0Q==}
+ 
++  ansi-regex@5.0.1:
++    resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
++    engines: {node: '>=8'}
++
++  ansi-styles@5.2.0:
++    resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
++    engines: {node: '>=10'}
++
+   aria-hidden@1.2.6:
+     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
+     engines: {node: '>=10'}
+ 
++  aria-query@5.3.0:
++    resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
++
++  aria-query@5.3.2:
++    resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
++    engines: {node: '>= 0.4'}
++
+   array-flatten@1.1.1:
+     resolution: {integrity: sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg==}
+ 
+@@ -1853,6 +1969,9 @@ packages:
+     resolution: {integrity: sha512-7s16KR8io8nIBWQyCYhmFhd+ebIzb9VKTzki+wOJXHTxTnV6+mFGH3+Jwn1zoKaY9/H9T/0BcKCZnzXljPnpSQ==}
+     hasBin: true
+ 
++  bidi-js@1.0.3:
++    resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
++
+   body-parser@1.20.3:
+     resolution: {integrity: sha512-7rAxByjUMqQ3/bHJy7D6OGXvx/MMc4IqBn/X0fcM1QUcAItpZrBEYhWGem+tzXH90c+G01ypMcYJBO9Y30203g==}
+     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
+@@ -1974,6 +2093,13 @@ packages:
+   cose-base@2.2.0:
+     resolution: {integrity: sha512-AzlgcsCbUMymkADOJtQm3wO9S3ltPfYOFD5033keQn9NJzIbtnZj+UdBJe7DYml/8TdbtHJW3j58SOnKhWY/5g==}
+ 
++  css-tree@3.2.1:
++    resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
++    engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0}
++
++  css.escape@1.5.1:
++    resolution: {integrity: sha512-YUifsXXuknHlUsmlgyY0PKzgPOr7/FjCePfHNt0jxm83wHZi44VDMQ7/fGNkjY3/jV1MC+1CmZbaHzugyeRtpg==}
++
+   cssesc@3.0.0:
+     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
+     engines: {node: '>=4'}
+@@ -2138,6 +2264,10 @@ packages:
+   dagre-d3-es@7.0.11:
+     resolution: {integrity: sha512-tvlJLyQf834SylNKax8Wkzco/1ias1OPw8DcUMDE7oUIoSEW25riQVuiu/0OWEFqT0cxHT3Pa9/D82Jr47IONw==}
+ 
++  data-urls@7.0.0:
++    resolution: {integrity: sha512-23XHcCF+coGYevirZceTVD7NdJOqVn+49IHyxgszm+JIiHLoB2TkmPtsYkNWT1pvRSGkc35L6NHs0yHkN2SumA==}
++    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
++
+   date-fns-jalali@4.1.0-0:
+     resolution: {integrity: sha512-hTIP/z+t+qKwBDcmmsnmjWTduxCg+5KfdqWQvb2X/8C9+knYY6epN/pfxdDuyVlSVeFz0sM5eEfwIUQ70U4ckg==}
+ 
+@@ -2167,6 +2297,9 @@ packages:
+   decimal.js-light@2.5.1:
+     resolution: {integrity: sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==}
+ 
++  decimal.js@10.6.0:
++    resolution: {integrity: sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==}
++
+   decode-named-character-reference@1.2.0:
+     resolution: {integrity: sha512-c6fcElNV6ShtZXmsgNgFFV5tVX2PaV4g+MOAkb8eXHvn6sryJBrZa9r0zV6+dtTyoCKxtDy5tyQ5ZwQuidtd+Q==}
+ 
+@@ -2203,6 +2336,12 @@ packages:
+   devlop@1.1.0:
+     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+ 
++  dom-accessibility-api@0.5.16:
++    resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
++
++  dom-accessibility-api@0.6.3:
++    resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
++
+   dom-helpers@5.2.1:
+     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
+ 
+@@ -2248,6 +2387,10 @@ packages:
+     resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}
+     engines: {node: '>=0.12'}
+ 
++  entities@8.0.0:
++    resolution: {integrity: sha512-zwfzJecQ/Uej6tusMqwAqU/6KL2XaB2VZ2Jg54Je6ahNBGNH6Ek6g3jjNCF0fG9EWQKGZNddNjU5F1ZQn/sBnA==}
++    engines: {node: '>=20.19.0'}
++
+   es-define-property@1.0.1:
+     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
+     engines: {node: '>= 0.4'}
+@@ -2465,6 +2608,10 @@ packages:
+   hastscript@9.0.1:
+     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
+ 
++  html-encoding-sniffer@6.0.0:
++    resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
++    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
++
+   html-url-attributes@3.0.1:
+     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
+ 
+@@ -2487,6 +2634,10 @@ packages:
+     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
+     engines: {node: '>=0.10.0'}
+ 
++  indent-string@4.0.0:
++    resolution: {integrity: sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg==}
++    engines: {node: '>=8'}
++
+   inherits@2.0.4:
+     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+ 
+@@ -2526,6 +2677,9 @@ packages:
+     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
+     engines: {node: '>=12'}
+ 
++  is-potential-custom-element-name@1.0.1:
++    resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
++
+   jiti@2.6.1:
+     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
+     hasBin: true
+@@ -2533,6 +2687,15 @@ packages:
+   js-tokens@4.0.0:
+     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+ 
++  jsdom@30.0.1:
++    resolution: {integrity: sha512-52v7mUVUfNQVYYqE1lcdaymWL0njO7lTLUog6ZvW2U5KsbiLk/GnZlVJ+qx0xfNJZ6Gn+KSpPNE52vurbxZwrA==}
++    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
++    peerDependencies:
++      canvas: ^3.2.3
++    peerDependenciesMeta:
++      canvas:
++        optional: true
++
+   jsesc@3.1.0:
+     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
+     engines: {node: '>=6'}
+@@ -2647,6 +2810,10 @@ packages:
+   loupe@3.2.1:
+     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
+ 
++  lru-cache@11.5.2:
++    resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
++    engines: {node: 20 || >=22}
++
+   lru-cache@5.1.1:
+     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+ 
+@@ -2660,6 +2827,10 @@ packages:
+     peerDependencies:
+       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+ 
++  lz-string@1.5.0:
++    resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
++    hasBin: true
++
+   magic-string@0.30.19:
+     resolution: {integrity: sha512-2N21sPY9Ws53PZvsEpVtNuSW+ScYbQdp4b9qUaL+9QkHUrGFKo56Lg9Emg5s9V/qrtNBmiR01sYhUOwu3H+VOw==}
+ 
+@@ -2723,6 +2894,9 @@ packages:
+   mdast-util-to-string@4.0.0:
+     resolution: {integrity: sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==}
+ 
++  mdn-data@2.27.1:
++    resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
++
+   media-typer@0.3.0:
+     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
+     engines: {node: '>= 0.6'}
+@@ -2837,6 +3011,10 @@ packages:
+     engines: {node: '>=4'}
+     hasBin: true
+ 
++  min-indent@1.0.1:
++    resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
++    engines: {node: '>=4'}
++
+   minipass@7.1.2:
+     resolution: {integrity: sha512-qOOzS1cBTWYF4BH8fVePDBOO9iptMnGUEZwNc/cMWnTV2nVLZ7VoNWEPHkYczZA0pdoA7dl6e7FL659nX9S2aw==}
+     engines: {node: '>=16 || 14 >=14.17'}
+@@ -2920,6 +3098,9 @@ packages:
+   parse5@7.3.0:
+     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
+ 
++  parse5@8.0.1:
++    resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
++
+   parseurl@1.3.3:
+     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
+     engines: {node: '>= 0.8'}
+@@ -2980,6 +3161,10 @@ packages:
+     engines: {node: '>=14'}
+     hasBin: true
+ 
++  pretty-format@27.5.1:
++    resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
++    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
++
+   prop-types@15.8.1:
+     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
+ 
+@@ -2996,6 +3181,10 @@ packages:
+   proxy-from-env@1.1.0:
+     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+ 
++  punycode@2.3.1:
++    resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
++    engines: {node: '>=6'}
++
+   qs@6.13.0:
+     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
+     engines: {node: '>=0.6'}
+@@ -3031,6 +3220,9 @@ packages:
+   react-is@16.13.1:
+     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
+ 
++  react-is@17.0.2:
++    resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
++
+   react-is@18.3.1:
+     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
+ 
+@@ -3107,6 +3299,10 @@ packages:
+       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+ 
++  redent@3.0.0:
++    resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
++    engines: {node: '>=8'}
++
+   regex-recursion@6.0.2:
+     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
+ 
+@@ -3144,6 +3340,10 @@ packages:
+   remark-stringify@11.0.0:
+     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
+ 
++  require-from-string@2.0.2:
++    resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
++    engines: {node: '>=0.10.0'}
++
+   resolve-pkg-maps@1.0.0:
+     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
+ 
+@@ -3167,6 +3367,10 @@ packages:
+   safer-buffer@2.1.2:
+     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+ 
++  saxes@6.0.0:
++    resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
++    engines: {node: '>=v12.22.7'}
++
+   scheduler@0.27.0:
+     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
+ 
+@@ -3238,6 +3442,10 @@ packages:
+   stringify-entities@4.0.4:
+     resolution: {integrity: sha512-IwfBptatlO+QCJUo19AqvrPNqlVMpW9YEL2LIVY+Rpv2qsjCGxaDLNRgeGsQWJhfItebuJhsGSLjaBbNSQ+ieg==}
+ 
++  strip-indent@3.0.0:
++    resolution: {integrity: sha512-laJTa3Jb+VQpaC6DseHhF7dXVqHTfJPCRDaEbid/drOhgitgYku/letMUqOXFoWV0zIIUbjpdH2t+tYj4bQMRQ==}
++    engines: {node: '>=8'}
++
+   style-to-js@1.1.18:
+     resolution: {integrity: sha512-JFPn62D4kJaPTnhFUI244MThx+FEGbi+9dw1b9yBBQ+1CZpV7QAT8kUtJ7b7EUNdHajjF/0x8fT+16oLJoojLg==}
+ 
+@@ -3247,6 +3455,9 @@ packages:
+   stylis@4.3.6:
+     resolution: {integrity: sha512-yQ3rwFWRfwNUY7H5vpU0wfdkNSnvnJinhF9830Swlaxl03zsOjCfmX0ugac+3LtK0lYSgwL/KXc8oYL3mG4YFQ==}
+ 
++  symbol-tree@3.2.4:
++    resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
++
+   tailwind-merge@3.3.1:
+     resolution: {integrity: sha512-gBXpgUm/3rp1lMZZrM/w7D8GKqshif0zAymAhbCyIt8KMe+0v9DQ7cdYLR4FHH/cKpdTXb+A/tKKU3eolfsI+g==}
+ 
+@@ -3295,10 +3506,25 @@ packages:
+     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}
+     engines: {node: '>=14.0.0'}
+ 
++  tldts-core@7.4.10:
++    resolution: {integrity: sha512-KnQjp53ZekKgm/r3l+u8kJGGzYgrWdP8+Mql7a4vijh2WE0IrZWspQj/TpTxDho/YxO+AnOZnIjQcCD+q6iJsw==}
++
++  tldts@7.4.10:
++    resolution: {integrity: sha512-GgouD1B+sWwvkaEq8vXC15DjQitxbvs12oIXELpconwm+Tg3zfcEv4jgzq3vtKverDXsg3VI8aRgNL2Nra0Iog==}
++    hasBin: true
++
+   toidentifier@1.0.1:
+     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
+     engines: {node: '>=0.6'}
+ 
++  tough-cookie@6.0.2:
++    resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}
++    engines: {node: '>=16'}
++
++  tr46@6.0.0:
++    resolution: {integrity: sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw==}
++    engines: {node: '>=20'}
++
+   trim-lines@3.0.1:
+     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
+ 
+@@ -3335,6 +3561,10 @@ packages:
+   undici-types@7.14.0:
+     resolution: {integrity: sha512-QQiYxHuyZ9gQUIrmPo3IA+hUl4KYk8uSA7cHrcKd/l3p1OTpZcM0Tbp9x7FAtXdAYhlasd60ncPpgu6ihG6TOA==}
+ 
++  undici@8.10.0:
++    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
++    engines: {node: '>=22.19.0'}
++
+   unified@11.0.5:
+     resolution: {integrity: sha512-xKvGhPWw3k84Qjh8bI3ZeJjqnyadK+GEFtazSfZv/rKeTkTjOJho6mFqh2SM96iIcZokxiOpg78GazTSg8+KHA==}
+ 
+@@ -3551,9 +3781,29 @@ packages:
+   vscode-uri@3.0.8:
+     resolution: {integrity: sha512-AyFQ0EVmsOZOlAnxoFOGOq1SQDWAB7C6aqMGS23svWAllfOaxbuFvcT8D1i8z3Gyn8fraVeZNNmN6e9bxxXkKw==}
+ 
++  w3c-xmlserializer@5.0.0:
++    resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
++    engines: {node: '>=18'}
++
+   web-namespaces@2.0.1:
+     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
+ 
++  webidl-conversions@8.0.1:
++    resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
++    engines: {node: '>=20'}
++
++  whatwg-mimetype@5.0.0:
++    resolution: {integrity: sha512-sXcNcHOC51uPGF0P/D4NVtrkjSU2fNsm9iog4ZvZJsL3rjoDAzXZhkm2MWt1y+PUdggKAYVoMAIYcs78wJ51Cw==}
++    engines: {node: '>=20'}
++
++  whatwg-url@16.0.1:
++    resolution: {integrity: sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw==}
++    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
++
++  whatwg-url@17.1.0:
++    resolution: {integrity: sha512-3GeworPmc2ZfEEHP7lEbUfBX/L75wdEsi0rLNhXcXxnoN5jyq0SL5gCy06SGW2cyTIZdTvWIDQNQoza++vKeaw==}
++    engines: {node: ^22.14.0 || >=24.0.0}
++
+   why-is-node-running@2.3.0:
+     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
+     engines: {node: '>=8'}
+@@ -3564,6 +3814,13 @@ packages:
+     peerDependencies:
+       react: '>=16.8.0'
+ 
++  xml-name-validator@5.0.0:
++    resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
++    engines: {node: '>=18'}
++
++  xmlchars@2.2.0:
++    resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
++
+   yallist@3.1.1:
+     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
+ 
+@@ -3579,6 +3836,8 @@ packages:
+ 
+ snapshots:
+ 
++  '@adobe/css-tools@4.5.0': {}
++
+   '@antfu/install-pkg@1.1.0':
+     dependencies:
+       package-manager-detector: 1.5.0
+@@ -3586,6 +3845,21 @@ snapshots:
+ 
+   '@antfu/utils@9.3.0': {}
+ 
++  '@asamuzakjp/css-color@6.0.7':
++    dependencies:
++      '@csstools/css-calc': 3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-color-parser': 4.2.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-tokenizer': 4.0.0
++      lru-cache: 11.5.2
++
++  '@asamuzakjp/dom-selector@8.3.2':
++    dependencies:
++      bidi-js: 1.0.3
++      css-tree: 3.2.1
++      is-potential-custom-element-name: 1.0.1
++      lru-cache: 11.5.2
++
+   '@babel/code-frame@7.27.1':
+     dependencies:
+       '@babel/helper-validator-identifier': 7.27.1
+@@ -3702,6 +3976,10 @@ snapshots:
+ 
+   '@braintree/sanitize-url@7.1.1': {}
+ 
++  '@bramus/specificity@2.4.2':
++    dependencies:
++      css-tree: 3.2.1
++
+   '@builder.io/jsx-loc-internals@0.0.1':
+     dependencies:
+       '@babel/parser': 7.28.4
+@@ -3730,6 +4008,30 @@ snapshots:
+ 
+   '@chevrotain/utils@11.0.3': {}
+ 
++  '@csstools/color-helpers@6.1.1': {}
++
++  '@csstools/css-calc@3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':
++    dependencies:
++      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-tokenizer': 4.0.0
++
++  '@csstools/css-color-parser@4.2.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':
++    dependencies:
++      '@csstools/color-helpers': 6.1.1
++      '@csstools/css-calc': 3.3.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
++      '@csstools/css-tokenizer': 4.0.0
++
++  '@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0)':
++    dependencies:
++      '@csstools/css-tokenizer': 4.0.0
++
++  '@csstools/css-syntax-patches-for-csstree@1.1.8(css-tree@3.2.1)':
++    optionalDependencies:
++      css-tree: 3.2.1
++
++  '@csstools/css-tokenizer@4.0.0': {}
++
+   '@date-fns/tz@1.4.1': {}
+ 
+   '@esbuild/aix-ppc64@0.21.5':
+@@ -3879,6 +4181,8 @@ snapshots:
+   '@esbuild/win32-x64@0.25.10':
+     optional: true
+ 
++  '@exodus/bytes@1.15.1': {}
++
+   '@floating-ui/core@1.7.3':
+     dependencies:
+       '@floating-ui/utils': 0.2.10
+@@ -4809,6 +5113,41 @@ snapshots:
+       tailwindcss: 4.1.14
+       vite: 7.1.9(@types/node@24.7.0)(jiti@2.6.1)(lightningcss@1.30.1)(tsx@4.20.6)
+ 
++  '@testing-library/dom@10.4.1':
++    dependencies:
++      '@babel/code-frame': 7.27.1
++      '@babel/runtime': 7.28.4
++      '@types/aria-query': 5.0.4
++      aria-query: 5.3.0
++      dom-accessibility-api: 0.5.16
++      lz-string: 1.5.0
++      picocolors: 1.1.1
++      pretty-format: 27.5.1
++
++  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1))':
++    dependencies:
++      '@adobe/css-tools': 4.5.0
++      '@testing-library/dom': 10.4.1
++      aria-query: 5.3.2
++      css.escape: 1.5.1
++      dom-accessibility-api: 0.6.3
++      picocolors: 1.1.1
++      redent: 3.0.0
++    optionalDependencies:
++      vitest: 2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1)
++
++  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.1(@types/react@19.2.1))(@types/react@19.2.1)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
++    dependencies:
++      '@babel/runtime': 7.28.4
++      '@testing-library/dom': 10.4.1
++      react: 19.2.1
++      react-dom: 19.2.1(react@19.2.1)
++    optionalDependencies:
++      '@types/react': 19.2.1
++      '@types/react-dom': 19.2.1(@types/react@19.2.1)
++
++  '@types/aria-query@5.0.4': {}
++
+   '@types/babel__core@7.20.5':
+     dependencies:
+       '@babel/parser': 7.28.4
+@@ -5101,10 +5440,20 @@ snapshots:
+ 
+   add@2.0.6: {}
+ 
++  ansi-regex@5.0.1: {}
++
++  ansi-styles@5.2.0: {}
++
+   aria-hidden@1.2.6:
+     dependencies:
+       tslib: 2.8.1
+ 
++  aria-query@5.3.0:
++    dependencies:
++      dequal: 2.0.3
++
++  aria-query@5.3.2: {}
++
+   array-flatten@1.1.1: {}
+ 
+   assertion-error@2.0.1: {}
+@@ -5133,6 +5482,10 @@ snapshots:
+ 
+   baseline-browser-mapping@2.8.13: {}
+ 
++  bidi-js@1.0.3:
++    dependencies:
++      require-from-string: 2.0.2
++
+   body-parser@1.20.3:
+     dependencies:
+       bytes: 3.1.2
+@@ -5262,6 +5615,13 @@ snapshots:
+     dependencies:
+       layout-base: 2.0.1
+ 
++  css-tree@3.2.1:
++    dependencies:
++      mdn-data: 2.27.1
++      source-map-js: 1.2.1
++
++  css.escape@1.5.1: {}
++
+   cssesc@3.0.0: {}
+ 
+   csstype@3.1.3: {}
+@@ -5450,6 +5810,13 @@ snapshots:
+       d3: 7.9.0
+       lodash-es: 4.17.21
+ 
++  data-urls@7.0.0:
++    dependencies:
++      whatwg-mimetype: 5.0.0
++      whatwg-url: 16.0.1
++    transitivePeerDependencies:
++      - '@noble/hashes'
++
+   date-fns-jalali@4.1.0-0: {}
+ 
+   date-fns@4.1.0: {}
+@@ -5466,6 +5833,8 @@ snapshots:
+ 
+   decimal.js-light@2.5.1: {}
+ 
++  decimal.js@10.6.0: {}
++
+   decode-named-character-reference@1.2.0:
+     dependencies:
+       character-entities: 2.0.2
+@@ -5492,6 +5861,10 @@ snapshots:
+     dependencies:
+       dequal: 2.0.3
+ 
++  dom-accessibility-api@0.5.16: {}
++
++  dom-accessibility-api@0.6.3: {}
++
+   dom-helpers@5.2.1:
+     dependencies:
+       '@babel/runtime': 7.28.4
+@@ -5534,6 +5907,8 @@ snapshots:
+ 
+   entities@6.0.1: {}
+ 
++  entities@8.0.0: {}
++
+   es-define-property@1.0.1: {}
+ 
+   es-errors@1.3.0: {}
+@@ -5878,6 +6253,12 @@ snapshots:
+       property-information: 7.1.0
+       space-separated-tokens: 2.0.2
+ 
++  html-encoding-sniffer@6.0.0:
++    dependencies:
++      '@exodus/bytes': 1.15.1
++    transitivePeerDependencies:
++      - '@noble/hashes'
++
+   html-url-attributes@3.0.1: {}
+ 
+   html-void-elements@3.0.0: {}
+@@ -5900,6 +6281,8 @@ snapshots:
+     dependencies:
+       safer-buffer: 2.1.2
+ 
++  indent-string@4.0.0: {}
++
+   inherits@2.0.4: {}
+ 
+   inline-style-parser@0.2.4: {}
+@@ -5928,10 +6311,38 @@ snapshots:
+ 
+   is-plain-obj@4.1.0: {}
+ 
++  is-potential-custom-element-name@1.0.1: {}
++
+   jiti@2.6.1: {}
+ 
+   js-tokens@4.0.0: {}
+ 
++  jsdom@30.0.1:
++    dependencies:
++      '@asamuzakjp/css-color': 6.0.7
++      '@asamuzakjp/dom-selector': 8.3.2
++      '@bramus/specificity': 2.4.2
++      '@csstools/css-syntax-patches-for-csstree': 1.1.8(css-tree@3.2.1)
++      '@exodus/bytes': 1.15.1
++      css-tree: 3.2.1
++      data-urls: 7.0.0
++      decimal.js: 10.6.0
++      html-encoding-sniffer: 6.0.0
++      is-potential-custom-element-name: 1.0.1
++      lru-cache: 11.5.2
++      parse5: 8.0.1
++      saxes: 6.0.0
++      symbol-tree: 3.2.4
++      tough-cookie: 6.0.2
++      undici: 8.10.0
++      w3c-xmlserializer: 5.0.0
++      webidl-conversions: 8.0.1
++      whatwg-mimetype: 5.0.0
++      whatwg-url: 17.1.0
++      xml-name-validator: 5.0.0
++    transitivePeerDependencies:
++      - '@noble/hashes'
++
+   jsesc@3.1.0: {}
+ 
+   json5@2.2.3: {}
+@@ -6019,6 +6430,8 @@ snapshots:
+ 
+   loupe@3.2.1: {}
+ 
++  lru-cache@11.5.2: {}
++
+   lru-cache@5.1.1:
+     dependencies:
+       yallist: 3.1.1
+@@ -6031,6 +6444,8 @@ snapshots:
+     dependencies:
+       react: 19.2.1
+ 
++  lz-string@1.5.0: {}
++
+   magic-string@0.30.19:
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.5.5
+@@ -6206,6 +6621,8 @@ snapshots:
+     dependencies:
+       '@types/mdast': 4.0.4
+ 
++  mdn-data@2.27.1: {}
++
+   media-typer@0.3.0: {}
+ 
+   merge-descriptors@1.0.3: {}
+@@ -6446,6 +6863,8 @@ snapshots:
+ 
+   mime@1.6.0: {}
+ 
++  min-indent@1.0.1: {}
++
+   minipass@7.1.2: {}
+ 
+   minizlib@3.1.0:
+@@ -6520,6 +6939,10 @@ snapshots:
+     dependencies:
+       entities: 6.0.1
+ 
++  parse5@8.0.1:
++    dependencies:
++      entities: 8.0.0
++
+   parseurl@1.3.3: {}
+ 
+   path-data-parser@0.1.0: {}
+@@ -6572,6 +6995,12 @@ snapshots:
+ 
+   prettier@3.6.2: {}
+ 
++  pretty-format@27.5.1:
++    dependencies:
++      ansi-regex: 5.0.1
++      ansi-styles: 5.2.0
++      react-is: 17.0.2
++
+   prop-types@15.8.1:
+     dependencies:
+       loose-envify: 1.4.0
+@@ -6589,6 +7018,8 @@ snapshots:
+ 
+   proxy-from-env@1.1.0: {}
+ 
++  punycode@2.3.1: {}
++
+   qs@6.13.0:
+     dependencies:
+       side-channel: 1.1.0
+@@ -6622,6 +7053,8 @@ snapshots:
+ 
+   react-is@16.13.1: {}
+ 
++  react-is@17.0.2: {}
++
+   react-is@18.3.1: {}
+ 
+   react-markdown@10.1.0(@types/react@19.2.1)(react@19.2.1):
+@@ -6712,6 +7145,11 @@ snapshots:
+       tiny-invariant: 1.3.3
+       victory-vendor: 36.9.2
+ 
++  redent@3.0.0:
++    dependencies:
++      indent-string: 4.0.0
++      strip-indent: 3.0.0
++
+   regex-recursion@6.0.2:
+     dependencies:
+       regex-utilities: 2.3.0
+@@ -6785,6 +7223,8 @@ snapshots:
+       mdast-util-to-markdown: 2.1.2
+       unified: 11.0.5
+ 
++  require-from-string@2.0.2: {}
++
+   resolve-pkg-maps@1.0.0: {}
+ 
+   robust-predicates@3.0.2: {}
+@@ -6830,6 +7270,10 @@ snapshots:
+ 
+   safer-buffer@2.1.2: {}
+ 
++  saxes@6.0.0:
++    dependencies:
++      xmlchars: 2.2.0
++
+   scheduler@0.27.0: {}
+ 
+   semver@6.3.1: {}
+@@ -6944,6 +7388,10 @@ snapshots:
+       character-entities-html4: 2.1.0
+       character-entities-legacy: 3.0.0
+ 
++  strip-indent@3.0.0:
++    dependencies:
++      min-indent: 1.0.1
++
+   style-to-js@1.1.18:
+     dependencies:
+       style-to-object: 1.0.11
+@@ -6954,6 +7402,8 @@ snapshots:
+ 
+   stylis@4.3.6: {}
+ 
++  symbol-tree@3.2.4: {}
++
+   tailwind-merge@3.3.1: {}
+ 
+   tailwindcss-animate@1.0.7(tailwindcss@4.1.14):
+@@ -6991,8 +7441,22 @@ snapshots:
+ 
+   tinyspy@3.0.2: {}
+ 
++  tldts-core@7.4.10: {}
++
++  tldts@7.4.10:
++    dependencies:
++      tldts-core: 7.4.10
++
+   toidentifier@1.0.1: {}
+ 
++  tough-cookie@6.0.2:
++    dependencies:
++      tldts: 7.4.10
++
++  tr46@6.0.0:
++    dependencies:
++      punycode: 2.3.1
++
+   trim-lines@3.0.1: {}
+ 
+   trough@2.2.0: {}
+@@ -7021,6 +7485,8 @@ snapshots:
+ 
+   undici-types@7.14.0: {}
+ 
++  undici@8.10.0: {}
++
+   unified@11.0.5:
+     dependencies:
+       '@types/unist': 3.0.3
+@@ -7193,7 +7659,7 @@ snapshots:
+       lightningcss: 1.30.1
+       tsx: 4.20.6
+ 
+-  vitest@2.1.9(@types/node@24.7.0)(lightningcss@1.30.1):
++  vitest@2.1.9(@types/node@24.7.0)(jsdom@30.0.1)(lightningcss@1.30.1):
+     dependencies:
+       '@vitest/expect': 2.1.9
+       '@vitest/mocker': 2.1.9(vite@5.4.20(@types/node@24.7.0)(lightningcss@1.30.1))
+@@ -7217,6 +7683,7 @@ snapshots:
+       why-is-node-running: 2.3.0
+     optionalDependencies:
+       '@types/node': 24.7.0
++      jsdom: 30.0.1
+     transitivePeerDependencies:
+       - less
+       - lightningcss
+@@ -7245,8 +7712,32 @@ snapshots:
+ 
+   vscode-uri@3.0.8: {}
+ 
++  w3c-xmlserializer@5.0.0:
++    dependencies:
++      xml-name-validator: 5.0.0
++
+   web-namespaces@2.0.1: {}
+ 
++  webidl-conversions@8.0.1: {}
++
++  whatwg-mimetype@5.0.0: {}
++
++  whatwg-url@16.0.1:
++    dependencies:
++      '@exodus/bytes': 1.15.1
++      tr46: 6.0.0
++      webidl-conversions: 8.0.1
++    transitivePeerDependencies:
++      - '@noble/hashes'
++
++  whatwg-url@17.1.0:
++    dependencies:
++      '@exodus/bytes': 1.15.1
++      tr46: 6.0.0
++      webidl-conversions: 8.0.1
++    transitivePeerDependencies:
++      - '@noble/hashes'
++
+   why-is-node-running@2.3.0:
+     dependencies:
+       siginfo: 2.0.0
+@@ -7259,6 +7750,10 @@ snapshots:
+       regexparam: 3.0.0
+       use-sync-external-store: 1.6.0(react@19.2.1)
+ 
++  xml-name-validator@5.0.0: {}
++
++  xmlchars@2.2.0: {}
++
+   yallist@3.1.1: {}
+ 
+   yallist@5.0.0: {}
+diff --git a/todo.md b/todo.md
+index a081130..7ae6e5c 100644
+--- a/todo.md
++++ b/todo.md
+@@ -99,13 +99,21 @@
+ 
+ ## Ampliación del panel administrativo solicitada
+ 
+-- [ ] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.
+-- [ ] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.
+-- [ ] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.
+-- [ ] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.
+-- [ ] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.
+-- [ ] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.
+-- [ ] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.
+-- [ ] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.
+-- [ ] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.
+-- [ ] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint.
++- [x] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.
++- [x] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.
++- [x] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.
++- [x] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.
++- [x] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.
++- [x] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.
++- [x] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.
++- [x] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.
++- [x] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.
++- [x] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint; localmente pasan 25 pruebas y el Preview responde 401 controlado en `/api/admin/data`.
++- [x] Añadir una columna/indicador de estado de usuario usando `email_confirmed_at` y `banned_until` de Supabase Auth.
++- [x] Completar contratos con ciclo explícito y fechas disponibles; `cycle` usa el label real y `startAt` la fecha registrada; `endAt` queda `—` porque no existe en el esquema actual.
++- [x] Mostrar el tipo como columna visible en la tabla general de transacciones.
++- [x] Añadir pruebas verificables para filtros, estados vacíos y errores del panel; `adminUtils.test.ts` cubre filtros/estado vacío y `data.test.ts` cubre 503.
++- [x] Validar el panel ampliado en viewport móvil/tablet y registrar evidencia; `/admin` y la landing se capturaron a 375×812.
++- [x] Añadir pruebas UI/integración del panel `/admin` para filtro, estado vacío y error renderizado; 3 casos pasan en JSDOM.
++- [x] Validar `/admin` en viewport tablet adicional de 768×1024 y registrar evidencia; la puerta de acceso fue capturada.
++- [ ] Revisar visualmente la captura tablet y, si es posible, validar también la vista autenticada del panel ampliado en 768×1024 antes del checkpoint.
+diff --git a/vitest.config.ts b/vitest.config.ts
+index d6edd86..8929942 100644
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -1,8 +1,15 @@
++import { fileURLToPath, URL } from "node:url";
+ import { defineConfig } from "vitest/config";
+ 
+ export default defineConfig({
++  resolve: {
++    alias: {
++      "@": fileURLToPath(new URL("./client/src", import.meta.url)),
++      "@shared": fileURLToPath(new URL("./shared", import.meta.url)),
++    },
++  },
+   test: {
+-    include: ["api/**/*.test.ts", "server/**/*.test.ts"],
++    include: ["api/**/*.test.ts", "server/**/*.test.ts", "client/**/*.test.tsx"],
+     environment: "node",
+   },
+ });
+-- 
+2.43.0
+
