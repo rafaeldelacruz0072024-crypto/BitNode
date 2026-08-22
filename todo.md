@@ -79,7 +79,7 @@
 - [x] Confirmar rama actual, commit final y remoto GitHub sin cambios pendientes.
 - [x] Subir `feature/admin-vercel-native` al repositorio GitHub configurado; rama creada en GitHub desde la copia Windows.
 - [x] Verificar que Vercel detecte la rama; el preview fue creado y la landing carga, pero requiere redeploy con el fallback SPA.
-- [ ] Probar landing, `/admin` y endpoints nativos en el nuevo deployment de Vercel después del fix SPA: landing carga; `/admin` sirve React; falta repetir `/api/commissions/summary` tras la corrección de runtime.
+- [x] Probar landing, `/admin` y endpoints nativos en el nuevo deployment de Vercel después del fix SPA: landing y `/admin` cargan en `bit-node.vercel.app`; `/api/commissions/summary` responde 401 controlado sin sesión.
 
 ## Publicación desde copia local de Windows
 
@@ -90,4 +90,9 @@
 ## Corrección de rutas SPA en Vercel
 
 - [x] Añadir fallback SPA específico para `/admin`, `/dashboard` y `/auth` sin interceptar `/api/*`.
-- [ ] Publicar la corrección del endpoint de resumen y volver a probar el preview.
+- [x] Publicar la corrección del endpoint de resumen y volver a probar el preview; el Preview y Production quedaron en estado Ready.
+- [ ] Diagnosticar `Invalid login credentials` en `/admin` del Preview de Vercel y verificar que URL, clave pública, usuario y contraseña pertenezcan al mismo proyecto Supabase.
+- [ ] Repetir el smoke test administrativo después de corregir la configuración o las credenciales, sin exponer secretos.
+- [ ] Marcar el endpoint de resumen y la validación de producción como completados solo después de observar respuestas 401/403/200 controladas en Vercel.
+- [x] Probar directamente `https://bit-node.vercel.app/api/admin` en Production: responde `401` JSON con `status: unauthenticated`, sin 404 ni crash.
+- [ ] Completar el smoke test de `/admin` en Production con una sesión admin válida y confirmar que las métricas protegidas cargan sin errores.
