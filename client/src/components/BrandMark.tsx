@@ -2,16 +2,16 @@ import type { SVGProps } from "react";
 
 export function BrandMark(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 36 36" fill="none" aria-hidden="true" focusable="false" {...props}>
-      <rect x="1" y="1" width="34" height="34" rx="9" fill="url(#bitnode-mark-bg)" stroke="rgba(149,157,205,.35)" />
-      <path d="M10 10h7.2c4.4 0 7 2.1 7 5.4 0 1.7-.8 3.1-2.2 4 1.9.8 3 2.3 3 4.3 0 3.8-2.9 6.3-7.6 6.3H10V10Zm5.2 4.3v5.1h1.8c1.8 0 2.8-.9 2.8-2.6 0-1.7-1-2.5-2.8-2.5h-1.8Zm0 9.1v5.2h2.3c2 0 3.1-.9 3.1-2.7s-1.1-2.5-3.1-2.5h-2.3Z" fill="white" />
-      <path d="M28.5 9.5h1.8v20h-1.8z" fill="#6d7cff" opacity=".9" />
-      <defs>
-        <linearGradient id="bitnode-mark-bg" x1="5" y1="4" x2="31" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#161c43" />
-          <stop offset="1" stopColor="#080b18" />
-        </linearGradient>
-      </defs>
+    <svg
+      viewBox="0 0 36 36"
+      role="img"
+      aria-label="BitNode"
+      focusable="false"
+      {...props}
+    >
+      <rect x="1" y="1" width="34" height="34" rx="9" fill="#151b3d" stroke="#6d7cff" strokeWidth="1.25" />
+      <path d="M10 9.5h7.1c4.45 0 7.1 2.15 7.1 5.45 0 1.78-.82 3.17-2.3 4.05 1.96.82 3.08 2.35 3.08 4.48 0 3.83-2.94 6.52-7.78 6.52H10V9.5Zm4.9 4.1v3.92h2.05c1.65 0 2.55-.68 2.55-2.02 0-1.29-.9-1.9-2.55-1.9H14.9Zm0 7.87v4.4h2.42c1.86 0 2.93-.77 2.93-2.28 0-1.45-1.07-2.12-2.93-2.12H14.9Z" fill="#ffffff" />
+      <path d="M28.2 9.5h2v20.5h-2z" fill="#b7ff3c" />
     </svg>
   );
 }
