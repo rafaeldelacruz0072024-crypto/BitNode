@@ -73,3 +73,10 @@
 - [x] Repetir el login real y comprobar acceso admin después de recibir 200 del handler nativo.
 
 - [x] Validación final posterior al arreglo: `pnpm check`, 22 pruebas Vitest y `pnpm build` pasan; panel admin real visible con `admin` y bono binario 10%.
+
+## Publicación GitHub y Vercel
+
+- [ ] Confirmar rama actual, commit final y remoto GitHub sin cambios pendientes.
+- [ ] Subir `feature/admin-vercel-native` al repositorio GitHub configurado.
+- [ ] Verificar que Vercel detecte la rama y complete el build sin errores.
+- [ ] Probar landing, `/admin` y endpoints nativos en el deployment de Vercel.
