@@ -14,6 +14,8 @@ type AuthUser = {
   email?: string | null;
   last_sign_in_at?: string | null;
   created_at?: string | null;
+  email_confirmed_at?: string | null;
+  banned_until?: string | null;
 };
 
 type Profile = {
@@ -167,6 +169,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sponsorId: row.sponsor_id ?? null,
         createdAt: row.created_at ?? authUser?.created_at ?? null,
         lastSignInAt: authUser?.last_sign_in_at ?? null,
+        emailConfirmedAt: authUser?.email_confirmed_at ?? null,
+        bannedUntil: authUser?.banned_until ?? null,
+        status: authUser?.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "suspendido" : authUser?.email_confirmed_at ? "activo" : "pendiente",
       };
     });
 
@@ -183,6 +188,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fee: round(numberValue(row.fee)),
       netAmount: round(numberValue(row.net_amount)),
       providerStatus: row.provider_status ?? null,
+      cycle: row.type === "contract" ? row.label ?? null : null,
+      startAt: row.type === "contract" ? row.created_at ?? null : null,
+      endAt: null,
       createdAt: row.created_at ?? null,
     }));
 

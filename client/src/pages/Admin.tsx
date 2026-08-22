@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import React, { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
 import {
   ArrowLeft,
@@ -32,6 +33,9 @@ type AdminUser = {
   sponsorId: string | null;
   createdAt: string | null;
   lastSignInAt: string | null;
+  emailConfirmedAt: string | null;
+  bannedUntil: string | null;
+  status: string;
 };
 
 type AdminTransaction = {
@@ -47,6 +51,9 @@ type AdminTransaction = {
   fee: number;
   netAmount: number;
   providerStatus: string | null;
+  cycle: string | null;
+  startAt: string | null;
+  endAt: string | null;
   createdAt: string | null;
 };
 
@@ -175,25 +182,17 @@ function SummarySection({ data }: { data: AdminData | null }) {
   </>;
 }
 
-function UsersSection({ users }: { users: AdminUser[] }) {
+export function UsersSection({ users }: { users: AdminUser[] }) {
   const [query, setQuery] = useState("");
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return users;
-    return users.filter((user) => [user.username, user.displayName, user.email, user.role].some((value) => value?.toLowerCase().includes(normalized)));
-  }, [query, users]);
-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{users.length === 0 ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;
+  const filtered = useMemo(() => users.filter((user) => matchesAdminSearch([user.username, user.displayName, user.email, user.role, user.status], query)), [query, users]);
+  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">IDENTITY / PROFILES</p><h2>Usuarios registrados</h2></div><span className="card-status"><CheckCircle2 size={15} /> {users.length} perfiles</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por correo, usuario, estado o rol" aria-label="Buscar usuarios" /></label><span className="admin-toolbar-note">{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(users) ? <EmptyState title="Sin usuarios" detail="No existen perfiles disponibles para mostrar." /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro correo, usuario, estado o rol." /> : <DataTable label="Usuarios registrados"><thead><tr><th>Usuario</th><th>Correo</th><th>Estado</th><th>Rol</th><th>Patrocinador</th><th>Registro</th><th>Último acceso</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.username || "Sin username"}</strong><small>{user.displayName || user.id.slice(0, 12)}</small></td><td>{user.email || "—"}</td><td><StatusPill value={userStatusLabel(user)} /></td><td><StatusPill value={user.role} /></td><td className="mono-cell">{user.sponsorId?.slice(0, 12) || "—"}</td><td>{dateLabel(user.createdAt)}</td><td>{dateLabel(user.lastSignInAt)}</td></tr>)}</tbody></DataTable>}</article>;
 }
 
 function TransactionsSection({ rows, contractsOnly = false }: { rows: AdminTransaction[]; contractsOnly?: boolean }) {
   const [query, setQuery] = useState("");
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return rows;
-    return rows.filter((row) => [row.id, row.username, row.type, row.status, row.network, row.providerStatus].some((value) => value?.toLowerCase().includes(normalized)));
-  }, [query, rows]);
+  const filtered = useMemo(() => rows.filter((row) => matchesAdminSearch([row.id, row.username, row.type, row.status, row.network, row.providerStatus, row.cycle], query)), [query, rows]);
   const title = contractsOnly ? "Contratos" : "Transacciones";
-  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{rows.length === 0 ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : <DataTable label={title}><thead><tr><th>ID</th><th>Usuario</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></tr>)}</tbody></DataTable>}</article>;
+  return <article className="admin-card admin-card-full"><div className="card-heading"><div><p className="admin-kicker">{contractsOnly ? "CONTRACTS / LIFECYCLE" : "TRANSACTIONS / HISTORY"}</p><h2>{title}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Solo lectura</span></div><div className="admin-toolbar"><label className="admin-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${contractsOnly ? "contratos" : "transacciones"}`} aria-label={`Buscar ${title.toLowerCase()}`} /></label><span className="admin-toolbar-note">{filtered.length} registro{filtered.length === 1 ? "" : "s"}</span></div>{!hasRows(rows) ? <EmptyState title={`Sin ${title.toLowerCase()}`} detail={`No existen registros en ${contractsOnly ? "transactions con tipo contract" : "transactions"}.`} /> : filtered.length === 0 ? <EmptyState title="Sin coincidencias" detail="Prueba con otro identificador, usuario, tipo o estado." /> : <DataTable label={title}><thead><tr>{contractsOnly ? <><th>ID</th><th>Usuario</th><th>Ciclo</th><th>Monto</th><th>Estado</th><th>Fechas</th></> : <><th>ID</th><th>Usuario</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Red / wallet</th><th>Fecha</th></>}</tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td className="mono-cell">{row.id.slice(0, 18)}</td><td>{row.username || row.userId?.slice(0, 12) || "—"}</td>{contractsOnly ? <><td>{row.cycle || row.label || "Ciclo no registrado"}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : ""}</small></td><td><StatusPill value={row.status} /></td><td><span>Inicio {dateLabel(row.startAt)}</span><small>Fin {dateLabel(row.endAt)}</small></td></> : <><td>{statusLabel(row.type)}</td><td><strong>{money(row.amount)}</strong><small>{row.fee ? `Fee ${money(row.fee)}` : row.netAmount ? `Neto ${money(row.netAmount)}` : row.label || ""}</small></td><td><StatusPill value={row.status} /></td><td><span>{row.network || "—"}</span><small className="mono-cell">{row.wallet || "Wallet no registrada"}</small></td><td>{dateLabel(row.createdAt)}</td></>}</tr>)}</tbody></DataTable>}</article>;
 }
 
 function CommissionsSection({ data }: { data: AdminData }) {

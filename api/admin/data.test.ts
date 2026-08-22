@@ -55,4 +55,18 @@ describe("admin data endpoint", () => {
     }));
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
   });
+
+  it("returns a controlled 503 when a protected dataset cannot be queried", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "admin-1", email: "admin@example.com" }));
+    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: "admin-1", username: "admin", role: "admin" }]));
+    fetchMock.mockRejectedValueOnce(new Error("network failure"));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = responseMock();
+
+    await handler({ method: "GET", headers: { authorization: "Bearer token" } } as any, res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: "unavailable" }));
+  });
 });

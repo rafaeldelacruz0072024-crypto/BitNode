@@ -99,13 +99,21 @@
 
 ## Ampliación del panel administrativo solicitada
 
-- [ ] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.
-- [ ] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.
-- [ ] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.
-- [ ] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.
-- [ ] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.
-- [ ] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.
-- [ ] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.
-- [ ] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.
-- [ ] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.
-- [ ] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint.
+- [x] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.
+- [x] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.
+- [x] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.
+- [x] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.
+- [x] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.
+- [x] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.
+- [x] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.
+- [x] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.
+- [x] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.
+- [x] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint; localmente pasan 25 pruebas y el Preview responde 401 controlado en `/api/admin/data`.
+- [x] Añadir una columna/indicador de estado de usuario usando `email_confirmed_at` y `banned_until` de Supabase Auth.
+- [x] Completar contratos con ciclo explícito y fechas disponibles; `cycle` usa el label real y `startAt` la fecha registrada; `endAt` queda `—` porque no existe en el esquema actual.
+- [x] Mostrar el tipo como columna visible en la tabla general de transacciones.
+- [x] Añadir pruebas verificables para filtros, estados vacíos y errores del panel; `adminUtils.test.ts` cubre filtros/estado vacío y `data.test.ts` cubre 503.
+- [x] Validar el panel ampliado en viewport móvil/tablet y registrar evidencia; `/admin` y la landing se capturaron a 375×812.
+- [x] Añadir pruebas UI/integración del panel `/admin` para filtro, estado vacío y error renderizado; 3 casos pasan en JSDOM.
+- [x] Validar `/admin` en viewport tablet adicional de 768×1024 y registrar evidencia; la puerta de acceso fue capturada.
+- [ ] Revisar visualmente la captura tablet y, si es posible, validar también la vista autenticada del panel ampliado en 768×1024 antes del checkpoint.
