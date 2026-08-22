@@ -28,7 +28,7 @@
 - [x] Validar la integración server-side contra la estructura real: `profiles.role` ya existe; ningún usuario ha sido promovido automáticamente, por lo que el acceso seguirá en 403 hasta asignar un admin explícitamente.
 - [x] Sustituir el formulario de API key por login/logout de Supabase y estados de acceso 401/403/503.
 - [x] Añadir pruebas mock para sesión ausente, token inválido, usuario no admin y admin autorizado.
-- [ ] Ejecutar smoke test real con una sesión Supabase admin después de promover explícitamente un perfil.
+- [x] Ejecutar smoke test real con la sesión Supabase admin de gentecash después de promover explícitamente el perfil.
 - [x] Verificar build, pruebas, flujo responsive y esquema Supabase real.
 
 ## Comisión de indicación directa: 10%
@@ -53,3 +53,23 @@
 - [x] Mostrar en el frontend el bono binario 10%, volumen por pierna y estado de emparejamiento.
 - [x] Añadir pruebas específicas de tasa 10%, emparejamiento, delta, redondeo, idempotencia, 401/403/200 y separación directo/binario.
 - [x] Validar `pnpm check`, 22 pruebas, `pnpm build`, responsive y crear el commit final `81a719b` posterior a esta integración.
+
+## Credencial administrativa autorizada
+
+- [x] Restablecer la contraseña de `gentecash@gmail.com` mediante la API administrativa segura de Supabase, sin escribirla en código, logs o repositorio.
+- [x] Verificar login real HTTP 200 y rol `admin` en Supabase sin exponer contraseña; el acceso visual en `/admin` queda listo para comprobarse con esa sesión.
+
+## Diagnóstico de autorización admin real
+
+- [x] Comparar el UUID del access token con `public.profiles.id`; el token real corresponde a `1d49e94b-381e-41a3-92b8-7441d0f6508e` y el rol devuelto es `admin`.
+- [x] Confirmar que la función consulta el proyecto `kmiuwbnduedaqpaytbhz` y usa la clave service-role correcta.
+- [x] Corregir el rechazo: el middleware local no adaptaba `ServerResponse` al contrato Vercel y provocaba 404/crash; se corrigió sin cambiar permisos.
+- [x] Repetir la prueba visual con `gentecash@gmail.com`: panel visible, `Función protegida activa`, `gentecash@gmail.com · admin` y bono binario 10% cargado.
+
+## Corrección del smoke test admin local
+
+- [x] Conectar las funciones nativas `api/admin.ts` y `api/commissions/summary.ts` al servidor de desarrollo para evitar 404 en `/api/*`.
+- [x] Mantener respuestas diferenciadas: 401 para sesión, 403 para rol, 503 para disponibilidad; el frontend muestra el estado correspondiente.
+- [x] Repetir el login real y comprobar acceso admin después de recibir 200 del handler nativo.
+
+- [x] Validación final posterior al arreglo: `pnpm check`, 22 pruebas Vitest y `pnpm build` pasan; panel admin real visible con `admin` y bono binario 10%.

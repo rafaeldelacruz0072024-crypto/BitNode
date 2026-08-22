@@ -150,6 +150,41 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
+function nativeResponse(res: import("node:http").ServerResponse) {
+  const response = {
+    status(code: number) {
+      res.statusCode = code;
+      return response;
+    },
+    json(body: unknown) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify(body));
+    },
+    setHeader(name: string, value: string) {
+      res.setHeader(name, value);
+    },
+  };
+  return response;
+}
+
+function vitePluginNativeApi(): Plugin {
+  return {
+    name: "native-vercel-api-dev",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/admin", async (req, res, next) => {
+        if (req.method !== "GET" || req.url !== "/" && req.url !== "") return next();
+        const { default: handler } = await import("./api/admin");
+        return handler(req as never, nativeResponse(res) as never);
+      });
+      server.middlewares.use("/api/commissions/summary", async (req, res, next) => {
+        if (req.method !== "GET" || req.url !== "/" && req.url !== "") return next();
+        const { default: handler } = await import("./api/commissions/summary");
+        return handler(req as never, nativeResponse(res) as never);
+      });
+    },
+  };
+}
+
 function vitePluginStorageProxy(): Plugin {
   return {
     name: "manus-storage-proxy",
@@ -203,7 +238,7 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginNativeApi(), vitePluginStorageProxy()];
 
 export default defineConfig({
   plugins,
