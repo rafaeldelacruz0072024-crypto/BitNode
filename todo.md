@@ -30,3 +30,12 @@
 - [x] Añadir pruebas mock para sesión ausente, token inválido, usuario no admin y admin autorizado.
 - [ ] Ejecutar smoke test real con una sesión Supabase admin después de promover explícitamente un perfil.
 - [x] Verificar build, pruebas, flujo responsive y esquema Supabase real.
+
+## Comisión de indicación directa: 10%
+
+- [x] Definir una única constante server-side de comisión directa igual a 10% en `server/commissionRules.ts`.
+- [x] Implementar cálculo de comisión directa con redondeo a 8 decimales y validación de monto positivo.
+- [x] Mantener el crédito idempotente delegando desde `server/contractActivation.ts` en `process_contract_commissions`, que usa `source_event_id`, beneficiario, tipo `direct` y conflicto único.
+- [x] Validar en el RPC Supabase existente que el directo se acredita únicamente a `network_nodes.sponsor_id`; el binario usa una ruta separada.
+- [x] Añadir pruebas de cálculo, redondeo, monto inválido, llamada al RPC, idempotencia y bloqueo de contratos no confirmados.
+- [x] Validar por arquitectura y pruebas que el navegador no acredita fondos: sólo el flujo server-side de contrato confirmado llama al RPC y conserva el binario independiente del directo.
