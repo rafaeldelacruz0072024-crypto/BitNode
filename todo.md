@@ -52,4 +52,4 @@
 - [x] Exponer métricas seguras mediante `api/commissions/summary.ts`, con validación de sesión y rol admin.
 - [x] Mostrar en el frontend el bono binario 10%, volumen por pierna y estado de emparejamiento.
 - [x] Añadir pruebas específicas de tasa 10%, emparejamiento, delta, redondeo, idempotencia, 401/403/200 y separación directo/binario.
-- [x] Validar `pnpm check`, 22 pruebas, `pnpm build` y responsive; queda pendiente crear el commit final posterior a esta integración.
+- [x] Validar `pnpm check`, 22 pruebas, `pnpm build`, responsive y crear el commit final `81a719b` posterior a esta integración.
