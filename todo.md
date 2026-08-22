@@ -42,5 +42,5 @@
 
 ## Consolidación solicitada
 
-- [ ] Revisar y consolidar todos los cambios actuales de `feature/admin-vercel-native` en un commit versionado, sin implementar funcionalidades nuevas.
-- [ ] Confirmar que `main` permanece sin modificaciones y entregar la referencia del commit/checkpoint.
+- [x] Revisar y consolidar todos los cambios actuales de `feature/admin-vercel-native` en un commit versionado, sin implementar funcionalidades nuevas.
+- [x] Confirmar que `main` permanece sin modificaciones y entregar la referencia del commit/checkpoint.
