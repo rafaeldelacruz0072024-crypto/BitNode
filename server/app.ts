@@ -1,15 +1,15 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./_core/oauth";
-import { registerStorageProxy } from "./_core/storageProxy";
-import { appRouter } from "./routers";
-import { createContext } from "./_core/context";
-import { registerNowPaymentsRoutes } from "./nowpayments";
-import { registerWithdrawalRoutes } from "./withdrawals";
-import { registerCommissionRoutes } from "./commissions";
-import { registerDepositRoutes } from "./deposits";
-import { createApiRateLimiter, createFinancialRateLimiter } from "./security";
+import { registerOAuthRoutes } from "./_core/oauth.js";
+import { registerStorageProxy } from "./_core/storageProxy.js";
+import { appRouter } from "./routers.js";
+import { createContext } from "./_core/context.js";
+import { registerNowPaymentsRoutes } from "./nowpayments.js";
+import { registerWithdrawalRoutes } from "./withdrawals.js";
+import { registerCommissionRoutes } from "./commissions.js";
+import { registerDepositRoutes } from "./deposits.js";
+import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js";
 
 export function createApp(): Express {
   const app = express();
