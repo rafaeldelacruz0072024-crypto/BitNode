@@ -1,15 +1,15 @@
 {
-  "version": 2,
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
   "framework": "vite",
   "functions": {
-    "api/**/*.ts": {
+    "api/handler.mjs": {
+      "runtime": "nodejs20.x",
       "maxDuration": 60
     }
   },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/[...path].ts" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/handler.mjs" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
