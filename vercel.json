@@ -4,7 +4,6 @@
   "framework": "vite",
   "functions": {
     "api/handler.mjs": {
-      "runtime": "nodejs20.x",
       "maxDuration": 60
     }
   },
