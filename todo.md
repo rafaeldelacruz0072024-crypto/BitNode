@@ -39,3 +39,8 @@
 - [x] Validar en el RPC Supabase existente que el directo se acredita únicamente a `network_nodes.sponsor_id`; el binario usa una ruta separada.
 - [x] Añadir pruebas de cálculo, redondeo, monto inválido, llamada al RPC, idempotencia y bloqueo de contratos no confirmados.
 - [x] Validar por arquitectura y pruebas que el navegador no acredita fondos: sólo el flujo server-side de contrato confirmado llama al RPC y conserva el binario independiente del directo.
+
+## Consolidación solicitada
+
+- [ ] Revisar y consolidar todos los cambios actuales de `feature/admin-vercel-native` en un commit versionado, sin implementar funcionalidades nuevas.
+- [ ] Confirmar que `main` permanece sin modificaciones y entregar la referencia del commit/checkpoint.
