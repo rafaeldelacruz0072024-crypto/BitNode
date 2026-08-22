@@ -3,12 +3,12 @@
   "outputDirectory": "dist/public",
   "framework": "vite",
   "functions": {
-    "api/handler.mjs": {
+    "api/handler.cjs": {
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/handler.mjs" },
+    { "source": "/api/:path*", "destination": "/api/handler.cjs" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
