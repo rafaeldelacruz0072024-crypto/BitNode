@@ -76,14 +76,31 @@ export async function getCommissionSummary(userId: string) {
 
   const { data, error } = await client
     .from("commission_ledger")
-    .select("id, commission_type, amount, rate, leg, status, source_event_id, created_at")
+    .select("id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata")
     .eq("beneficiary_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Commission ledger query failed: ${error.message}`);
 
+  const { data: volumeRows, error: volumeError } = await client
+    .from("network_volume")
+    .select("leg, volume, matched_volume, updated_at")
+    .eq("user_id", userId);
+  if (volumeError) throw new Error(`Network volume query failed: ${volumeError.message}`);
+
+  const left = Number(volumeRows?.find((row) => row.leg === "left")?.volume || 0);
+  const right = Number(volumeRows?.find((row) => row.leg === "right")?.volume || 0);
+  const matched = Math.min(left, right);
+  const updatedAt = volumeRows?.reduce<string | null>((latest, row) => (!latest || String(row.updated_at) > latest ? String(row.updated_at) : latest), null);
   const rows = data || [];
   return {
     ...summarizeCommissionRows(rows),
+    binaryVolume: {
+      left,
+      right,
+      matched,
+      status: matched > 0 ? "paired" : left > 0 || right > 0 ? "awaiting_pair" : "no_volume",
+      updatedAt,
+    },
     entries: rows,
   };
 }

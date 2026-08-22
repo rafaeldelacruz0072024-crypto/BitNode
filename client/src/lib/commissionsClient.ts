@@ -4,12 +4,20 @@ export type CommissionSummary = {
   direct: number;
   binary: number;
   total: number;
+  binaryVolume?: {
+    left: number;
+    right: number;
+    matched: number;
+    status: "paired" | "awaiting_pair" | "no_volume";
+    updatedAt: string | null;
+  };
   entries: Array<{
     id: string;
     commission_type: string;
     amount: number | string;
     rate: number | string;
     leg: string | null;
+    metadata?: Record<string, unknown>;
     status: string;
     source_event_id: string;
     created_at: string;

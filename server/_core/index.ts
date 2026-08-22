@@ -1,19 +1,8 @@
 import "dotenv/config";
-import express from "express";
-import helmet from "helmet";
-import { createApiRateLimiter, createFinancialRateLimiter } from "../security";
 import { createServer } from "http";
 import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { registerNowPaymentsRoutes } from "../nowpayments";
-import { registerWithdrawalRoutes } from "../withdrawals";
-import { registerCommissionRoutes } from "../commissions";
-import { registerDepositRoutes } from "../deposits";
+import { createApp } from "../app";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -25,53 +14,27 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-async function findAvailablePort(startPort: number = 3000): Promise<number> {
+async function findAvailablePort(startPort = 3000): Promise<number> {
   for (let port = startPort; port < startPort + 20; port++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
+    if (await isPortAvailable(port)) return port;
   }
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
 async function startServer() {
-  const app = express();
+  const app = createApp();
   const server = createServer(app);
-  app.disable("x-powered-by");
-  app.set("trust proxy", 1);
-  app.use(helmet({ contentSecurityPolicy: false }));
-  const apiLimiter = createApiRateLimiter();
-  const financialLimiter = createFinancialRateLimiter();
-  app.use(express.json({ limit: "1mb" }));
-  app.use(express.urlencoded({ limit: "64kb", extended: true }));
-  app.use("/api", apiLimiter);
-  app.use(["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions"], financialLimiter);
-  registerStorageProxy(app);
-  registerOAuthRoutes(app);
-  registerNowPaymentsRoutes(app);
-  registerWithdrawalRoutes(app);
-  registerCommissionRoutes(app);
-  registerDepositRoutes(app);
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
-  // development mode uses Vite, production mode uses static files
+
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
+  const preferredPort = Number.parseInt(process.env.PORT || "3000", 10);
   const port = await findAvailablePort(preferredPort);
-
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    console.log(`Port ${preferredPort} is busy, using port ${port}`);
   }
 
   server.listen(port, () => {
@@ -79,4 +42,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(error => {
+  console.error("[Server] Failed to start:", error);
+  process.exitCode = 1;
+});

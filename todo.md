@@ -150,3 +150,97 @@ El proyecto debe evolucionar desde una réplica estática hacia una aplicación 
 - [x] Reducir límites de body y añadir headers de seguridad HTTP.
 - [x] Añadir rate limiting específico para rutas financieras y de autenticación.
 - [x] Añadir pruebas de rechazo por exceso de solicitudes y payloads inválidos.
+
+## Integración GitHub y Vercel
+
+- [x] Inspeccionar conectores activos y confirmar la cuenta/repositorio GitHub destino: `rafaeldelacruz0072024-crypto/BitNode`.
+- [x] Confirmar la cuenta/proyecto Vercel: `bit-node` en el equipo Hobby; despliegue conectado a `main`.
+- [x] Preparar exportación del código y flujo de ramas sin secretos; GitHub contiene la estructura extraída y el commit `f0a3e1f`.
+- [ ] Configurar variables de entorno server-side en el destino elegido.
+- [ ] Validar build, rutas protegidas, Supabase y dominio después del enlace.
+- [ ] Documentar rollback y operación del despliegue externo.
+
+## Organización de Vercel
+
+- [ ] Verificar que el proyecto Vercel apunta a `rafaeldelacruz0072024-crypto/BitNode` y que el último despliegue terminó correctamente.
+- [ ] Revisar variables de entorno requeridas sin revelar valores.
+- [ ] Confirmar rama de producción, previews y nombre de proyecto.
+- [ ] Revisar dominios, logs y rutas críticas de autenticación/Supabase.
+- [ ] Documentar la organización recomendada de Vercel y los pendientes reales.
+
+## Flujo operativo GitHub/Vercel
+
+- [ ] Documentar `main` como producción, ramas `feature/*` como previews y merge protegido con revisión.
+- [ ] Registrar cómo Vercel tratará previews y despliegues de producción por rama.
+
+## Corrección de despliegue Vercel
+
+- [ ] Revisar cómo se crea la app Express y qué rutas deben exportarse como handler serverless.
+- [ ] Crear entrada `api/` compatible con Vercel sin iniciar `listen()` en runtime serverless.
+- [ ] Añadir `vercel.json` con build frontend, rutas API y fallback SPA.
+- [ ] Probar localmente frontend, API, Auth y build de producción.
+- [ ] Documentar variables requeridas y pasos de redeploy en Vercel.
+
+## Corrección de despliegue Vercel
+
+- [ ] Corregir `vercel.json`: eliminar el runtime inválido `nodejs22.x` y dejar que Vercel autodetecte la función Node.
+- [ ] Validar un nuevo despliegue de producción después de corregir el runtime.
+- [ ] Configurar variables de entorno server-side en Vercel después de estabilizar el build.
+- [ ] Ejecutar auditoría final sobre el dominio de producción y documentar NOWPayments como pendiente.
+
+## Bug reportado: logo del header
+
+- [x] Corregir el logo BitNode roto en la barra superior de la landing y verificar la ruta del recurso en producción.
+- [ ] Subir `BrandMark.tsx`, `Home.tsx`, `Dashboard.tsx` e `index.css` actualizados al repositorio GitHub conectado a Vercel.
+- [ ] Confirmar que el despliegue del fix del logo termine correctamente en Vercel.
+- [ ] Verificar en producción el logo de la landing y el dashboard, incluido el estado vacío de contratos.
+
+## Registro y login con Supabase
+
+- [ ] Revisar el esquema actual de perfiles y el flujo de autenticación del proyecto.
+- [ ] Preparar SQL idempotente para perfiles, trigger de alta y políticas RLS.
+- [ ] Configurar y verificar las URLs de redirección de Supabase y Vercel.
+- [ ] Probar registro, login, cierre de sesión y persistencia de sesión.
+- [ ] Entregar el SQL ejecutable y documentar el resultado de cada verificación.
+
+## Corrección SQL de perfiles
+
+- [ ] Hacer autocontenido el script de autenticación: crear `public.profiles` antes del trigger y de la sincronización.
+- [ ] Reejecutar las verificaciones de tabla, trigger y RLS en Supabase.
+
+## Conflicto persistente de username
+
+- [ ] Diagnosticar qué perfil y qué usuario de Auth ocupan `gentecash`.
+- [ ] Reemplazar la sincronización por una inserción que no genere colisiones dentro de la misma consulta.
+- [ ] Verificar que no existan duplicados y que el trigger de nuevos registros sea tolerante.
+
+## Dependencia faltante de Auth
+
+- [ ] Crear `public.profiles` como paso aislado antes de ejecutar diagnósticos, triggers o sincronizaciones.
+- [ ] Confirmar que la URL del SQL Editor corresponde a `kmiuwbnduedaqpaytbhz.supabase.co`.
+
+## Build Vercel bloqueado por TypeScript
+
+- [ ] Corregir la dependencia/tipado de `@vercel/node` en `api/[...path].ts`.
+- [ ] Resolver las incompatibilidades de tipos Express/Supabase en las rutas serverless.
+- [x] Ejecutar build y pruebas locales antes de sincronizar la corrección con GitHub.
+- [ ] Reanudar la prueba de registro/login después de un despliegue Ready.
+
+## Auth: confirmación de correo bloqueada
+
+- [ ] Verificar el estado de `gentecash+4@gmail.com` en Supabase Auth sin modificar la cuenta.
+- [ ] Revisar confirmación de email y URLs de redirección para producción.
+- [ ] Reenviar confirmación o completar una prueba controlada de login.
+
+## Indicaciones directa y binaria
+
+- [x] Auditar el endpoint y el modelo de resumen de comisiones existente.
+- [x] Mostrar por separado indicación directa, bono binario, volumen por pierna y estado de emparejamiento.
+- [x] Cubrir estados vacíos y errores de Supabase sin presentar datos simulados como reales.
+- [ ] Probar la sección en escritorio, móvil y producción.
+
+## Brechas de verificación directa/binaria
+
+- [x] Extender el resumen de comisiones con volumen izquierdo, volumen derecho, volumen emparejado y estado binario real desde Supabase.
+- [x] Añadir estados visibles de carga y error de Supabase en Mi red, sin presentar fallback local como dato remoto.
+- [ ] Validar Mi red en móvil y producción después de sincronizar Dashboard.tsx e index.css con GitHub/Vercel.
