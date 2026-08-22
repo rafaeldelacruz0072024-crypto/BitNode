@@ -2,6 +2,13 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
   "framework": "vite",
+  "rewrites": [
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/:path*", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/dashboard/:path*", "destination": "/index.html" },
+    { "source": "/auth", "destination": "/index.html" }
+  ],
   "functions": {
     "api/admin.ts": {
       "maxDuration": 10
