@@ -16,21 +16,43 @@ const sections = ["Resumen", "Usuarios", "Contratos", "Transacciones", "Comision
 export default function Admin() {
   const [open, setOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("Resumen");
-  const [apiState, setApiState] = useState<ApiState>("checking");
+  const [apiState, setApiState] = useState<ApiState>("locked");
+  const [adminKey, setAdminKey] = useState("");
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authError, setAuthError] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
-    fetch("/api/admin", { headers: { Accept: "application/json" } })
-      .then(async (response) => {
-        if (!mounted) return;
-        if (response.status === 401 || response.status === 503) setApiState("locked");
-        else setApiState(response.ok ? "ready" : "offline");
-      })
-      .catch(() => mounted && setApiState("offline"));
-    return () => { mounted = false; };
-  }, []);
+  useEffect(() => { setApiState("locked"); }, []);
+
+  async function authorize(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    setApiState("checking");
+    try {
+      const response = await fetch("/api/admin", { headers: { Accept: "application/json", Authorization: `Bearer ${adminKey}` } });
+      if (response.ok) { setIsAuthorized(true); setApiState("ready"); }
+      else { setApiState(response.status === 401 || response.status === 503 ? "locked" : "offline"); setAuthError(response.status === 503 ? "ADMIN_API_KEY todavía no está configurada en Vercel." : "La credencial no fue aceptada."); }
+    } catch { setApiState("offline"); setAuthError("No se pudo conectar con la función nativa."); }
+  }
 
   const apiLabel = apiState === "checking" ? "Verificando función" : apiState === "ready" ? "Función protegida activa" : apiState === "locked" ? "API protegida · credencial requerida" : "API no disponible";
+
+  if (!isAuthorized) return (
+    <main className="admin-shell admin-gate-shell">
+      <section className="admin-gate">
+        <div className="admin-brand-mark">B<span>·</span></div>
+        <p className="admin-kicker">BITNODE / PRIVATE OPERATIONS</p>
+        <h1>Acceso administrativo</h1>
+        <p>Esta consola experimental usa una función nativa de Vercel. Introduce la credencial configurada como <code>ADMIN_API_KEY</code> para abrirla.</p>
+        <form onSubmit={authorize} className="admin-gate-form">
+          <label htmlFor="admin-key">Credencial administrativa</label>
+          <input id="admin-key" type="password" value={adminKey} onChange={(event) => setAdminKey(event.target.value)} placeholder="Bearer secret" autoComplete="off" required />
+          <button type="submit" disabled={apiState === "checking"}>{apiState === "checking" ? "Verificando…" : "Entrar a la consola"}</button>
+        </form>
+        {authError && <p className="admin-auth-error" role="alert">{authError}</p>}
+        <Link href="/" className="admin-back"><ArrowLeft size={15} /> Volver a BitNode</Link>
+      </section>
+    </main>
+  );
 
   return (
     <main className="admin-shell">

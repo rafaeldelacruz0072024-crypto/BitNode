@@ -1,0 +1,10 @@
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist/public",
+  "framework": "vite",
+  "functions": {
+    "api/admin.ts": {
+      "maxDuration": 10
+    }
+  }
+}
