@@ -12,6 +12,9 @@
   "functions": {
     "api/admin.ts": {
       "maxDuration": 10
+    },
+    "api/admin/data.ts": {
+      "maxDuration": 30
     }
   }
 }

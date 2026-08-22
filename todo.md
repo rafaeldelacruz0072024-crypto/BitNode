@@ -96,3 +96,16 @@
 - [ ] Marcar el endpoint de resumen y la validación de producción como completados solo después de observar respuestas 401/403/200 controladas en Vercel.
 - [x] Probar directamente `https://bit-node.vercel.app/api/admin` en Production: responde `401` JSON con `status: unauthenticated`, sin 404 ni crash.
 - [ ] Completar el smoke test de `/admin` en Production con una sesión admin válida y confirmar que las métricas protegidas cargan sin errores.
+
+## Ampliación del panel administrativo solicitada
+
+- [ ] Auditar el panel `/admin` actual y conservar la protección Supabase Auth + rol admin.
+- [ ] Añadir navegación interna para Resumen, Usuarios, Contratos, Transacciones y Comisiones.
+- [ ] Conectar métricas de resumen a datos reales y mostrar estados de carga, vacío y error.
+- [ ] Añadir tabla read-only de usuarios con búsqueda, rol, estado y fecha de registro.
+- [ ] Añadir tabla read-only de contratos con usuario, ciclo, monto, estado y fechas.
+- [ ] Añadir tabla read-only de transacciones con tipo, monto, estado, red, wallet y fecha.
+- [ ] Añadir sección de comisiones directas/binarias con tasas, volumen y ledger reciente.
+- [ ] Mantener todas las consultas administrativas server-side y read-only, sin acreditar fondos ni modificar datos.
+- [ ] Añadir pruebas Vitest para autorización, consultas, filtros, errores y estados vacíos.
+- [ ] Validar `pnpm check`, `pnpm test`, `pnpm build` y vista responsive del panel antes del checkpoint.

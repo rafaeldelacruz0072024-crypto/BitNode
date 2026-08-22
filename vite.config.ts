@@ -181,6 +181,11 @@ function vitePluginNativeApi(): Plugin {
         const { default: handler } = await import("./api/commissions/summary");
         return handler(req as never, nativeResponse(res) as never);
       });
+      server.middlewares.use("/api/admin/data", async (req, res, next) => {
+        if (req.method !== "GET" || req.url !== "/" && req.url !== "") return next();
+        const { default: handler } = await import("./api/admin/data");
+        return handler(req as never, nativeResponse(res) as never);
+      });
     },
   };
 }
