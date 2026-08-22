@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { ArrowLeft, BarChart3, CheckCircle2, CircleDollarSign, LayoutDashboard, LockKeyhole, Menu, Server, ShieldCheck, Users, X } from "lucide-react";
 
 type ApiState = "checking" | "ready" | "locked" | "offline";
+type BinarySummary = { configuredRate: number; direct: number; binary: number; total: number; binaryVolume: { left: number; right: number; matched: number; status: string } };
 
 const metrics = [
   { label: "Usuarios registrados", value: "—", change: "Conecta Supabase para ver datos", icon: Users },
@@ -25,6 +26,7 @@ export default function Admin() {
   const [userEmail, setUserEmail] = useState("");
   const [userRole, setUserRole] = useState("");
   const [authError, setAuthError] = useState("");
+  const [binarySummary, setBinarySummary] = useState<BinarySummary | null>(null);
 
   useEffect(() => {
     if (!supabase) { setApiState("offline"); setAuthError("Faltan las variables públicas de Supabase."); return; }
@@ -45,7 +47,7 @@ export default function Admin() {
     try {
       const response = await fetch("/api/admin", { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` } });
       const body = await response.json().catch(() => ({}));
-      if (response.ok) { setIsAuthorized(true); setUserEmail(body.user?.email ?? ""); setUserRole(body.user?.role ?? "admin"); setApiState("ready"); }
+      if (response.ok) { setIsAuthorized(true); setUserEmail(body.user?.email ?? ""); setUserRole(body.user?.role ?? "admin"); setApiState("ready"); await loadBinarySummary(accessToken); }
       else { setIsAuthorized(false); setApiState(response.status === 401 || response.status === 403 ? "locked" : "offline"); setAuthError(body.error ?? "La sesión no tiene permisos administrativos."); }
     } catch { setIsAuthorized(false); setApiState("offline"); setAuthError("No se pudo conectar con la función nativa."); }
   }
@@ -60,7 +62,12 @@ export default function Admin() {
     await validateSession(data.session.access_token);
   }
 
-  async function signOut() { await supabase?.auth.signOut(); setIsAuthorized(false); setUserEmail(""); setUserRole(""); setApiState("locked"); }
+  async function loadBinarySummary(accessToken: string) {
+    const response = await fetch("/api/commissions/summary", { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` } });
+    if (response.ok) setBinarySummary(await response.json());
+  }
+
+  async function signOut() { await supabase?.auth.signOut(); setIsAuthorized(false); setUserEmail(""); setUserRole(""); setBinarySummary(null); setApiState("locked"); }
 
   const apiLabel = apiState === "checking" ? "Verificando función" : apiState === "ready" ? "Función protegida activa" : apiState === "locked" ? "API protegida · credencial requerida" : "API no disponible";
 
@@ -111,15 +118,17 @@ export default function Admin() {
           <div className="admin-header-right"><span className={`api-badge ${apiState}`}><i />{apiLabel}</span><span className="admin-user">{userEmail} · {userRole}</span><button className="admin-logout" onClick={signOut}>Salir</button><div className="admin-avatar">OP</div></div>
         </header>
 
-        <div className="admin-warning"><ShieldCheck size={17} /><span><strong>Modo seguro de prueba.</strong> Esta rama no muta balances, contratos ni comisiones. Las funciones nativas devuelven datos únicamente después de validar la credencial administrativa.</span></div>
+        <div className="admin-warning"><ShieldCheck size={17} /><span><strong>Bono binario configurado al {binarySummary ? `${binarySummary.configuredRate * 100}%` : "10%"}.</strong> El emparejamiento se calcula server-side sobre volumen real de las piernas izquierda y derecha; el navegador sólo consulta datos.</span></div>
 
         <div className="admin-grid">
           {metrics.map(({ label, value, change, icon: Icon }) => <article className="admin-metric" key={label}><div className="metric-icon"><Icon size={18} /></div><p>{label}</p><strong>{value}</strong><small>{change}</small></article>)}
         </div>
 
+        <div className="admin-binary-card"><div><p className="admin-kicker">BINARY BONUS / 10%</p><h2>Volumen emparejado</h2><p>La comisión se acredita únicamente sobre el volumen balanceado entre ambas piernas.</p></div><div className="binary-stats"><div><span>Izquierda</span><strong>{binarySummary ? `$${binarySummary.binaryVolume.left.toFixed(2)}` : "—"}</strong></div><div><span>Derecha</span><strong>{binarySummary ? `$${binarySummary.binaryVolume.right.toFixed(2)}` : "—"}</strong></div><div><span>Emparejado</span><strong>{binarySummary ? `$${binarySummary.binaryVolume.matched.toFixed(2)}` : "—"}</strong></div><div><span>Bono binario</span><strong>{binarySummary ? `$${binarySummary.binary.toFixed(2)}` : "—"}</strong></div></div><span className="binary-status">{binarySummary?.binaryVolume.status === "paired" ? "Emparejamiento activo" : binarySummary?.binaryVolume.status === "awaiting_pair" ? "Esperando volumen opuesto" : "Sin volumen registrado"}</span></div>
+
         <div className="admin-columns">
           <article className="admin-card admin-card-large"><div className="card-heading"><div><p className="admin-kicker">CONTROL CENTER</p><h2>{activeSection}</h2></div><span className="card-status"><CheckCircle2 size={15} /> Sin acciones pendientes</span></div><div className="empty-admin"><div className="empty-orbit"><LockKeyhole size={24} /></div><h3>Conexión administrativa pendiente</h3><p>El panel visual está listo. La lectura de usuarios y operaciones se habilitará en la siguiente iteración, después de configurar la identidad de administrador y Supabase server-side.</p><button onClick={() => setActiveSection("Configuración")}>Revisar configuración <ArrowLeft size={15} /></button></div></article>
-          <article className="admin-card"><div className="card-heading"><div><p className="admin-kicker">RUNTIME</p><h2>Funciones Vercel</h2></div></div><div className="runtime-row"><span><i className="runtime-dot ready" />Frontend estático</span><b>OK</b></div><div className="runtime-row"><span><i className={`runtime-dot ${apiState === "ready" ? "ready" : "idle"}`} />API nativa /api/admin</span><b>{apiState === "ready" ? "OK" : "LOCKED"}</b></div><div className="runtime-row"><span><i className="runtime-dot idle" />Supabase admin data</span><b>PENDING</b></div><code>export default function handler(req, res)</code></article>
+          <article className="admin-card"><div className="card-heading"><div><p className="admin-kicker">RUNTIME</p><h2>Funciones Vercel</h2></div></div><div className="runtime-row"><span><i className="runtime-dot ready" />Frontend estático</span><b>OK</b></div><div className="runtime-row"><span><i className={`runtime-dot ${apiState === "ready" ? "ready" : "idle"}`} />API nativa /api/admin</span><b>{apiState === "ready" ? "OK" : "LOCKED"}</b></div><div className="runtime-row"><span><i className={`runtime-dot ${binarySummary ? "ready" : "idle"}`} />Supabase binary bonus</span><b>{binarySummary ? "10% / OK" : "PENDING"}</b></div><code>export default function handler(req, res)</code></article>
         </div>
       </section>
     </main>

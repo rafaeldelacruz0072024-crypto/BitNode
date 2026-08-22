@@ -44,3 +44,12 @@
 
 - [x] Revisar y consolidar todos los cambios actuales de `feature/admin-vercel-native` en un commit versionado, sin implementar funcionalidades nuevas.
 - [x] Confirmar que `main` permanece sin modificaciones y entregar la referencia del commit/checkpoint.
+
+## Bono binario 10% en backend y frontend
+
+- [x] Centralizar la tasa binaria en 10% en `server/binaryCommission.ts` y conservar el emparejamiento izquierda/derecha.
+- [x] Conectar el flujo server-side de contratos confirmados al adaptador de comisiones; el navegador sólo consulta el endpoint protegido.
+- [x] Exponer métricas seguras mediante `api/commissions/summary.ts`, con validación de sesión y rol admin.
+- [x] Mostrar en el frontend el bono binario 10%, volumen por pierna y estado de emparejamiento.
+- [x] Añadir pruebas específicas de tasa 10%, emparejamiento, delta, redondeo, idempotencia, 401/403/200 y separación directo/binario.
+- [x] Validar `pnpm check`, 22 pruebas, `pnpm build` y responsive; queda pendiente crear el commit final posterior a esta integración.
