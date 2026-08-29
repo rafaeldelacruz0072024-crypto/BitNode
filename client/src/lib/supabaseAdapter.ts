@@ -71,13 +71,15 @@ export function summarizeCompletedLedger(movements: Movement[]) {
 }
 
 export async function fetchTransactions(userId: string): Promise<Movement[] | null> {
-  const { url } = config();
-  const headers = await requestHeaders();
-  if (!url || !headers) return null;
-  const query = `${url.replace(/\/$/, "")}/rest/v1/transactions?user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=100`;
-  const response = await fetch(query, { headers });
-  if (!response.ok) throw new Error(`Supabase respondió ${response.status}`);
-  const rows = await response.json();
+  void userId;
+  const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+  if (!session?.access_token) return null;
+  const response = await fetch("/api/account/summary", {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(payload.error || "No se pudo cargar el balance."));
+  const rows = Array.isArray(payload.transactions) ? payload.transactions : [];
   return rows.map((row: Record<string, unknown>) => ({
     id: String(row.id),
     type: row.type,
