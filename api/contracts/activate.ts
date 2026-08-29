@@ -13,7 +13,7 @@ type VercelResponse = {
 const headerValue = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
 
 function credentials() {
-  const baseUrl = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+  const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!baseUrl || !serviceKey) throw new Error("Supabase server credentials are not configured.");
   return { baseUrl, serviceKey };
