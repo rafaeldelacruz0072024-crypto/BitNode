@@ -1,5 +1,27 @@
 import { supabase } from "./supabaseClient";
 
+export type DailyTaskResult = {
+  status: "task_completed" | "already_completed" | "credited";
+  cycle_day: number;
+  completed_tasks: string[];
+  remaining_tasks?: number;
+  reward?: number;
+  rate?: number;
+  transaction_id?: string;
+  credited?: boolean;
+  capital_preserved?: boolean;
+};
+
+export async function completeDailyTask(contractId: string, taskKey: string) {
+  if (!supabase) throw new Error("Supabase no está configurado.");
+  const { data, error } = await supabase.rpc("complete_daily_task", {
+    p_contract_id: contractId,
+    p_task_key: taskKey,
+  });
+  if (error) throw new Error(error.message);
+  return data as DailyTaskResult;
+}
+
 export type CommissionSummary = {
   direct: number;
   binary: number;

@@ -8,6 +8,7 @@ import {
   Activity,
   Bell,
   Box,
+  CheckCircle2,
   ChevronDown,
   CircleDollarSign,
   Clock3,
@@ -17,6 +18,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  RefreshCw,
   Settings,
   Users,
   Wallet,
@@ -41,13 +43,82 @@ import { requestWithdrawal } from "@/lib/withdrawalClient";
 import { requestManualDeposit } from "@/lib/depositClient";
 import {
   activateContractAndCommissions,
+  completeDailyTask,
   fetchCommissionSummary,
   type CommissionSummary,
 } from "@/lib/commissionsClient";
 
+const DAILY_TASKS = [
+  ["sync_node", "Sincronizar nodo", "Conecta con los peers de la red."],
+  ["validate_block", "Validar bloque", "Verifica hash, firmas y merkle root."],
+  ["audit_mempool", "Auditar mempool", "Revisa transacciones pendientes."],
+  ["sign_checkpoint", "Firmar checkpoint", "Confirma tu participación diaria."],
+] as const;
+
+function DailyTasksPanel({
+  user,
+  onReward,
+}: {
+  user: LocalUserState;
+  onReward: (amount: number, transactionId?: string) => void;
+}) {
+  const [completed, setCompleted] = useState<string[]>([]);
+  const [cycleDay, setCycleDay] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const activeContract = user.contracts.find(contract => contract.status === "active");
+
+  if (!activeContract)
+    return <div className="generic-panel"><span className="dash-eyebrow">TAREAS DIARIAS</span><h2>Activa un nodo primero</h2><p>Necesitas un contrato activo para realizar las cuatro tareas y recibir el pasivo.</p></div>;
+  const activeContractId = activeContract.id;
+
+  async function complete(taskKey: string) {
+    setBusy(taskKey);
+    setMessage("");
+    try {
+      const result = await completeDailyTask(activeContractId, taskKey);
+      setCompleted(result.completed_tasks || []);
+      setCycleDay(result.cycle_day || 0);
+      if (result.status === "credited" && result.reward) {
+        onReward(result.reward, result.transaction_id);
+        setMessage(`Pasivo acreditado: ${money(result.reward)}. Capital preservado.`);
+      } else if (result.status === "already_completed") {
+        setMessage("Esta tarea ya fue realizada durante el período actual.");
+      } else {
+        setMessage(`Tarea completada. Faltan ${result.remaining_tasks ?? 0}.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo completar la tarea.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return <div className="generic-panel">
+    <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
+    <h2>Activa tu nodo hoy</h2>
+    <p>Completa las cuatro tareas cada 24 horas. La cuarta acredita automáticamente el pasivo variable del ciclo.</p>
+    <div className="local-plan-grid">
+      {DAILY_TASKS.map(([key, name, description]) => {
+        const done = completed.includes(key);
+        return <article className="dash-card local-plan" key={key}>
+          <span className="dash-eyebrow">{done ? "COMPLETADA" : "PENDIENTE"}</span>
+          <h3>{name}</h3>
+          <p>{description}</p>
+          <button className="dash-primary" disabled={done || busy !== null} onClick={() => complete(key)}>
+            {busy === key ? "Procesando…" : done ? "Completada" : "Realizar tarea"} {done ? <CheckCircle2 size={15} /> : <RefreshCw size={15} />}
+          </button>
+        </article>;
+      })}
+    </div>
+    {message && <div className="form-success" role="status">{message}</div>}
+  </div>;
+}
+
 const nav = [
   ["Inicio", "/dashboard", Home],
   ["Activar nodos", "/dashboard/activate", Gem],
+  ["Tareas diarias", "/dashboard/tasks", CheckCircle2],
   ["Mis nodos", "/dashboard/nodes", Box],
   ["Mi red", "/dashboard/network", Users],
   ["Depositar", "/dashboard/deposit", Plus],
@@ -357,6 +428,22 @@ export default function Dashboard() {
       );
     }
   };
+  const reward = (amount: number, transactionId?: string) => {
+    const movement = {
+      id: transactionId || newId("YIELD"),
+      type: "yield" as const,
+      label: "Pasivo diario acreditado",
+      amount,
+      status: "completed" as const,
+      date: new Date().toISOString(),
+    };
+    setUser(prev => ({
+      ...prev,
+      balance: prev.balance + amount,
+      totalYield: prev.totalYield + amount,
+      movements: [movement, ...prev.movements],
+    }));
+  };
 
   if (authLoading)
     return <div className="auth-loading">Verificando sesión…</div>;
@@ -381,6 +468,7 @@ export default function Dashboard() {
       deposit={mutateDeposit}
       withdraw={mutateWithdraw}
       activate={activate}
+      reward={reward}
     />
   );
   return (
@@ -654,6 +742,7 @@ function SectionPanel({
   deposit,
   withdraw,
   activate,
+  reward,
 }: {
   section: string;
   user: LocalUserState;
@@ -670,12 +759,18 @@ function SectionPanel({
     fee: number
   ) => void;
   activate: (item: (typeof catalog)[number]) => void;
+  reward: (amount: number, transactionId?: string) => void;
 }) {
   const labels: Record<string, [string, string, string]> = {
     activate: [
       "CONTRATOS DISPONIBLES",
       "Activar nodos",
       "Elige el ritmo de generación que mejor encaja con tu estrategia.",
+    ],
+    tasks: [
+      "ACTIVACIÓN DIARIA",
+      "Tareas diarias",
+      "Completa las cuatro tareas para activar el pasivo del día.",
     ],
     nodes: [
       "INFRAESTRUCTURA ASIGNADA",
@@ -744,6 +839,8 @@ function SectionPanel({
         </div>
       </div>
     );
+  if (section === "tasks")
+    return <DailyTasksPanel user={user} onReward={reward} />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} localDeposit={deposit} />;
   if (section === "withdraw")
