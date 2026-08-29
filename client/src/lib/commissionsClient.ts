@@ -39,7 +39,7 @@ export async function fetchCommissionSummary(): Promise<CommissionSummary | null
   return response.json() as Promise<CommissionSummary>;
 }
 
-export async function activateContractAndCommissions(input: { contractId: string; label: string; amount: number }) {
+export async function activateContractAndCommissions(input: { contractId: string; planId: string; amount: number }) {
   const token = await accessToken();
   if (!token) throw new Error("Sesión Supabase requerida para activar contratos.");
 

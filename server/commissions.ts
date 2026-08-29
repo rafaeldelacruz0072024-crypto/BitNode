@@ -88,19 +88,29 @@ export async function getCommissionSummary(userId: string) {
   };
 }
 
-export async function activateContractAndCommissions(client: SupabaseClient, input: { userId: string; contractId: string; username?: string; label: string; amount: number }) {
-  if (!input.contractId || !input.label || !Number.isFinite(input.amount) || input.amount < 10) {
+export async function activateContractAndCommissions(client: SupabaseClient, input: { userId: string; contractId: string; planId: string; username?: string; amount: number }) {
+  if (!input.contractId || !input.planId || !Number.isFinite(input.amount) || input.amount < 10) {
     throw new Error("Invalid contract activation input.");
   }
-  const { data, error } = await client.rpc("activate_contract_and_commissions", {
+
+  const { data: placement, error: placementError } = await client.rpc("place_network_node", {
+    p_user_id: input.userId,
+    p_sponsor_id: null,
+    p_preferred_leg: null,
+  });
+  if (placementError) throw new Error(`Network placement RPC failed: ${placementError.message}`);
+
+  const { data, error } = await client.rpc("activate_plan_and_node", {
     p_user_id: input.userId,
     p_contract_id: input.contractId,
-    p_username: input.username || null,
-    p_label: input.label,
+    p_plan_id: input.planId,
     p_amount: input.amount,
+    p_parent_id: placement?.parent_id ?? null,
+    p_leg: placement?.leg ?? null,
+    p_username: input.username || null,
   });
-  if (error) throw new Error(`Contract activation RPC failed: ${error.message}`);
-  return data as Record<string, unknown>;
+  if (error) throw new Error(`Plan activation RPC failed: ${error.message}`);
+  return { ...(data as Record<string, unknown>), placement };
 }
 
 export async function processConfirmedContractCommissions(client: SupabaseClient, userId: string, contractId: string) {
@@ -150,16 +160,16 @@ export function registerCommissionRoutes(app: Express) {
     if (error || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
 
     const contractId = String(req.body?.contractId || "").trim();
-    const label = String(req.body?.label || "").trim();
+    const planId = String(req.body?.planId || "").trim();
     const amount = Number(req.body?.amount);
-    if (!contractId || !label || !Number.isFinite(amount)) return res.status(400).json({ error: "Datos de contrato incompletos." });
+    if (!contractId || !planId || !Number.isFinite(amount)) return res.status(400).json({ error: "Datos de contrato incompletos." });
 
     try {
       const result = await activateContractAndCommissions(client, {
         userId: data.user.id,
         contractId,
+        planId,
         username: data.user.user_metadata?.username || data.user.email?.split("@")[0],
-        label,
         amount,
       });
       return res.json(result);

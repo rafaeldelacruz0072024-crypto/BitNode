@@ -24,7 +24,7 @@ describe("commission helpers", () => {
 
   it("rejects an invalid atomic activation before calling Supabase", async () => {
     const client = { rpc: async () => ({ data: null, error: null }) };
-    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "", label: "Nodo", amount: 10 })).rejects.toThrow("Invalid contract activation input");
+    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "", planId: "daily", amount: 10 })).rejects.toThrow("Invalid contract activation input");
   });
 
   it("handles parallel duplicate commission events idempotently", async () => {
@@ -36,8 +36,12 @@ describe("commission helpers", () => {
   });
 
   it("surfaces atomic activation RPC failures", async () => {
-    const client = { rpc: async () => ({ data: null, error: { message: "Insufficient available balance" } }) };
-    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "contract-1", label: "Nodo", amount: 10 })).rejects.toThrow("Contract activation RPC failed");
+    const client = {
+      rpc: async (name: string) => name === "place_network_node"
+        ? { data: { parent_id: null, leg: null }, error: null }
+        : { data: null, error: { message: "Insufficient available balance" } },
+    };
+    await expect(activateContractAndCommissions(client as never, { userId: "user-1", contractId: "contract-1", planId: "daily", amount: 10 })).rejects.toThrow("Plan activation RPC failed");
   });
 
   it("rejects non-completed contract transactions before the RPC", async () => {

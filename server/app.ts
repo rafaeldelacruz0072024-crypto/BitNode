@@ -8,6 +8,7 @@ import { createContext } from "./_core/context.js";
 import { registerNowPaymentsRoutes } from "./nowpayments.js";
 import { registerWithdrawalRoutes } from "./withdrawals.js";
 import { registerCommissionRoutes } from "./commissions.js";
+import { registerSecureCommissionRoutes } from "./secureCommissionEndpoint.js";
 import { registerDepositRoutes } from "./deposits.js";
 import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js";
 
@@ -29,6 +30,7 @@ export function createApp(): Express {
   registerNowPaymentsRoutes(app);
   registerWithdrawalRoutes(app);
   registerCommissionRoutes(app);
+  registerSecureCommissionRoutes(app);
   registerDepositRoutes(app);
 
   app.use(
