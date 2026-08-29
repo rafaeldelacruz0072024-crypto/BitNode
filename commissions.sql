@@ -146,9 +146,9 @@ begin
     v_delta := greatest(v_new_matched - v_old_matched, 0);
 
     if v_delta > 0 then
-      v_commission := round(v_delta * 0.10, 8);
+      v_commission := round(v_delta * 0.08, 8);
       insert into public.commission_ledger(beneficiary_id, source_user_id, source_event_id, commission_type, amount, rate, leg, status, metadata)
-      values (v_current, p_user_id, p_source_event_id, 'binary', v_commission, 0.10, v_node.leg, 'credited', jsonb_build_object('contract_id', p_contract_id, 'matched_volume', v_delta, 'left_volume', v_left, 'right_volume', v_right))
+    values (v_current, p_user_id, p_source_event_id, 'binary', v_commission, 0.08, v_node.leg, 'credited', jsonb_build_object('contract_id', p_contract_id, 'matched_volume', v_delta, 'left_volume', v_left, 'right_volume', v_right))
       on conflict (source_event_id, commission_type, beneficiary_id, leg) do nothing;
       if found then v_binary := v_binary + v_commission; end if;
     end if;

@@ -10,7 +10,7 @@ Esta primera versión calcula los bonos exclusivamente en el servidor y conserva
 |---|---|
 | Bono directo | 10% del importe de un contrato confirmado y pagado |
 | Beneficiario directo | El patrocinador directo almacenado en la red del usuario que activó el contrato |
-| Bono binario | 10% del volumen emparejado entre las piernas izquierda y derecha |
+| Bono binario | 8% del volumen emparejado entre las piernas izquierda y derecha |
 | Volumen elegible | Contratos confirmados, no cancelados ni reembolsados |
 | Emparejamiento | `matched = min(left_volume, right_volume)` |
 | Arrastre | Se conserva el excedente de cada pierna después de descontar el volumen emparejado |

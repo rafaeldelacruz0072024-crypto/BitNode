@@ -1050,7 +1050,7 @@ function SectionPanel({
               {commissionSummary ? money(commissionSummary.binary) : "—"}
             </strong>
             <p>
-              10% sobre el volumen emparejado entre las piernas izquierda y
+              8% sobre el volumen emparejado entre las piernas izquierda y
               derecha.{!commissionSummary && " Datos remotos no disponibles."}
             </p>
             <div className="binary-volume-grid">
@@ -1069,7 +1069,7 @@ function SectionPanel({
             </div>
             <div className="commission-detail-meta">
               <span>{binaryEntries.length} eventos acreditados</span>
-              <span>Rate 10%</span>
+              <span>Rate 8%</span>
             </div>
             <CommissionEntryDetails entries={binaryEntries} empty="Aún no hay bonos binarios." />
           </section>

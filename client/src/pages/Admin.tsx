@@ -370,7 +370,7 @@ function SummarySection({ data }: { data: AdminData | null }) {
             <span>Entradas pendientes</span>
             <b>{money(data.commissions.pending)}</b>
           </div>
-          <code>direct_rate = 10% · binary_rate = 10%</code>
+          <code>direct_rate = 10% · binary_rate = 8%</code>
         </article>
       </div>
       <article className="admin-card admin-card-full">
@@ -772,7 +772,7 @@ function CommissionsSection({ data }: { data: AdminData }) {
           <div className="metric-icon">
             <BarChart3 size={18} />
           </div>
-          <p>Bono binario / 10%</p>
+          <p>Bono binario / 8%</p>
           <strong>{money(data.commissions.binary)}</strong>
           <small>Volumen emparejado server-side</small>
         </article>
