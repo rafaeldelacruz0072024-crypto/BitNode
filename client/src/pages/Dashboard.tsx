@@ -410,16 +410,18 @@ export default function Dashboard() {
       );
     }
   };
-  const activate = async (item: (typeof catalog)[number]) => {
-    if (user.balance < item.min)
+  const activate = async (item: (typeof catalog)[number], amount: number) => {
+    if (!Number.isFinite(amount) || amount < item.min)
+      return showNotice(`El monto mínimo es ${money(item.min)}.`);
+    if (user.balance < amount)
       return showNotice(
-        `Necesitas al menos ${money(item.min)} en tu balance local.`
+        `No tienes suficiente balance para activar ${money(amount)}.`
       );
     const contract: Contract = {
       id: newId("NODE"),
       name: item.name,
       rate: item.rate,
-      amount: item.min,
+      amount,
       status: "active",
       createdAt: new Date().toLocaleDateString("es-MX"),
       duration: item.duration,
@@ -428,7 +430,7 @@ export default function Dashboard() {
       id: contract.id,
       type: "contract" as const,
       label: `Activación ${item.name}`,
-      amount: -item.min,
+      amount: -amount,
       status: "completed" as const,
       date: new Date().toISOString(),
     };
@@ -436,12 +438,12 @@ export default function Dashboard() {
       const result = await activateContractAndCommissions({
         contractId: contract.id,
         planId: item.id,
-        amount: item.min,
+        amount,
       });
       setUser(prev => ({
         ...prev,
-        balance: prev.balance - item.min,
-        totalInvested: prev.totalInvested + item.min,
+        balance: prev.balance - amount,
+        totalInvested: prev.totalInvested + amount,
         contracts: [contract, ...prev.contracts],
         movements: [movement, ...prev.movements],
       }));
@@ -794,9 +796,12 @@ function SectionPanel({
     wallet: string,
     fee: number
   ) => void;
-  activate: (item: (typeof catalog)[number]) => void;
+  activate: (item: (typeof catalog)[number], amount: number) => void;
   reward: (amount: number, transactionId?: string) => void;
 }) {
+  const [activationAmounts, setActivationAmounts] = useState<Record<string, string>>(
+    () => Object.fromEntries(catalog.map(item => [item.id, String(item.min)]))
+  );
   const labels: Record<string, [string, string, string]> = {
     activate: [
       "CONTRATOS DISPONIBLES",
@@ -859,19 +864,36 @@ function SectionPanel({
         <h2>{title}</h2>
         <p>{copy}</p>
         <div className="local-plan-grid">
-          {catalog.map(item => (
-            <article className="dash-card local-plan" key={item.name}>
+          {catalog.map(item => {
+            const rawAmount = activationAmounts[item.id] ?? String(item.min);
+            const amount = Number(rawAmount);
+            const valid = Number.isFinite(amount) && amount >= item.min && amount <= user.balance;
+            return <article className="dash-card local-plan" key={item.name}>
               <span className="dash-eyebrow">{item.duration}</span>
               <h3>{item.name}</h3>
               <strong>{item.rate}</strong>
               <p>
                 Generación de lunes a viernes. Mínimo local: {money(item.min)}.
               </p>
-              <button className="dash-primary" onClick={() => activate(item)}>
-                Activar por {money(item.min)} <Zap size={15} />
+              <label className="activation-amount">
+                <span>Monto a activar (USD)</span>
+                <input
+                  type="number"
+                  min={item.min}
+                  max={user.balance}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={rawAmount}
+                  aria-invalid={!valid}
+                  onChange={event => setActivationAmounts(current => ({ ...current, [item.id]: event.target.value }))}
+                />
+                <small>Disponible: {money(user.balance)}</small>
+              </label>
+              <button className="dash-primary" disabled={!valid} onClick={() => activate(item, amount)}>
+                {amount >= item.min && Number.isFinite(amount) ? `Activar por ${money(amount)}` : `Mínimo ${money(item.min)}`} <Zap size={15} />
               </button>
-            </article>
-          ))}
+            </article>;
+          })}
         </div>
       </div>
     );
