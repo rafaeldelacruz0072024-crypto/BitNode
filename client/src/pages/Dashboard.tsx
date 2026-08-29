@@ -112,9 +112,9 @@ function DailyTasksPanel({
     setMessage("");
     try {
       const result = await completeDailyTask(activeContractId, taskKey);
-      setCompleted(result.completed_tasks || []);
+      setCompleted(current => Array.from(new Set([...(result.completed_tasks || current), taskKey])));
       setCycleDay(result.cycle_day || 0);
-      setDeadline(Date.now() + 86400000);
+      setDeadline(current => current ?? Date.now() + 86400000);
       if (result.status === "credited" && result.reward) {
         onReward(result.reward, result.transaction_id);
         setMessage(`Pasivo acreditado: ${money(result.reward)}. Capital preservado.`);
@@ -133,7 +133,7 @@ function DailyTasksPanel({
   return <div className="generic-panel">
     <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
     <h2>Activa tu nodo hoy</h2>
-    <p>Completa las cuatro tareas cada 24 horas. La cuarta acredita automáticamente el pasivo variable del ciclo.</p>
+    <p>Completa las cuatro tareas una vez cada 24 horas. La primera inicia el contador y la cuarta acredita automáticamente el pasivo variable del ciclo.</p>
     <div className="dash-card" style={{ marginBottom: 18 }}><span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span><strong style={{ fontFamily: "'IBM Plex Mono'", fontSize: 28 }}>{timeLeft}</strong><p>Si llega a cero sin completar las cuatro tareas, el progreso y los días vuelven a cero. Tu capital permanece intacto.</p></div>
     <div className="local-plan-grid">
       {DAILY_TASKS.map(([key, name, description]) => {
