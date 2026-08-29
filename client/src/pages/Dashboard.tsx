@@ -35,7 +35,7 @@ import {
   newId,
   saveLocalUser,
 } from "@/lib/localUserStore";
-import { fetchTransactions, mergeTransactions } from "@/lib/supabaseAdapter";
+import { fetchTransactions, summarizeCompletedLedger } from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsInvoice } from "@/lib/nowpaymentsClient";
@@ -324,22 +324,21 @@ export default function Dashboard() {
       };
     fetchTransactions(authUserId)
       .then(remote => {
-        if (
-          !active ||
-          !remote?.length ||
-          remote[0]?.id === user.movements[0]?.id
-        )
-          return;
+        if (!active || remote === null) return;
+        const ledger = summarizeCompletedLedger(remote);
         setUser(prev => ({
           ...prev,
-          movements: mergeTransactions(prev.movements, remote),
+          balance: ledger.balance,
+          totalInvested: ledger.totalInvested,
+          totalYield: ledger.totalYield,
+          movements: remote,
         }));
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [user.username]);
+  }, [authUserId]);
   useEffect(() => {
     const timer = window.setInterval(
       () => setLiveNodes(value => value + (Math.random() > 0.5 ? 1 : 0)),

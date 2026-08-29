@@ -32,11 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body || {}) as Record<string, unknown>;
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : "";
+  const planId = typeof body.planId === "string" ? body.planId.trim() : "";
   const username = typeof body.username === "string" ? body.username.trim() : "";
   const label = typeof body.label === "string" ? body.label.trim() : "";
   const amount = typeof body.amount === "number" ? body.amount : Number(body.amount);
-  if (!contractId || !Number.isFinite(amount) || amount < 10 || amount > 100000) {
-    return res.status(400).json({ error: "contractId y un monto entre 10 y 100000 son requeridos." });
+  if (!contractId || !planId || !Number.isFinite(amount) || amount < 10 || amount > 100000) {
+    return res.status(400).json({ error: "contractId, planId y un monto entre 10 y 100000 son requeridos." });
   }
 
   try {
@@ -47,14 +48,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authResponse.json() as { id?: string };
     if (!user.id) return res.status(401).json({ error: "Usuario Supabase inválido." });
 
-    const rpcResponse = await fetch(`${baseUrl}/rest/v1/rpc/activate_contract_and_commissions`, {
+    const serviceHeaders = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" };
+    const placementResponse = await fetch(`${baseUrl}/rest/v1/rpc/place_network_node`, {
       method: "POST",
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ p_user_id: user.id, p_contract_id: contractId, p_username: username, p_label: label, p_amount: amount }),
+      headers: serviceHeaders,
+      body: JSON.stringify({ p_user_id: user.id, p_sponsor_id: null, p_preferred_leg: null }),
+    });
+    const placement = await placementResponse.json().catch(() => ({})) as { parent_id?: string | null; leg?: string | null };
+    if (!placementResponse.ok) return res.status(400).json({ error: "No se pudo colocar el nodo en la red.", details: placement });
+
+    const rpcResponse = await fetch(`${baseUrl}/rest/v1/rpc/activate_plan_and_node`, {
+      method: "POST",
+      headers: serviceHeaders,
+      body: JSON.stringify({ p_user_id: user.id, p_contract_id: contractId, p_plan_id: planId, p_amount: amount, p_parent_id: placement.parent_id ?? null, p_leg: placement.leg ?? null, p_username: username || null }),
     });
     const result = await rpcResponse.json().catch(() => ({}));
     if (!rpcResponse.ok) return res.status(rpcResponse.status >= 400 && rpcResponse.status < 500 ? 400 : 503).json({ error: "No se pudo activar el contrato.", details: result });
-    return res.status(200).json(result);
+    return res.status(200).json({ ...(result as Record<string, unknown>), placement });
   } catch (error) {
     console.error("[contract-activation]", error);
     return res.status(503).json({ error: "La activación no está disponible." });

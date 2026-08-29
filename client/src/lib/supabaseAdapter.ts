@@ -55,6 +55,21 @@ export function mergeTransactions(local: Movement[], remote: Movement[]) {
   return [...remote, ...local.filter((item) => !remoteIds.has(item.id))];
 }
 
+export function summarizeCompletedLedger(movements: Movement[]) {
+  return movements.reduce(
+    (summary, movement) => {
+      if (movement.status !== "completed") return summary;
+      summary.balance += Number.isFinite(movement.amount) ? movement.amount : 0;
+      if (movement.type === "contract" && movement.amount < 0)
+        summary.totalInvested += Math.abs(movement.amount);
+      if (movement.type === "yield" && movement.amount > 0)
+        summary.totalYield += movement.amount;
+      return summary;
+    },
+    { balance: 0, totalInvested: 0, totalYield: 0 }
+  );
+}
+
 export async function fetchTransactions(userId: string): Promise<Movement[] | null> {
   const { url } = config();
   const headers = await requestHeaders();
