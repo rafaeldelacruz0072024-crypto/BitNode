@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
+  ArrowRight,
   Bell,
   Box,
   CheckCircle2,
@@ -55,6 +56,14 @@ const DAILY_TASKS = [
   ["audit_mempool", "Auditar mempool", "Revisa transacciones pendientes."],
   ["sign_checkpoint", "Firmar checkpoint", "Confirma tu participación diaria."],
 ] as const;
+
+function binaryReferralUrl(code: string, side: "izquierda" | "derecha") {
+  const configuredUrl = import.meta.env.VITE_APP_URL as string | undefined;
+  const origin = configuredUrl || (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? window.location.origin
+    : "https://bit-node.vercel.app");
+  return `${origin.replace(/\/$/, "")}/r/${encodeURIComponent(code)}/${side}`;
+}
 
 function DailyTasksPanel({
   user,
@@ -690,27 +699,15 @@ function HomePanel({
         <section className="dash-card referral-card">
           <div className="dash-card-head">
             <div>
-              <span className="dash-eyebrow">ENLACE DE REFERIDO</span>
-              <h3>Construye tu red</h3>
+              <span className="dash-eyebrow">ENLACES BINARIOS</span>
+              <h3>Controla tus piernas</h3>
             </div>
             <Users size={20} />
           </div>
           <p>
-            Comparte tu enlace y recibe bonos cuando tu red active contratos.
+            Comparte únicamente el enlace izquierdo o derecho desde tu red.
           </p>
-          <div className="referral-code">
-            bitnode.space/r/<strong>{user.referralCode}</strong>
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(
-                  `bitnode.space/r/${user.referralCode}`
-                );
-                showNotice("Enlace copiado al portapapeles.");
-              }}
-            >
-              <Copy size={14} />
-            </button>
-          </div>
+          <button className="dash-primary" onClick={() => navigate("/dashboard/network")}>Ver enlaces binarios <ArrowRight size={15} /></button>
         </section>
         <section className="dash-card progress-card">
           <div className="dash-card-head">
@@ -1014,7 +1011,7 @@ function SectionPanel({
         )}
         <div className="commission-detail-grid binary-invite-links">
           {([['izquierda', 'PIERNA IZQUIERDA', '←'], ['derecha', 'PIERNA DERECHA', '→']] as const).map(([side, label, arrow]) => {
-            const link = `https://bitnode.space/r/${user.referralCode}/${side}`;
+            const link = binaryReferralUrl(user.referralCode, side);
             return <div className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`} key={side}><div><span className="dash-eyebrow">{arrow} {label}</span><strong>{link}</strong></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(link); showNotice(`Enlace de pierna ${side} copiado.`); }}>Copiar <Copy size={14} /></button></div>;
           })}
         </div>
