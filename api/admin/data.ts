@@ -209,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return respond(res, 200, {
       status: "ready",
-      readOnly: true,
+      readOnly: false,
       user: { id: user.id, email: user.email ?? null, username: profile.username ?? null, role: profile.role },
       lastUpdated: new Date().toISOString(),
       metrics: {
