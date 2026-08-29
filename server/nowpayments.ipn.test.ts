@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { describe, expect, it, beforeEach } from "vitest";
-import { validIpnSignature } from "./nowpayments";
+import { validDepositCurrency, validIpnSignature } from "./nowpayments";
 
 function signature(body: Record<string, unknown>, secret: string) {
   const sorted = Object.keys(body).sort().reduce<Record<string, unknown>>((result, key) => {
@@ -25,5 +25,14 @@ describe("NOWPayments IPN signature", () => {
     const signed = signature(body, "test-ipn-secret");
     expect(validIpnSignature({ ...body, payment_status: "failed" }, signed)).toBe(false);
     expect(validIpnSignature(body, `${signed}0`)).toBe(false);
+  });
+});
+
+describe("supported deposit networks", () => {
+  it("accepts only USDT TRC20 and BEP20", () => {
+    expect(validDepositCurrency("usdttrc20")).toBe("usdttrc20");
+    expect(validDepositCurrency("usdtbsc")).toBe("usdtbsc");
+    expect(validDepositCurrency("usdterc20")).toBeNull();
+    expect(validDepositCurrency("btc")).toBeNull();
   });
 });

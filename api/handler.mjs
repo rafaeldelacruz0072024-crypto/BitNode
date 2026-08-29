@@ -683,6 +683,7 @@ async function createContext(opts) {
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 var NOWPAYMENTS_SANDBOX_URL = "https://api-sandbox.nowpayments.io/v1";
+var SUPPORTED_DEPOSIT_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
 var supabaseUrl = process.env.VITE_SUPABASE_URL;
 var serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 function adminClient() {
@@ -713,6 +714,10 @@ function validIpnSignature(body, signature) {
   const received = Buffer.from(signature, "utf8");
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
+function validDepositCurrency(value) {
+  const currency = String(value || "").toLowerCase();
+  return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
+}
 function registerNowPaymentsRoutes(app2) {
   app2.post("/api/payments/nowpayments/invoice", async (req, res) => {
     try {
@@ -723,9 +728,9 @@ function registerNowPaymentsRoutes(app2) {
       const { data: authData, error: authError } = await admin3.auth.getUser(token3);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
       const amount = Number(req.body?.amount);
-      const payCurrency = String(req.body?.payCurrency || "usdttrc20").toLowerCase();
+      const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdttrc20");
       if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
-      if (!/^[a-z0-9]{2,20}$/.test(payCurrency)) return res.status(400).json({ error: "Divisa de pago inv\xE1lida." });
+      if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
       const response = await fetch(`${NOWPAYMENTS_SANDBOX_URL}/invoice`, {

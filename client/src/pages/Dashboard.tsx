@@ -1080,13 +1080,11 @@ function DepositPanel({
           >
             <option value="usdttrc20">USDT TRC20</option>
             <option value="usdtbsc">USDT BEP20</option>
-            <option value="usdterc20">USDT ERC20</option>
-            <option value="btc">Bitcoin</option>
           </select>
         </label>
         <small>
-          Modo de prueba · El invoice se crea en NOWPayments Sandbox y queda
-          pendiente hasta recibir un callback IPN válido.
+          Redes disponibles: TRC20 y BEP20. Modo de prueba: el invoice se crea
+          en NOWPayments Sandbox y queda pendiente hasta recibir un callback IPN válido.
         </small>
         {error && (
           <div className="form-error" role="alert">
