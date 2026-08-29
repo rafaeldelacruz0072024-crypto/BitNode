@@ -46,6 +46,10 @@ export type CommissionSummary = {
   };
   entries: Array<{
     id: string;
+    source_user_id?: string;
+    source_username?: string;
+    node_name?: string;
+    contract_amount?: number | null;
     commission_type: string;
     amount: number | string;
     rate: number | string;

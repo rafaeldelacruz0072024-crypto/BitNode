@@ -100,3 +100,10 @@ h1 em,h2 span { color:var(--indigo); font-style:normal; }
 .auth-switch{display:block;margin:22px auto 0;color:#aeb7d4;background:transparent;font-size:13px}.auth-switch:hover{color:var(--acid)}.auth-back{display:block;margin-top:25px;padding-top:20px;border-top:1px solid var(--line);color:#747e9c;text-align:center;font:11px 'IBM Plex Mono'}.auth-back:hover{color:#fff}
 .form-error,.form-success{padding:11px 12px;border-radius:6px;font:11px 'IBM Plex Mono';line-height:1.55}.form-error{border:1px solid rgba(255,102,125,.3);color:#ffadb9;background:rgba(255,102,125,.07)}.form-success{border:1px solid rgba(183,255,60,.25);color:#d7ff9a;background:rgba(183,255,60,.06)}
 @media(max-width:600px){.auth-shell{padding:18px 14px}.auth-card{padding:28px 22px}.auth-card h1{font-size:40px}.auth-brand{margin-bottom:29px}}
+.commission-entry-list{margin-top:16px;border-top:1px solid rgba(149,157,205,.12)}
+.commission-entry-item{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid rgba(149,157,205,.09)}
+.commission-entry-item>div{display:flex;min-width:0;flex-direction:column;gap:5px}
+.commission-entry-item b{color:#e5e8f5;font-size:12px}.commission-entry-item span{color:#737d99;font:9px/1.45 'IBM Plex Mono'}
+.commission-entry-item>strong{flex:none;color:#2ce2a7;font:500 12px 'IBM Plex Mono'}
+.commission-entry-empty{margin:14px 0 0!important;padding-top:14px;border-top:1px solid rgba(149,157,205,.12);font:10px 'IBM Plex Mono'!important}
+@media(max-width:600px){.commission-entry-item{align-items:stretch;flex-direction:column}.commission-entry-item>strong{font-size:14px}}

@@ -1057,6 +1057,7 @@ function SectionPanel({
               <span>{directEntries.length} eventos acreditados</span>
               <span>Rate 10%</span>
             </div>
+            <CommissionEntryDetails entries={directEntries} empty="Aún no hay bonos directos." />
           </section>
           <section className="commission-detail-card binary">
             <div className="commission-detail-heading">
@@ -1091,6 +1092,7 @@ function SectionPanel({
               <span>{binaryEntries.length} eventos acreditados</span>
               <span>Rate 10%</span>
             </div>
+            <CommissionEntryDetails entries={binaryEntries} empty="Aún no hay bonos binarios." />
           </section>
         </div>
         <section className="network-ledger-card dash-card">
@@ -1116,6 +1118,7 @@ function SectionPanel({
                     {new Date(entry.created_at).toLocaleString("es-MX")} ·{" "}
                     {entry.status === "credited" ? "Acreditado" : "Pendiente"}
                     {entry.leg ? ` · Pierna ${entry.leg}` : ""}
+                    {entry.node_name ? ` · ${entry.node_name}` : ""}
                   </span>
                 </div>
                 <strong>{money(Number(entry.amount || 0))}</strong>
@@ -1571,6 +1574,36 @@ function EmptyState({ text }: { text: string }) {
       <small>Esta vista se conectará con Supabase en la siguiente etapa.</small>
     </div>
   );
+}
+
+function CommissionEntryDetails({
+  entries,
+  empty,
+}: {
+  entries: CommissionSummary["entries"];
+  empty: string;
+}) {
+  if (!entries.length) return <p className="commission-entry-empty">{empty}</p>;
+  return <div className="commission-entry-list">
+    {entries.slice(0, 6).map(entry => {
+      const matchedVolume = Number(entry.metadata?.matched_volume || 0);
+      return <div className="commission-entry-item" key={entry.id}>
+        <div>
+          <b>{entry.node_name || "Nodo no identificado"}</b>
+          <span>
+            Origen: {entry.source_username || "Usuario referido"}
+            {entry.contract_amount ? ` · Capital ${money(entry.contract_amount)}` : ""}
+            {matchedVolume ? ` · Emparejado ${money(matchedVolume)}` : ""}
+          </span>
+          <span>
+            {new Date(entry.created_at).toLocaleString("es-MX")} · Tasa {(Number(entry.rate || 0) * 100).toFixed(2)}%
+            {entry.leg ? ` · Pierna ${entry.leg}` : ""}
+          </span>
+        </div>
+        <strong>{money(Number(entry.amount || 0))}</strong>
+      </div>;
+    })}
+  </div>;
 }
 
 function BinaryTree({ nodes, currentUserId }: { nodes: Array<{ user_id: string; parent_id: string | null; leg: "left" | "right" | null }>; currentUserId?: string }) {

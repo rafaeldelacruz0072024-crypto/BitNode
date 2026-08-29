@@ -88,7 +88,7 @@ export async function getCommissionSummary(userId: string) {
   const { data, error } = await client
     .from("commission_ledger")
     .select(
-      "id, commission_type, amount, rate, leg, status, source_event_id, created_at"
+      "id, source_user_id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata"
     )
     .eq("beneficiary_id", userId)
     .order("created_at", { ascending: false });
@@ -96,6 +96,33 @@ export async function getCommissionSummary(userId: string) {
     throw new Error(`Commission ledger query failed: ${error.message}`);
 
   const rows = data || [];
+  const sourceUserIds = Array.from(new Set(rows.map(row => row.source_user_id).filter(Boolean)));
+  const contractIds = Array.from(new Set(rows.map(row => String((row.metadata as Record<string, unknown> | null)?.contract_id || "")).filter(Boolean)));
+  const [{ data: sourceProfiles }, { data: sourceContracts }] = await Promise.all([
+    sourceUserIds.length
+      ? client.from("profiles").select("id, username").in("id", sourceUserIds)
+      : Promise.resolve({ data: [] }),
+    contractIds.length
+      ? client.from("contracts").select("id, plan_id, amount").in("id", contractIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const planIds = Array.from(new Set((sourceContracts || []).map(contract => contract.plan_id).filter(Boolean)));
+  const { data: sourcePlans } = planIds.length
+    ? await client.from("plans").select("id, name").in("id", planIds)
+    : { data: [] };
+  const profilesById = new Map((sourceProfiles || []).map(profile => [profile.id, profile.username]));
+  const contractsById = new Map((sourceContracts || []).map(contract => [contract.id, contract]));
+  const plansById = new Map((sourcePlans || []).map(plan => [plan.id, plan.name]));
+  const enrichedRows = rows.map(row => {
+    const metadata = (row.metadata || {}) as Record<string, unknown>;
+    const contract = contractsById.get(String(metadata.contract_id || ""));
+    return {
+      ...row,
+      source_username: profilesById.get(row.source_user_id) || "Usuario referido",
+      node_name: contract ? plansById.get(contract.plan_id) || contract.plan_id : "Nodo no identificado",
+      contract_amount: contract ? Number(contract.amount) : null,
+    };
+  });
   const { data: networkNodes, error: networkError } = await client
     .from("network_nodes")
     .select("user_id, parent_id, leg, sponsor_id")
@@ -104,7 +131,7 @@ export async function getCommissionSummary(userId: string) {
     throw new Error(`Network tree query failed: ${networkError.message}`);
   return {
     ...summarizeCommissionRows(rows),
-    entries: rows,
+    entries: enrichedRows,
     networkNodes: networkNodes || [],
   };
 }

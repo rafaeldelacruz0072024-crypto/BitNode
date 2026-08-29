@@ -891,15 +891,35 @@ function summarizeCommissionRows(rows) {
 async function getCommissionSummary(userId) {
   const client = adminClient2();
   if (!client) throw new Error("Supabase server credentials are not configured.");
-  const { data, error } = await client.from("commission_ledger").select("id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata").eq("beneficiary_id", userId).order("created_at", { ascending: false });
+  const { data, error } = await client.from("commission_ledger").select("id, source_user_id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata").eq("beneficiary_id", userId).order("created_at", { ascending: false });
   if (error) throw new Error(`Commission ledger query failed: ${error.message}`);
+  const rows = data || [];
+  const sourceUserIds = Array.from(new Set(rows.map((row) => row.source_user_id).filter(Boolean)));
+  const contractIds = Array.from(new Set(rows.map((row) => String(row.metadata?.contract_id || "")).filter(Boolean)));
+  const [{ data: sourceProfiles }, { data: sourceContracts }] = await Promise.all([
+    sourceUserIds.length ? client.from("profiles").select("id, username").in("id", sourceUserIds) : Promise.resolve({ data: [] }),
+    contractIds.length ? client.from("contracts").select("id, plan_id, amount").in("id", contractIds) : Promise.resolve({ data: [] })
+  ]);
+  const planIds = Array.from(new Set((sourceContracts || []).map((contract) => contract.plan_id).filter(Boolean)));
+  const { data: sourcePlans } = planIds.length ? await client.from("plans").select("id, name").in("id", planIds) : { data: [] };
+  const profilesById = new Map((sourceProfiles || []).map((profile) => [profile.id, profile.username]));
+  const contractsById = new Map((sourceContracts || []).map((contract) => [contract.id, contract]));
+  const plansById = new Map((sourcePlans || []).map((plan) => [plan.id, plan.name]));
+  const enrichedRows = rows.map((row) => {
+    const contract = contractsById.get(String(row.metadata?.contract_id || ""));
+    return {
+      ...row,
+      source_username: profilesById.get(row.source_user_id) || "Usuario referido",
+      node_name: contract ? plansById.get(contract.plan_id) || contract.plan_id : "Nodo no identificado",
+      contract_amount: contract ? Number(contract.amount) : null
+    };
+  });
   const { data: volumeRows, error: volumeError } = await client.from("network_volume").select("leg, volume, matched_volume, updated_at").eq("user_id", userId);
   if (volumeError) throw new Error(`Network volume query failed: ${volumeError.message}`);
   const left = Number(volumeRows?.find((row) => row.leg === "left")?.volume || 0);
   const right = Number(volumeRows?.find((row) => row.leg === "right")?.volume || 0);
   const matched = Math.min(left, right);
   const updatedAt = volumeRows?.reduce((latest, row) => !latest || String(row.updated_at) > latest ? String(row.updated_at) : latest, null);
-  const rows = data || [];
   return {
     ...summarizeCommissionRows(rows),
     binaryVolume: {
@@ -909,7 +929,7 @@ async function getCommissionSummary(userId) {
       status: matched > 0 ? "paired" : left > 0 || right > 0 ? "awaiting_pair" : "no_volume",
       updatedAt
     },
-    entries: rows
+    entries: enrichedRows
   };
 }
 async function activateContractAndCommissions(client, input) {
