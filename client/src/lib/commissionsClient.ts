@@ -61,6 +61,7 @@ export type CommissionSummary = {
   }>;
   networkNodes?: Array<{
     user_id: string;
+    username?: string;
     parent_id: string | null;
     leg: "left" | "right" | null;
     sponsor_id: string | null;

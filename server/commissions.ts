@@ -129,10 +129,18 @@ export async function getCommissionSummary(userId: string) {
     .or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
   if (networkError)
     throw new Error(`Network tree query failed: ${networkError.message}`);
+  const networkUserIds = Array.from(new Set((networkNodes || []).map(node => node.user_id)));
+  const { data: networkProfiles } = networkUserIds.length
+    ? await client.from("profiles").select("id, username").in("id", networkUserIds)
+    : { data: [] };
+  const networkNamesById = new Map((networkProfiles || []).map(profile => [profile.id, profile.username]));
   return {
     ...summarizeCommissionRows(rows),
     entries: enrichedRows,
-    networkNodes: networkNodes || [],
+    networkNodes: (networkNodes || []).map(node => ({
+      ...node,
+      username: networkNamesById.get(node.user_id) || "Usuario",
+    })),
   };
 }
 

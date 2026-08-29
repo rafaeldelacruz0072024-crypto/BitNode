@@ -1018,7 +1018,7 @@ function SectionPanel({
             return <div className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`} key={side}><div><span className="dash-eyebrow">{arrow} {label}</span><strong>{link}</strong></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(link); showNotice(`Enlace de pierna ${side} copiado.`); }}>Copiar <Copy size={14} /></button></div>;
           })}
         </div>
-        <BinaryTree nodes={commissionSummary?.networkNodes || []} currentUserId={currentUserId} />
+        <BinaryTree nodes={commissionSummary?.networkNodes || []} currentUserId={currentUserId} ownerName={user.username} />
         <div className="commission-detail-grid">
           <section className="commission-detail-card direct">
             <div className="commission-detail-heading">
@@ -1588,9 +1588,11 @@ function CommissionEntryDetails({
   </div>;
 }
 
-function BinaryTree({ nodes, currentUserId }: { nodes: Array<{ user_id: string; parent_id: string | null; leg: "left" | "right" | null }>; currentUserId?: string }) {
+function BinaryTree({ nodes, currentUserId, ownerName }: { nodes: Array<{ user_id: string; username?: string; parent_id: string | null; leg: "left" | "right" | null }>; currentUserId?: string; ownerName: string }) {
   const root = nodes.find((node) => node.user_id === currentUserId) || nodes.find((node) => !node.parent_id);
   const child = (leg: "left" | "right") => nodes.find((node) => node.parent_id === root?.user_id && node.leg === leg);
-  const label = (id?: string) => id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "Disponible";
-  return <section className="binary-tree-card dash-card"><div className="dash-card-head"><div><span className="dash-eyebrow">ÁRBOL BINARIO</span><h3>Estructura de red</h3></div><span className="ledger-status">LEFT / RIGHT</span></div><div className="binary-tree-visual"><div className={`tree-node root ${root ? "filled" : "empty"}`}><span>RAÍZ</span><b>{label(root?.user_id)}</b></div><div className="tree-connector" /><div className="tree-legs"><div className={`tree-leg left ${child("left") ? "filled" : "empty"}`}><span>PIERNA IZQUIERDA</span><b>{label(child("left")?.user_id)}</b></div><div className={`tree-leg right ${child("right") ? "filled" : "empty"}`}><span>PIERNA DERECHA</span><b>{label(child("right")?.user_id)}</b></div></div></div><p className="binary-tree-note">Cada activación se coloca una sola vez en la primera posición disponible.</p></section>;
+  const left = child("left");
+  const right = child("right");
+  const label = (node?: { username?: string; user_id: string }) => node?.username || "Disponible";
+  return <section className="binary-tree-card dash-card"><div className="dash-card-head"><div><span className="dash-eyebrow">ÁRBOL BINARIO</span><h3>Estructura de red</h3></div><span className="ledger-status">LEFT / RIGHT</span></div><div className="binary-tree-visual"><div className="tree-node root filled"><i className="tree-status-dot" /><span>DUEÑO DE LA CUENTA</span><b>{root?.username || ownerName}</b><small>NODO PRINCIPAL</small></div><div className="tree-connector"><i /></div><div className="tree-legs"><div className={`tree-leg left ${left ? "filled" : "empty"}`}><i className="tree-status-dot" /><span>PIERNA IZQUIERDA</span><b>{label(left)}</b><small>{left ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small></div><div className={`tree-leg right ${right ? "filled" : "empty"}`}><i className="tree-status-dot" /><span>PIERNA DERECHA</span><b>{label(right)}</b><small>{right ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small></div></div></div><p className="binary-tree-note">La red se actualiza automáticamente cuando una nueva indicación ocupa una posición.</p></section>;
 }

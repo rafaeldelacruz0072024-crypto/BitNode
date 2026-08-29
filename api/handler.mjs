@@ -920,6 +920,11 @@ async function getCommissionSummary(userId) {
   const right = Number(volumeRows?.find((row) => row.leg === "right")?.volume || 0);
   const matched = Math.min(left, right);
   const updatedAt = volumeRows?.reduce((latest, row) => !latest || String(row.updated_at) > latest ? String(row.updated_at) : latest, null);
+  const { data: networkNodes, error: networkError } = await client.from("network_nodes").select("user_id, parent_id, leg, sponsor_id").or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
+  if (networkError) throw new Error(`Network tree query failed: ${networkError.message}`);
+  const networkUserIds = Array.from(new Set((networkNodes || []).map((node) => node.user_id)));
+  const { data: networkProfiles } = networkUserIds.length ? await client.from("profiles").select("id, username").in("id", networkUserIds) : { data: [] };
+  const networkNamesById = new Map((networkProfiles || []).map((profile) => [profile.id, profile.username]));
   return {
     ...summarizeCommissionRows(rows),
     binaryVolume: {
@@ -929,7 +934,11 @@ async function getCommissionSummary(userId) {
       status: matched > 0 ? "paired" : left > 0 || right > 0 ? "awaiting_pair" : "no_volume",
       updatedAt
     },
-    entries: enrichedRows
+    entries: enrichedRows,
+    networkNodes: (networkNodes || []).map((node) => ({
+      ...node,
+      username: networkNamesById.get(node.user_id) || "Usuario"
+    }))
   };
 }
 async function activateContractAndCommissions(client, input) {
