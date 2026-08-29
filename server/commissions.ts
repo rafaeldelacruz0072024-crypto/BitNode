@@ -24,7 +24,10 @@ export type CommissionEventInput = {
   eventType?: "contract_confirmed" | "contract_reversed";
 };
 
-export async function processContractCommissionsWithClient(client: Pick<SupabaseClient, "rpc">, input: CommissionEventInput) {
+export async function processContractCommissionsWithClient(
+  client: Pick<SupabaseClient, "rpc">,
+  input: CommissionEventInput
+) {
   if (!input.sourceEventId || !input.contractId || !input.userId) {
     throw new Error("Commission event identifiers are required.");
   }
@@ -45,7 +48,8 @@ export async function processContractCommissionsWithClient(client: Pick<Supabase
 
 export async function processContractCommissions(input: CommissionEventInput) {
   const client = adminClient();
-  if (!client) throw new Error("Supabase server credentials are not configured.");
+  if (!client)
+    throw new Error("Supabase server credentials are not configured.");
   return processContractCommissionsWithClient(client, input);
 }
 
@@ -55,11 +59,17 @@ export function validateCommissionEventInput(input: CommissionEventInput) {
       input.contractId &&
       input.userId &&
       Number.isFinite(input.amount) &&
-      input.amount > 0,
+      input.amount > 0
   );
 }
 
-export function summarizeCommissionRows(rows: Array<{ commission_type: string; amount: number | string | null; status: string }>) {
+export function summarizeCommissionRows(
+  rows: Array<{
+    commission_type: string;
+    amount: number | string | null;
+    status: string;
+  }>
+) {
   const credited = rows.filter(row => row.status === "credited");
   const direct = credited
     .filter(row => row.commission_type === "direct")
@@ -72,33 +82,62 @@ export function summarizeCommissionRows(rows: Array<{ commission_type: string; a
 
 export async function getCommissionSummary(userId: string) {
   const client = adminClient();
-  if (!client) throw new Error("Supabase server credentials are not configured.");
+  if (!client)
+    throw new Error("Supabase server credentials are not configured.");
 
   const { data, error } = await client
     .from("commission_ledger")
-    .select("id, commission_type, amount, rate, leg, status, source_event_id, created_at")
+    .select(
+      "id, commission_type, amount, rate, leg, status, source_event_id, created_at"
+    )
     .eq("beneficiary_id", userId)
     .order("created_at", { ascending: false });
-  if (error) throw new Error(`Commission ledger query failed: ${error.message}`);
+  if (error)
+    throw new Error(`Commission ledger query failed: ${error.message}`);
 
   const rows = data || [];
+  const { data: networkNodes, error: networkError } = await client
+    .from("network_nodes")
+    .select("user_id, parent_id, leg, sponsor_id")
+    .or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
+  if (networkError)
+    throw new Error(`Network tree query failed: ${networkError.message}`);
   return {
     ...summarizeCommissionRows(rows),
     entries: rows,
+    networkNodes: networkNodes || [],
   };
 }
 
-export async function activateContractAndCommissions(client: SupabaseClient, input: { userId: string; contractId: string; planId: string; username?: string; amount: number }) {
-  if (!input.contractId || !input.planId || !Number.isFinite(input.amount) || input.amount < 10) {
+export async function activateContractAndCommissions(
+  client: SupabaseClient,
+  input: {
+    userId: string;
+    contractId: string;
+    planId: string;
+    username?: string;
+    amount: number;
+  }
+) {
+  if (
+    !input.contractId ||
+    !input.planId ||
+    !Number.isFinite(input.amount) ||
+    input.amount < 10
+  ) {
     throw new Error("Invalid contract activation input.");
   }
 
-  const { data: placement, error: placementError } = await client.rpc("place_network_node", {
-    p_user_id: input.userId,
-    p_sponsor_id: null,
-    p_preferred_leg: null,
-  });
-  if (placementError) throw new Error(`Network placement RPC failed: ${placementError.message}`);
+  const { data: placement, error: placementError } = await client.rpc(
+    "place_network_node",
+    {
+      p_user_id: input.userId,
+      p_sponsor_id: null,
+      p_preferred_leg: null,
+    }
+  );
+  if (placementError)
+    throw new Error(`Network placement RPC failed: ${placementError.message}`);
 
   const { data, error } = await client.rpc("activate_plan_and_node", {
     p_user_id: input.userId,
@@ -113,16 +152,27 @@ export async function activateContractAndCommissions(client: SupabaseClient, inp
   return { ...(data as Record<string, unknown>), placement };
 }
 
-export async function processConfirmedContractCommissions(client: SupabaseClient, userId: string, contractId: string) {
+export async function processConfirmedContractCommissions(
+  client: SupabaseClient,
+  userId: string,
+  contractId: string
+) {
   const { data: transaction, error: transactionError } = await client
     .from("transactions")
     .select("id, user_id, type, status, amount")
     .eq("id", contractId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (transactionError) throw new Error(`Contract lookup failed: ${transactionError.message}`);
-  if (!transaction || transaction.type !== "contract" || transaction.status !== "completed") {
-    throw new Error("Only completed contract transactions can generate commissions.");
+  if (transactionError)
+    throw new Error(`Contract lookup failed: ${transactionError.message}`);
+  if (
+    !transaction ||
+    transaction.type !== "contract" ||
+    transaction.status !== "completed"
+  ) {
+    throw new Error(
+      "Only completed contract transactions can generate commissions."
+    );
   }
 
   return processContractCommissionsWithClient(client, {
@@ -138,64 +188,96 @@ export function registerCommissionRoutes(app: Express) {
   app.get("/api/commissions/summary", async (req: Request, res: Response) => {
     const client = adminClient();
     const accessToken = bearer(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
+    if (!client || !accessToken)
+      return res.status(401).json({ error: "Sesión Supabase requerida." });
 
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
+    if (error || !data.user)
+      return res.status(401).json({ error: "Sesión Supabase inválida." });
 
     try {
       return res.json(await getCommissionSummary(data.user.id));
     } catch (error) {
       console.error("[Commissions] summary error", error);
-      return res.status(500).json({ error: "No se pudo leer el ledger de comisiones." });
+      return res
+        .status(500)
+        .json({ error: "No se pudo leer el ledger de comisiones." });
     }
   });
 
   app.post("/api/contracts/activate", async (req: Request, res: Response) => {
     const client = adminClient();
     const accessToken = bearer(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
+    if (!client || !accessToken)
+      return res.status(401).json({ error: "Sesión Supabase requerida." });
 
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
+    if (error || !data.user)
+      return res.status(401).json({ error: "Sesión Supabase inválida." });
 
     const contractId = String(req.body?.contractId || "").trim();
     const planId = String(req.body?.planId || "").trim();
     const amount = Number(req.body?.amount);
-    if (!contractId || !planId || !Number.isFinite(amount)) return res.status(400).json({ error: "Datos de contrato incompletos." });
+    if (!contractId || !planId || !Number.isFinite(amount))
+      return res.status(400).json({ error: "Datos de contrato incompletos." });
 
     try {
       const result = await activateContractAndCommissions(client, {
         userId: data.user.id,
         contractId,
         planId,
-        username: data.user.user_metadata?.username || data.user.email?.split("@")[0],
+        username:
+          data.user.user_metadata?.username || data.user.email?.split("@")[0],
         amount,
       });
       return res.json(result);
     } catch (error) {
       console.error("[Contracts] activation error", error);
-      return res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo activar el contrato." });
+      return res
+        .status(400)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "No se pudo activar el contrato.",
+        });
     }
   });
 
-  app.post("/api/commissions/contract-confirmed", async (req: Request, res: Response) => {
-    const client = adminClient();
-    const accessToken = bearer(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
+  app.post(
+    "/api/commissions/contract-confirmed",
+    async (req: Request, res: Response) => {
+      const client = adminClient();
+      const accessToken = bearer(req);
+      if (!client || !accessToken)
+        return res.status(401).json({ error: "Sesión Supabase requerida." });
 
-    const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
+      const { data, error } = await client.auth.getUser(accessToken);
+      if (error || !data.user)
+        return res.status(401).json({ error: "Sesión Supabase inválida." });
 
-    const contractId = String(req.body?.contractId || "").trim();
-    if (!contractId) return res.status(400).json({ error: "contractId es requerido." });
+      const contractId = String(req.body?.contractId || "").trim();
+      if (!contractId)
+        return res.status(400).json({ error: "contractId es requerido." });
 
-    try {
-      const result = await processConfirmedContractCommissions(client, data.user.id, contractId);
-      return res.json(result);
-    } catch (error) {
-      console.error("[Commissions] contract confirmation error", error);
-      return res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo procesar la comisión." });
+      try {
+        const result = await processConfirmedContractCommissions(
+          client,
+          data.user.id,
+          contractId
+        );
+        return res.json(result);
+      } catch (error) {
+        console.error("[Commissions] contract confirmation error", error);
+        return res
+          .status(400)
+          .json({
+            error:
+              error instanceof Error
+                ? error.message
+                : "No se pudo procesar la comisión.",
+          });
+      }
     }
-  });
+  );
 }

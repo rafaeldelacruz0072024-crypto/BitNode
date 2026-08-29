@@ -4,140 +4,1419 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Bell, Box, ChevronDown, CircleDollarSign, Clock3, Copy, Gem, Home, LogOut, Menu, Plus, Settings, Users, Wallet, X, Zap } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Box,
+  ChevronDown,
+  CircleDollarSign,
+  Clock3,
+  Copy,
+  Gem,
+  Home,
+  LogOut,
+  Menu,
+  Plus,
+  Settings,
+  Users,
+  Wallet,
+  X,
+  Zap,
+} from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
-import { Contract, LocalUserState, addPendingDeposit, loadLocalUser, money, newId, saveLocalUser } from "@/lib/localUserStore";
+import {
+  Contract,
+  LocalUserState,
+  addPendingDeposit,
+  loadLocalUser,
+  money,
+  newId,
+  saveLocalUser,
+} from "@/lib/localUserStore";
 import { fetchTransactions, mergeTransactions } from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsInvoice } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
 import { requestManualDeposit } from "@/lib/depositClient";
-import { activateContractAndCommissions, fetchCommissionSummary, type CommissionSummary } from "@/lib/commissionsClient";
+import {
+  activateContractAndCommissions,
+  fetchCommissionSummary,
+  type CommissionSummary,
+} from "@/lib/commissionsClient";
 
-const nav = [["Inicio", "/dashboard", Home], ["Activar nodos", "/dashboard/activate", Gem], ["Mis nodos", "/dashboard/nodes", Box], ["Mi red", "/dashboard/network", Users], ["Depositar", "/dashboard/deposit", Plus], ["Retirar", "/dashboard/withdraw", Wallet], ["Historial", "/dashboard/history", Clock3], ["Perfil", "/dashboard/profile", Settings]] as const;
-const liveRows = [["BN-Y9F4UG", "Ethereum", "2,501 ops", "+$2.0430"], ["BN-8DX8W6", "Solana", "3,264 ops", "+$0.2208"], ["BN-4SDMIE", "Arbitrum", "3,232 ops", "+$1.6028"], ["BN-5WHG14", "Bitcoin", "4,165 ops", "+$1.0476"]];
-const catalog = [{ id: "daily", name: "Nodo Diario", rate: "1% – 1.5%", duration: "Indefinida", min: 10 }, { id: "7d", name: "Nodo 7 Días", rate: "2% – 3%", duration: "7 días + capital de vuelta", min: 10 }, { id: "14d", name: "Nodo 14 Días", rate: "3% – 4%", duration: "14 días + capital de vuelta", min: 10 }, { id: "21d", name: "Nodo 21 Días", rate: "4% – 5%", duration: "21 días + capital de vuelta", min: 10 }];
+const nav = [
+  ["Inicio", "/dashboard", Home],
+  ["Activar nodos", "/dashboard/activate", Gem],
+  ["Mis nodos", "/dashboard/nodes", Box],
+  ["Mi red", "/dashboard/network", Users],
+  ["Depositar", "/dashboard/deposit", Plus],
+  ["Retirar", "/dashboard/withdraw", Wallet],
+  ["Historial", "/dashboard/history", Clock3],
+  ["Perfil", "/dashboard/profile", Settings],
+] as const;
+const liveRows = [
+  ["BN-Y9F4UG", "Ethereum", "2,501 ops", "+$2.0430"],
+  ["BN-8DX8W6", "Solana", "3,264 ops", "+$0.2208"],
+  ["BN-4SDMIE", "Arbitrum", "3,232 ops", "+$1.6028"],
+  ["BN-5WHG14", "Bitcoin", "4,165 ops", "+$1.0476"],
+];
+const catalog = [
+  {
+    id: "daily",
+    name: "Nodo Diario",
+    rate: "1% – 1.5%",
+    duration: "Indefinida",
+    min: 10,
+  },
+  {
+    id: "7d",
+    name: "Nodo 7 Días",
+    rate: "2% – 3%",
+    duration: "7 días + capital de vuelta",
+    min: 10,
+  },
+  {
+    id: "14d",
+    name: "Nodo 14 Días",
+    rate: "3% – 4%",
+    duration: "14 días + capital de vuelta",
+    min: 10,
+  },
+  {
+    id: "21d",
+    name: "Nodo 21 Días",
+    rate: "4% – 5%",
+    duration: "21 días + capital de vuelta",
+    min: 10,
+  },
+];
 const WITHDRAW_DAILY_LIMIT = 1000;
 const WITHDRAW_FEE_RATE = 0.015;
-const NETWORKS = ["Ethereum", "Solana", "BNB Chain", "Polygon", "Arbitrum", "Bitcoin"];
-const WALLET_RULES: Record<string, { placeholder: string; test: RegExp }> = { Ethereum: { placeholder: "0x + 40 caracteres hexadecimales", test: /^0x[a-fA-F0-9]{40}$/ }, BNB: { placeholder: "0x + 40 caracteres hexadecimales", test: /^0x[a-fA-F0-9]{40}$/ }, "BNB Chain": { placeholder: "0x + 40 caracteres hexadecimales", test: /^0x[a-fA-F0-9]{40}$/ }, Polygon: { placeholder: "0x + 40 caracteres hexadecimales", test: /^0x[a-fA-F0-9]{40}$/ }, Arbitrum: { placeholder: "0x + 40 caracteres hexadecimales", test: /^0x[a-fA-F0-9]{40}$/ }, Solana: { placeholder: "Dirección Base58 de Solana", test: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/ }, Bitcoin: { placeholder: "bc1..., 1... o 3...", test: /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/ } };
+const NETWORKS = [
+  "Ethereum",
+  "Solana",
+  "BNB Chain",
+  "Polygon",
+  "Arbitrum",
+  "Bitcoin",
+];
+const WALLET_RULES: Record<string, { placeholder: string; test: RegExp }> = {
+  Ethereum: {
+    placeholder: "0x + 40 caracteres hexadecimales",
+    test: /^0x[a-fA-F0-9]{40}$/,
+  },
+  BNB: {
+    placeholder: "0x + 40 caracteres hexadecimales",
+    test: /^0x[a-fA-F0-9]{40}$/,
+  },
+  "BNB Chain": {
+    placeholder: "0x + 40 caracteres hexadecimales",
+    test: /^0x[a-fA-F0-9]{40}$/,
+  },
+  Polygon: {
+    placeholder: "0x + 40 caracteres hexadecimales",
+    test: /^0x[a-fA-F0-9]{40}$/,
+  },
+  Arbitrum: {
+    placeholder: "0x + 40 caracteres hexadecimales",
+    test: /^0x[a-fA-F0-9]{40}$/,
+  },
+  Solana: {
+    placeholder: "Dirección Base58 de Solana",
+    test: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+  },
+  Bitcoin: {
+    placeholder: "bc1..., 1... o 3...",
+    test: /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/,
+  },
+};
 
-function Metric({ label, value, tone = "neutral", note }: { label: string; value: string; tone?: string; note?: string }) { return <article className={`dash-metric ${tone}`}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</article>; }
+function Metric({
+  label,
+  value,
+  tone = "neutral",
+  note,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  note?: string;
+}) {
+  return (
+    <article className={`dash-metric ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note && <small>{note}</small>}
+    </article>
+  );
+}
 
 export default function Dashboard() {
   const [location, navigate] = useLocation();
-  const { user: authUser, loading: authLoading, configured: authConfigured } = useSupabaseSession();
+  const {
+    user: authUser,
+    loading: authLoading,
+    configured: authConfigured,
+  } = useSupabaseSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [liveNodes, setLiveNodes] = useState(15014);
   const [user, setUser] = useState<LocalUserState>(loadLocalUser);
-  const [commissionSummary, setCommissionSummary] = useState<CommissionSummary | null>(null);
+  const [commissionSummary, setCommissionSummary] =
+    useState<CommissionSummary | null>(null);
   const [commissionLoading, setCommissionLoading] = useState(false);
   const [commissionError, setCommissionError] = useState<string | null>(null);
   const section = useMemo(() => location.split("/")[2] || "home", [location]);
   const authUserId = authUser?.id;
-  useEffect(() => { if (!authLoading && (!authConfigured || !authUser)) navigate("/auth"); }, [authLoading, authConfigured, authUser, navigate]);
-  useEffect(() => { if (authUser) setUser((prev) => ({ ...prev, username: displayAuthName(authUser) })); }, [authUser]);
-  useEffect(() => { let active = true; if (!authUserId) return () => { active = false; }; setCommissionLoading(true); setCommissionError(null); fetchCommissionSummary().then((summary) => { if (!active) return; setCommissionSummary(summary); }).catch((error) => { if (active) setCommissionError(error instanceof Error ? error.message : "No se pudo cargar el ledger de comisiones."); }).finally(() => { if (active) setCommissionLoading(false); }); return () => { active = false; }; }, [authUserId]);
+  useEffect(() => {
+    if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
+  }, [authLoading, authConfigured, authUser, navigate]);
+  useEffect(() => {
+    if (authUser)
+      setUser(prev => ({ ...prev, username: displayAuthName(authUser) }));
+  }, [authUser]);
+  useEffect(() => {
+    let active = true;
+    if (!authUserId)
+      return () => {
+        active = false;
+      };
+    setCommissionLoading(true);
+    setCommissionError(null);
+    fetchCommissionSummary()
+      .then(summary => {
+        if (!active) return;
+        setCommissionSummary(summary);
+      })
+      .catch(error => {
+        if (active)
+          setCommissionError(
+            error instanceof Error
+              ? error.message
+              : "No se pudo cargar el ledger de comisiones."
+          );
+      })
+      .finally(() => {
+        if (active) setCommissionLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authUserId]);
   const isHome = section === "home";
-  useEffect(() => { saveLocalUser(user); }, [user]);
-  useEffect(() => { let active = true; if (!authUserId) return () => { active = false; }; fetchTransactions(authUserId).then((remote) => { if (!active || !remote?.length || remote[0]?.id === user.movements[0]?.id) return; setUser((prev) => ({ ...prev, movements: mergeTransactions(prev.movements, remote) })); }).catch(() => undefined); return () => { active = false; }; }, [user.username]);
-  useEffect(() => { const timer = window.setInterval(() => setLiveNodes((value) => value + (Math.random() > .5 ? 1 : 0)), 5000); return () => window.clearInterval(timer); }, []);
-  const showNotice = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(null), 3000); };
-  const activeLabel = nav.find((item) => item[1] === location)?.[0] || (isHome ? "Inicio" : "Panel");
-  const mutateDeposit = async (amount: number) => { if (!amount || amount < 10) return showNotice("El depósito mínimo es de $10.00."); try { const result = await requestManualDeposit(amount); const movement = { id: result.id, type: "deposit" as const, label: "Depósito manual · pendiente", amount, status: "pending" as const, date: new Date().toISOString() }; setUser((prev) => addPendingDeposit(prev, movement)); showNotice("Depósito registrado para confirmación; el balance no se acredita todavía."); } catch (error) { showNotice(error instanceof Error ? error.message : "No se pudo registrar el depósito."); } };
-  const mutateWithdraw = async (amount: number, network: string, wallet: string, fee: number) => { try { const result = await requestWithdrawal(amount, network, wallet); const movement = { id: result.id, type: "withdraw" as const, label: `Solicitud de retiro · ${network}`, amount: -amount, status: "pending" as const, date: new Date().toISOString(), network, wallet, fee: result.fee ?? fee, netAmount: result.netAmount ?? amount - fee }; setUser((prev) => ({ ...prev, movements: [movement, ...prev.movements] })); showNotice(`Solicitud registrada: recibirás ${money(result.netAmount)}. El balance no se descuenta hasta aprobación.`); } catch (cause) { showNotice(cause instanceof Error ? cause.message : "No se pudo registrar la solicitud."); } };
-  const activate = async (item: typeof catalog[number]) => { if (user.balance < item.min) return showNotice(`Necesitas al menos ${money(item.min)} en tu balance local.`); const contract: Contract = { id: newId("NODE"), name: item.name, rate: item.rate, amount: item.min, status: "active", createdAt: new Date().toLocaleDateString("es-MX"), duration: item.duration }; const movement = { id: contract.id, type: "contract" as const, label: `Activación ${item.name}`, amount: -item.min, status: "completed" as const, date: new Date().toISOString() }; try { const result = await activateContractAndCommissions({ contractId: contract.id, planId: item.id, amount: item.min }); setUser((prev) => ({ ...prev, balance: prev.balance - item.min, totalInvested: prev.totalInvested + item.min, contracts: [contract, ...prev.contracts], movements: [movement, ...prev.movements] })); fetchCommissionSummary().then((summary) => { if (summary) setCommissionSummary(summary); }).catch(() => undefined); showNotice(result.status === "duplicate" ? `${item.name} ya estaba activado.` : `${item.name} activado y comisión liquidada.`); navigate("/dashboard/nodes"); } catch (error) { showNotice(error instanceof Error ? error.message : "No se pudo activar el contrato."); } };
+  useEffect(() => {
+    saveLocalUser(user);
+  }, [user]);
+  useEffect(() => {
+    let active = true;
+    if (!authUserId)
+      return () => {
+        active = false;
+      };
+    fetchTransactions(authUserId)
+      .then(remote => {
+        if (
+          !active ||
+          !remote?.length ||
+          remote[0]?.id === user.movements[0]?.id
+        )
+          return;
+        setUser(prev => ({
+          ...prev,
+          movements: mergeTransactions(prev.movements, remote),
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [user.username]);
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setLiveNodes(value => value + (Math.random() > 0.5 ? 1 : 0)),
+      5000
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), 3000);
+  };
+  const activeLabel =
+    nav.find(item => item[1] === location)?.[0] ||
+    (isHome ? "Inicio" : "Panel");
+  const mutateDeposit = async (amount: number) => {
+    if (!amount || amount < 10)
+      return showNotice("El depósito mínimo es de $10.00.");
+    try {
+      const result = await requestManualDeposit(amount);
+      const movement = {
+        id: result.id,
+        type: "deposit" as const,
+        label: "Depósito manual · pendiente",
+        amount,
+        status: "pending" as const,
+        date: new Date().toISOString(),
+      };
+      setUser(prev => addPendingDeposit(prev, movement));
+      showNotice(
+        "Depósito registrado para confirmación; el balance no se acredita todavía."
+      );
+    } catch (error) {
+      showNotice(
+        error instanceof Error
+          ? error.message
+          : "No se pudo registrar el depósito."
+      );
+    }
+  };
+  const mutateWithdraw = async (
+    amount: number,
+    network: string,
+    wallet: string,
+    fee: number
+  ) => {
+    try {
+      const result = await requestWithdrawal(amount, network, wallet);
+      const movement = {
+        id: result.id,
+        type: "withdraw" as const,
+        label: `Solicitud de retiro · ${network}`,
+        amount: -amount,
+        status: "pending" as const,
+        date: new Date().toISOString(),
+        network,
+        wallet,
+        fee: result.fee ?? fee,
+        netAmount: result.netAmount ?? amount - fee,
+      };
+      setUser(prev => ({ ...prev, movements: [movement, ...prev.movements] }));
+      showNotice(
+        `Solicitud registrada: recibirás ${money(result.netAmount)}. El balance no se descuenta hasta aprobación.`
+      );
+    } catch (cause) {
+      showNotice(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo registrar la solicitud."
+      );
+    }
+  };
+  const activate = async (item: (typeof catalog)[number]) => {
+    if (user.balance < item.min)
+      return showNotice(
+        `Necesitas al menos ${money(item.min)} en tu balance local.`
+      );
+    const contract: Contract = {
+      id: newId("NODE"),
+      name: item.name,
+      rate: item.rate,
+      amount: item.min,
+      status: "active",
+      createdAt: new Date().toLocaleDateString("es-MX"),
+      duration: item.duration,
+    };
+    const movement = {
+      id: contract.id,
+      type: "contract" as const,
+      label: `Activación ${item.name}`,
+      amount: -item.min,
+      status: "completed" as const,
+      date: new Date().toISOString(),
+    };
+    try {
+      const result = await activateContractAndCommissions({
+        contractId: contract.id,
+        planId: item.id,
+        amount: item.min,
+      });
+      setUser(prev => ({
+        ...prev,
+        balance: prev.balance - item.min,
+        totalInvested: prev.totalInvested + item.min,
+        contracts: [contract, ...prev.contracts],
+        movements: [movement, ...prev.movements],
+      }));
+      fetchCommissionSummary()
+        .then(summary => {
+          if (summary) setCommissionSummary(summary);
+        })
+        .catch(() => undefined);
+      showNotice(
+        result.status === "duplicate"
+          ? `${item.name} ya estaba activado.`
+          : `${item.name} activado y comisión liquidada.`
+      );
+      navigate("/dashboard/nodes");
+    } catch (error) {
+      showNotice(
+        error instanceof Error
+          ? error.message
+          : "No se pudo activar el contrato."
+      );
+    }
+  };
 
-  if (authLoading) return <div className="auth-loading">Verificando sesión…</div>;
+  if (authLoading)
+    return <div className="auth-loading">Verificando sesión…</div>;
   if (!authUserId) return null;
-  const content = isHome ? <HomePanel user={user} commissionSummary={commissionSummary} liveNodes={liveNodes} showNotice={showNotice} navigate={navigate} /> : <SectionPanel section={section} user={user} commissionSummary={commissionSummary} commissionLoading={commissionLoading} commissionError={commissionError} showNotice={showNotice} deposit={mutateDeposit} withdraw={mutateWithdraw} activate={activate} />;
-  return <div className="dashboard-shell">{notice && <div className="notice dash-notice" role="status">{notice}</div>}<aside className={`dashboard-sidebar ${mobileOpen ? "is-open" : ""}`}><div className="dash-brand"><BrandMark className="brand-mark" /><span>bitnode<span>.</span></span></div><div className="dash-nav">{nav.map(([label, href, Icon]) => <Link key={href} href={href} className={location === href ? "active" : ""} onClick={() => setMobileOpen(false)}><Icon size={19} /><span>{label}</span></Link>)}</div><button className="logout" onClick={async () => { await supabase?.auth.signOut(); showNotice("Sesión cerrada."); navigate("/"); }}><LogOut size={19} /><span>Cerrar sesión</span></button></aside><div className="dashboard-main"><header className="dash-topbar"><button className="dash-mobile-toggle" onClick={() => setMobileOpen(!mobileOpen)}>{mobileOpen ? <X /> : <Menu />}</button><h1>{activeLabel}</h1><div className="dash-tools"><button className="dash-locale" onClick={() => showNotice("Idioma activo: Español")}>ES <ChevronDown size={14} /></button><button onClick={() => showNotice("No tienes notificaciones nuevas.")} aria-label="Notificaciones"><Bell size={19} /></button><button className="dash-balance" onClick={() => navigate("/dashboard/deposit")}><span>BALANCE</span><strong>{money(user.balance)}</strong></button></div></header><main className="dash-content">{content}</main></div></div>;
+  const content = isHome ? (
+    <HomePanel
+      user={user}
+      commissionSummary={commissionSummary}
+      liveNodes={liveNodes}
+      showNotice={showNotice}
+      navigate={navigate}
+    />
+  ) : (
+    <SectionPanel
+      section={section}
+      user={user}
+      currentUserId={authUserId}
+      commissionSummary={commissionSummary}
+      commissionLoading={commissionLoading}
+      commissionError={commissionError}
+      showNotice={showNotice}
+      deposit={mutateDeposit}
+      withdraw={mutateWithdraw}
+      activate={activate}
+    />
+  );
+  return (
+    <div className="dashboard-shell">
+      {notice && (
+        <div className="notice dash-notice" role="status">
+          {notice}
+        </div>
+      )}
+      <aside className={`dashboard-sidebar ${mobileOpen ? "is-open" : ""}`}>
+        <div className="dash-brand">
+          <BrandMark className="brand-mark" />
+          <span>
+            bitnode<span>.</span>
+          </span>
+        </div>
+        <div className="dash-nav">
+          {nav.map(([label, href, Icon]) => (
+            <Link
+              key={href}
+              href={href}
+              className={location === href ? "active" : ""}
+              onClick={() => setMobileOpen(false)}
+            >
+              <Icon size={19} />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </div>
+        <button
+          className="logout"
+          onClick={async () => {
+            await supabase?.auth.signOut();
+            showNotice("Sesión cerrada.");
+            navigate("/");
+          }}
+        >
+          <LogOut size={19} />
+          <span>Cerrar sesión</span>
+        </button>
+      </aside>
+      <div className="dashboard-main">
+        <header className="dash-topbar">
+          <button
+            className="dash-mobile-toggle"
+            onClick={() => setMobileOpen(!mobileOpen)}
+          >
+            {mobileOpen ? <X /> : <Menu />}
+          </button>
+          <h1>{activeLabel}</h1>
+          <div className="dash-tools">
+            <button
+              className="dash-locale"
+              onClick={() => showNotice("Idioma activo: Español")}
+            >
+              ES <ChevronDown size={14} />
+            </button>
+            <button
+              onClick={() => showNotice("No tienes notificaciones nuevas.")}
+              aria-label="Notificaciones"
+            >
+              <Bell size={19} />
+            </button>
+            <button
+              className="dash-balance"
+              onClick={() => navigate("/dashboard/deposit")}
+            >
+              <span>BALANCE</span>
+              <strong>{money(user.balance)}</strong>
+            </button>
+          </div>
+        </header>
+        <main className="dash-content">{content}</main>
+      </div>
+    </div>
+  );
 }
 
-function HomePanel({ user, commissionSummary, liveNodes, showNotice, navigate }: { user: LocalUserState; commissionSummary: CommissionSummary | null; liveNodes: number; showNotice: (message: string) => void; navigate: (path: string) => void }) { return <><div className="dash-intro"><div><span className="dash-eyebrow">PANEL DE CONTROL</span><h2>Hola, {user.username}</h2><p>Esto es lo que están generando tus nodos.</p></div><div className="dash-date">MIÉRCOLES · 20 AGO 2026</div></div><section className="dash-metrics-grid"><Metric label="BALANCE DISPONIBLE" value={money(user.balance)} tone="green" /><Metric label="INVERTIDO EN NODOS" value={money(user.totalInvested)} /><Metric label="RENDIMIENTO TOTAL" value={money(user.totalYield)} tone="blue" /><Metric label="GANANCIA DIARIA EST." value={money(user.contracts.length * 0.04)} tone="violet" note="lunes a viernes" /></section><section className="dash-mini-grid"><Metric label="INICIO RÁPIDO" value={money(commissionSummary?.direct ?? user.quickBonus)} note={commissionSummary ? "ledger Supabase" : "estado local"} /><Metric label="BINARIO" value={money(commissionSummary?.binary ?? user.binaryBonus)} note={commissionSummary ? "ledger Supabase" : "estado local"} /><Metric label="RANGOS" value={money(user.rankBonus)} note="pendiente de motor" /></section><div className="dash-section-heading"><h3>Mis contratos</h3><button onClick={() => navigate("/dashboard/activate")}>Activar nodo <span>→</span></button></div><div className="dash-columns"><section className="empty-contracts">{user.contracts.length ? <div className="contract-list">{user.contracts.slice(0, 3).map((contract) => <div className="local-contract" key={contract.id}><div><span>{contract.id} · ACTIVO</span><h4>{contract.name}</h4><small>{contract.rate} diario · {contract.duration}</small></div><strong>{money(contract.amount)}</strong></div>)}</div> : <><BrandMark className="brand-mark" /><h4>Aún no tienes contratos activos</h4><p>Activa tu primer nodo para comenzar a participar en la infraestructura.</p><button className="dash-primary" onClick={() => navigate("/dashboard/activate")}>Ver contratos <Zap size={15} /></button></>}</section><LiveFarm liveNodes={liveNodes} /></div><div className="dash-lower-grid"><section className="dash-card referral-card"><div className="dash-card-head"><div><span className="dash-eyebrow">ENLACE DE REFERIDO</span><h3>Construye tu red</h3></div><Users size={20} /></div><p>Comparte tu enlace y recibe bonos cuando tu red active contratos.</p><div className="referral-code">bitnode.space/r/<strong>{user.referralCode}</strong><button onClick={() => { navigator.clipboard?.writeText(`bitnode.space/r/${user.referralCode}`); showNotice("Enlace copiado al portapapeles."); }}><Copy size={14} /></button></div></section><section className="dash-card progress-card"><div className="dash-card-head"><div><span className="dash-eyebrow">PRÓXIMO RANGO</span><h3>{user.totalInvested >= 50 ? "Plata" : "Bronce"}</h3></div><span className="rank-value">{user.totalInvested >= 50 ? "$250" : "$50"}</span></div><div className="progress-track"><span style={{ width: `${Math.min(100, user.totalInvested * 2)}%` }} /></div><div className="progress-labels"><span>{money(user.totalInvested)} invertidos</span><span>{user.totalInvested >= 50 ? "$250" : "$50"} objetivo</span></div></section></div></>; }
+function HomePanel({
+  user,
+  commissionSummary,
+  liveNodes,
+  showNotice,
+  navigate,
+}: {
+  user: LocalUserState;
+  commissionSummary: CommissionSummary | null;
+  liveNodes: number;
+  showNotice: (message: string) => void;
+  navigate: (path: string) => void;
+}) {
+  return (
+    <>
+      <div className="dash-intro">
+        <div>
+          <span className="dash-eyebrow">PANEL DE CONTROL</span>
+          <h2>Hola, {user.username}</h2>
+          <p>Esto es lo que están generando tus nodos.</p>
+        </div>
+        <div className="dash-date">MIÉRCOLES · 20 AGO 2026</div>
+      </div>
+      <section className="dash-metrics-grid">
+        <Metric
+          label="BALANCE DISPONIBLE"
+          value={money(user.balance)}
+          tone="green"
+        />
+        <Metric label="INVERTIDO EN NODOS" value={money(user.totalInvested)} />
+        <Metric
+          label="RENDIMIENTO TOTAL"
+          value={money(user.totalYield)}
+          tone="blue"
+        />
+        <Metric
+          label="GANANCIA DIARIA EST."
+          value={money(user.contracts.length * 0.04)}
+          tone="violet"
+          note="lunes a viernes"
+        />
+      </section>
+      <section className="dash-mini-grid">
+        <Metric
+          label="INICIO RÁPIDO"
+          value={money(commissionSummary?.direct ?? user.quickBonus)}
+          note={commissionSummary ? "ledger Supabase" : "estado local"}
+        />
+        <Metric
+          label="BINARIO"
+          value={money(commissionSummary?.binary ?? user.binaryBonus)}
+          note={commissionSummary ? "ledger Supabase" : "estado local"}
+        />
+        <Metric
+          label="RANGOS"
+          value={money(user.rankBonus)}
+          note="pendiente de motor"
+        />
+      </section>
+      <div className="dash-section-heading">
+        <h3>Mis contratos</h3>
+        <button onClick={() => navigate("/dashboard/activate")}>
+          Activar nodo <span>→</span>
+        </button>
+      </div>
+      <div className="dash-columns">
+        <section className="empty-contracts">
+          {user.contracts.length ? (
+            <div className="contract-list">
+              {user.contracts.slice(0, 3).map(contract => (
+                <div className="local-contract" key={contract.id}>
+                  <div>
+                    <span>{contract.id} · ACTIVO</span>
+                    <h4>{contract.name}</h4>
+                    <small>
+                      {contract.rate} diario · {contract.duration}
+                    </small>
+                  </div>
+                  <strong>{money(contract.amount)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <BrandMark className="brand-mark" />
+              <h4>Aún no tienes contratos activos</h4>
+              <p>
+                Activa tu primer nodo para comenzar a participar en la
+                infraestructura.
+              </p>
+              <button
+                className="dash-primary"
+                onClick={() => navigate("/dashboard/activate")}
+              >
+                Ver contratos <Zap size={15} />
+              </button>
+            </>
+          )}
+        </section>
+        <LiveFarm liveNodes={liveNodes} />
+      </div>
+      <div className="dash-lower-grid">
+        <section className="dash-card referral-card">
+          <div className="dash-card-head">
+            <div>
+              <span className="dash-eyebrow">ENLACE DE REFERIDO</span>
+              <h3>Construye tu red</h3>
+            </div>
+            <Users size={20} />
+          </div>
+          <p>
+            Comparte tu enlace y recibe bonos cuando tu red active contratos.
+          </p>
+          <div className="referral-code">
+            bitnode.space/r/<strong>{user.referralCode}</strong>
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(
+                  `bitnode.space/r/${user.referralCode}`
+                );
+                showNotice("Enlace copiado al portapapeles.");
+              }}
+            >
+              <Copy size={14} />
+            </button>
+          </div>
+        </section>
+        <section className="dash-card progress-card">
+          <div className="dash-card-head">
+            <div>
+              <span className="dash-eyebrow">PRÓXIMO RANGO</span>
+              <h3>{user.totalInvested >= 50 ? "Plata" : "Bronce"}</h3>
+            </div>
+            <span className="rank-value">
+              {user.totalInvested >= 50 ? "$250" : "$50"}
+            </span>
+          </div>
+          <div className="progress-track">
+            <span
+              style={{ width: `${Math.min(100, user.totalInvested * 2)}%` }}
+            />
+          </div>
+          <div className="progress-labels">
+            <span>{money(user.totalInvested)} invertidos</span>
+            <span>{user.totalInvested >= 50 ? "$250" : "$50"} objetivo</span>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
 
-function LiveFarm({ liveNodes }: { liveNodes: number }) { return <section className="live-farm"><div className="live-farm-title"><h3><i /> Granja en vivo</h3><span>UPTIME <strong>99.77%</strong></span></div><div className="farm-summary"><strong>{liveNodes.toLocaleString("en-US")}</strong><span>NODOS</span><strong>99.77%</strong><span>UPTIME</span></div>{liveRows.map((row) => <div className="farm-row" key={row[0]}><div><b>{row[0]}</b><span>{row[1]} · {row[2]}</span></div><strong>{row[3]}</strong></div>)}</section>; }
+function LiveFarm({ liveNodes }: { liveNodes: number }) {
+  return (
+    <section className="live-farm">
+      <div className="live-farm-title">
+        <h3>
+          <i /> Granja en vivo
+        </h3>
+        <span>
+          UPTIME <strong>99.77%</strong>
+        </span>
+      </div>
+      <div className="farm-summary">
+        <strong>{liveNodes.toLocaleString("en-US")}</strong>
+        <span>NODOS</span>
+        <strong>99.77%</strong>
+        <span>UPTIME</span>
+      </div>
+      {liveRows.map(row => (
+        <div className="farm-row" key={row[0]}>
+          <div>
+            <b>{row[0]}</b>
+            <span>
+              {row[1]} · {row[2]}
+            </span>
+          </div>
+          <strong>{row[3]}</strong>
+        </div>
+      ))}
+    </section>
+  );
+}
 
-function SectionPanel({ section, user, commissionSummary, commissionLoading, commissionError, showNotice, deposit, withdraw, activate }: { section: string; user: LocalUserState; commissionSummary: CommissionSummary | null; commissionLoading: boolean; commissionError: string | null; showNotice: (message: string) => void; deposit: (amount: number) => void; withdraw: (amount: number, network: string, wallet: string, fee: number) => void; activate: (item: typeof catalog[number]) => void }) {
-  const labels: Record<string, [string, string, string]> = { activate: ["CONTRATOS DISPONIBLES", "Activar nodos", "Elige el ritmo de generación que mejor encaja con tu estrategia."], nodes: ["INFRAESTRUCTURA ASIGNADA", "Mis nodos", "Consulta el estado y el rendimiento de tus contratos activos."], network: ["PROGRAMA DE RED", "Mi red", "Revisa tu organización, bonos y evolución de rangos."], deposit: ["BALANCE DE CUENTA", "Depositar", "Fondea tu balance local para activar capacidad de validación."], withdraw: ["BALANCE DISPONIBLE", "Retirar", "Solicita una transferencia desde tu balance local disponible."], history: ["REGISTRO DE ACTIVIDAD", "Historial", "Movimientos, acreditaciones y operaciones de tu cuenta."], profile: ["CONFIGURACIÓN", "Perfil", "Administra tus datos y preferencias de cuenta."] };
+function SectionPanel({
+  section,
+  user,
+  currentUserId,
+  commissionSummary,
+  commissionLoading,
+  commissionError,
+  showNotice,
+  deposit,
+  withdraw,
+  activate,
+}: {
+  section: string;
+  user: LocalUserState;
+  currentUserId?: string;
+  commissionSummary: CommissionSummary | null;
+  commissionLoading: boolean;
+  commissionError: string | null;
+  showNotice: (message: string) => void;
+  deposit: (amount: number) => void;
+  withdraw: (
+    amount: number,
+    network: string,
+    wallet: string,
+    fee: number
+  ) => void;
+  activate: (item: (typeof catalog)[number]) => void;
+}) {
+  const labels: Record<string, [string, string, string]> = {
+    activate: [
+      "CONTRATOS DISPONIBLES",
+      "Activar nodos",
+      "Elige el ritmo de generación que mejor encaja con tu estrategia.",
+    ],
+    nodes: [
+      "INFRAESTRUCTURA ASIGNADA",
+      "Mis nodos",
+      "Consulta el estado y el rendimiento de tus contratos activos.",
+    ],
+    network: [
+      "PROGRAMA DE RED",
+      "Mi red",
+      "Revisa tu organización, bonos y evolución de rangos.",
+    ],
+    deposit: [
+      "BALANCE DE CUENTA",
+      "Depositar",
+      "Fondea tu balance local para activar capacidad de validación.",
+    ],
+    withdraw: [
+      "BALANCE DISPONIBLE",
+      "Retirar",
+      "Solicita una transferencia desde tu balance local disponible.",
+    ],
+    history: [
+      "REGISTRO DE ACTIVIDAD",
+      "Historial",
+      "Movimientos, acreditaciones y operaciones de tu cuenta.",
+    ],
+    profile: [
+      "CONFIGURACIÓN",
+      "Perfil",
+      "Administra tus datos y preferencias de cuenta.",
+    ],
+  };
   const [eyebrow, title, copy] = labels[section] || labels.activate;
-  const commissionMovements = (commissionSummary?.entries || []).map((entry) => ({ id: `commission-${entry.id}`, label: entry.commission_type === "binary" ? "Bono binario" : entry.commission_type === "direct" ? "Bono directo" : "Ajuste de comisión", date: new Date(entry.created_at).toLocaleString("es-MX"), amount: Number(entry.amount || 0), status: entry.status }));
-  if (section === "activate") return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p><div className="local-plan-grid">{catalog.map((item) => <article className="dash-card local-plan" key={item.name}><span className="dash-eyebrow">{item.duration}</span><h3>{item.name}</h3><strong>{item.rate}</strong><p>Generación de lunes a viernes. Mínimo local: {money(item.min)}.</p><button className="dash-primary" onClick={() => activate(item)}>Activar por {money(item.min)} <Zap size={15} /></button></article>)}</div></div>;
-  if (section === "deposit") return <DepositPanel title={title} copy={copy} localDeposit={deposit} />;
-  if (section === "withdraw") return <WithdrawalForm title={title} copy={copy} user={user} onSubmit={withdraw} />;
-  if (section === "nodes") return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p><div className="dash-card local-ledger">{user.contracts.length ? user.contracts.map((c) => <div className="local-contract" key={c.id}><div><span>{c.id} · {c.status.toUpperCase()}</span><h4>{c.name}</h4><small>{c.rate} diario · activado {c.createdAt}</small></div><strong>{money(c.amount)}</strong></div>) : <EmptyState text="Aún no hay nodos activos." />}</div></div>;
-  if (section === "history") return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p><div className="dash-card local-ledger">{user.movements.length || commissionMovements.length ? [...user.movements.map((m) => ({ id: m.id, label: m.label, date: m.date, amount: m.amount, status: m.status })), ...commissionMovements].map((m) => <div className="movement-row" key={m.id}><div><b>{m.label}</b><span>{m.date} · {m.status === "pending" ? "Pendiente" : m.status === "credited" ? "Acreditado" : "Completado"}</span></div><strong className={m.amount >= 0 ? "positive" : "negative"}>{m.amount >= 0 ? "+" : "−"}{money(Math.abs(m.amount))}</strong></div>) : <EmptyState text="Aún no hay movimientos." />}</div></div>;
+  const commissionMovements = (commissionSummary?.entries || []).map(entry => ({
+    id: `commission-${entry.id}`,
+    label:
+      entry.commission_type === "binary"
+        ? "Bono binario"
+        : entry.commission_type === "direct"
+          ? "Bono directo"
+          : "Ajuste de comisión",
+    date: new Date(entry.created_at).toLocaleString("es-MX"),
+    amount: Number(entry.amount || 0),
+    status: entry.status,
+  }));
+  if (section === "activate")
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+        <div className="local-plan-grid">
+          {catalog.map(item => (
+            <article className="dash-card local-plan" key={item.name}>
+              <span className="dash-eyebrow">{item.duration}</span>
+              <h3>{item.name}</h3>
+              <strong>{item.rate}</strong>
+              <p>
+                Generación de lunes a viernes. Mínimo local: {money(item.min)}.
+              </p>
+              <button className="dash-primary" onClick={() => activate(item)}>
+                Activar por {money(item.min)} <Zap size={15} />
+              </button>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  if (section === "deposit")
+    return <DepositPanel title={title} copy={copy} localDeposit={deposit} />;
+  if (section === "withdraw")
+    return (
+      <WithdrawalForm
+        title={title}
+        copy={copy}
+        user={user}
+        onSubmit={withdraw}
+      />
+    );
+  if (section === "nodes")
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+        <div className="dash-card local-ledger">
+          {user.contracts.length ? (
+            user.contracts.map(c => (
+              <div className="local-contract" key={c.id}>
+                <div>
+                  <span>
+                    {c.id} · {c.status.toUpperCase()}
+                  </span>
+                  <h4>{c.name}</h4>
+                  <small>
+                    {c.rate} diario · activado {c.createdAt}
+                  </small>
+                </div>
+                <strong>{money(c.amount)}</strong>
+              </div>
+            ))
+          ) : (
+            <EmptyState text="Aún no hay nodos activos." />
+          )}
+        </div>
+      </div>
+    );
+  if (section === "history")
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+        <div className="dash-card local-ledger">
+          {user.movements.length || commissionMovements.length ? (
+            [
+              ...user.movements.map(m => ({
+                id: m.id,
+                label: m.label,
+                date: m.date,
+                amount: m.amount,
+                status: m.status,
+              })),
+              ...commissionMovements,
+            ].map(m => (
+              <div className="movement-row" key={m.id}>
+                <div>
+                  <b>{m.label}</b>
+                  <span>
+                    {m.date} ·{" "}
+                    {m.status === "pending"
+                      ? "Pendiente"
+                      : m.status === "credited"
+                        ? "Acreditado"
+                        : "Completado"}
+                  </span>
+                </div>
+                <strong className={m.amount >= 0 ? "positive" : "negative"}>
+                  {m.amount >= 0 ? "+" : "−"}
+                  {money(Math.abs(m.amount))}
+                </strong>
+              </div>
+            ))
+          ) : (
+            <EmptyState text="Aún no hay movimientos." />
+          )}
+        </div>
+      </div>
+    );
   if (section === "network") {
-    const directEntries = (commissionSummary?.entries || []).filter((entry) => entry.commission_type === "direct" && entry.status === "credited");
-    const binaryEntries = (commissionSummary?.entries || []).filter((entry) => entry.commission_type === "binary" && entry.status === "credited");
-    const pendingEntries = (commissionSummary?.entries || []).filter((entry) => entry.status !== "credited");
+    const directEntries = (commissionSummary?.entries || []).filter(
+      entry => entry.commission_type === "direct" && entry.status === "credited"
+    );
+    const binaryEntries = (commissionSummary?.entries || []).filter(
+      entry => entry.commission_type === "binary" && entry.status === "credited"
+    );
+    const pendingEntries = (commissionSummary?.entries || []).filter(
+      entry => entry.status !== "credited"
+    );
     const binaryVolume = commissionSummary?.binaryVolume;
-    const pairingLabel = binaryVolume?.status === "paired" ? "Emparejado" : binaryVolume?.status === "awaiting_pair" ? "Esperando volumen opuesto" : "Sin volumen binario";
-    return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p>{commissionLoading && <div className="commission-state" role="status">Consultando ledger y volumen binario en Supabase…</div>}{commissionError && <div className="commission-state error" role="alert">{commissionError}</div>}<div className="network-link-card dash-card"><div><span className="dash-eyebrow">ENLACE PERSONAL</span><h3>bitnode.space/r/{user.referralCode}</h3><p>Comparte este enlace para registrar indicaciones directas.</p></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(`bitnode.space/r/${user.referralCode}`); showNotice("Enlace copiado al portapapeles."); }}>Copiar enlace <Copy size={15} /></button></div><div className="commission-detail-grid"><section className="commission-detail-card direct"><div className="commission-detail-heading"><div><span className="dash-eyebrow">INDICACIÓN DIRECTA</span><h3>Bono directo</h3></div><Users size={20} /></div><strong>{commissionSummary ? money(commissionSummary.direct) : "—"}</strong><p>10% sobre la activación elegible de un referido directo.{!commissionSummary && " Datos remotos no disponibles."}</p><div className="commission-detail-meta"><span>{directEntries.length} eventos acreditados</span><span>Rate 10%</span></div></section><section className="commission-detail-card binary"><div className="commission-detail-heading"><div><span className="dash-eyebrow">ESTRUCTURA BINARIA</span><h3>Bono binario</h3></div><Zap size={20} /></div><strong>{commissionSummary ? money(commissionSummary.binary) : "—"}</strong><p>10% sobre el volumen emparejado entre las piernas izquierda y derecha.{!commissionSummary && " Datos remotos no disponibles."}</p><div className="binary-volume-grid"><span>Izquierda <b>{money(binaryVolume?.left ?? 0)}</b></span><span>Derecha <b>{money(binaryVolume?.right ?? 0)}</b></span><span>Emparejado <b>{money(binaryVolume?.matched ?? 0)}</b></span><span>Estado <b>{pairingLabel}</b></span></div><div className="commission-detail-meta"><span>{binaryEntries.length} eventos acreditados</span><span>Rate 10%</span></div></section></div><section className="network-ledger-card dash-card"><div className="dash-card-head"><div><span className="dash-eyebrow">LEDGER DE COMISIONES</span><h3>Actividad reciente</h3></div><span className="ledger-status">{commissionSummary ? "SUPABASE" : "SIN CONEXIÓN"}</span></div>{commissionSummary?.entries.length ? commissionSummary.entries.slice(0, 5).map((entry) => <div className="commission-ledger-row" key={entry.id}><div><b>{entry.commission_type === "binary" ? "Bono binario" : "Bono directo"}</b><span>{new Date(entry.created_at).toLocaleString("es-MX")} · {entry.status === "credited" ? "Acreditado" : "Pendiente"}{entry.leg ? ` · Pierna ${entry.leg}` : ""}</span></div><strong>{money(Number(entry.amount || 0))}</strong></div>) : <EmptyState text="Aún no hay comisiones acreditadas." />}<div className="commission-ledger-foot"><span>{commissionSummary ? `${pendingEntries.length} pendientes o reversadas` : "Ledger remoto no disponible"}</span><span>Total acumulado: <b>{commissionSummary ? money(commissionSummary.total) : "—"}</b></span></div></section><div className="dash-lower-grid local-network-grid"><section className="dash-card"><span className="dash-eyebrow">PRÓXIMO RANGO</span><h3>{user.totalInvested >= 50 ? "Plata" : "Bronce"}</h3><p>Volumen personal actual: {money(user.totalInvested)}</p></section></div></div>;
+    const pairingLabel =
+      binaryVolume?.status === "paired"
+        ? "Emparejado"
+        : binaryVolume?.status === "awaiting_pair"
+          ? "Esperando volumen opuesto"
+          : "Sin volumen binario";
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+        {commissionLoading && (
+          <div className="commission-state" role="status">
+            Consultando ledger y volumen binario en Supabase…
+          </div>
+        )}
+        {commissionError && (
+          <div className="commission-state error" role="alert">
+            {commissionError}
+          </div>
+        )}
+        <div className="network-link-card dash-card">
+          <div>
+            <span className="dash-eyebrow">ENLACE PERSONAL</span>
+            <h3>bitnode.space/r/{user.referralCode}</h3>
+            <p>Comparte este enlace para registrar indicaciones directas.</p>
+          </div>
+          <button
+            className="dash-primary"
+            onClick={() => {
+              navigator.clipboard?.writeText(
+                `bitnode.space/r/${user.referralCode}`
+              );
+              showNotice("Enlace copiado al portapapeles.");
+            }}
+          >
+            Copiar enlace <Copy size={15} />
+          </button>
+        </div>
+        <BinaryTree nodes={commissionSummary?.networkNodes || []} currentUserId={currentUserId} />
+        <div className="commission-detail-grid">
+          <section className="commission-detail-card direct">
+            <div className="commission-detail-heading">
+              <div>
+                <span className="dash-eyebrow">INDICACIÓN DIRECTA</span>
+                <h3>Bono directo</h3>
+              </div>
+              <Users size={20} />
+            </div>
+            <strong>
+              {commissionSummary ? money(commissionSummary.direct) : "—"}
+            </strong>
+            <p>
+              10% sobre la activación elegible de un referido directo.
+              {!commissionSummary && " Datos remotos no disponibles."}
+            </p>
+            <div className="commission-detail-meta">
+              <span>{directEntries.length} eventos acreditados</span>
+              <span>Rate 10%</span>
+            </div>
+          </section>
+          <section className="commission-detail-card binary">
+            <div className="commission-detail-heading">
+              <div>
+                <span className="dash-eyebrow">ESTRUCTURA BINARIA</span>
+                <h3>Bono binario</h3>
+              </div>
+              <Zap size={20} />
+            </div>
+            <strong>
+              {commissionSummary ? money(commissionSummary.binary) : "—"}
+            </strong>
+            <p>
+              10% sobre el volumen emparejado entre las piernas izquierda y
+              derecha.{!commissionSummary && " Datos remotos no disponibles."}
+            </p>
+            <div className="binary-volume-grid">
+              <span>
+                Izquierda <b>{money(binaryVolume?.left ?? 0)}</b>
+              </span>
+              <span>
+                Derecha <b>{money(binaryVolume?.right ?? 0)}</b>
+              </span>
+              <span>
+                Emparejado <b>{money(binaryVolume?.matched ?? 0)}</b>
+              </span>
+              <span>
+                Estado <b>{pairingLabel}</b>
+              </span>
+            </div>
+            <div className="commission-detail-meta">
+              <span>{binaryEntries.length} eventos acreditados</span>
+              <span>Rate 10%</span>
+            </div>
+          </section>
+        </div>
+        <section className="network-ledger-card dash-card">
+          <div className="dash-card-head">
+            <div>
+              <span className="dash-eyebrow">LEDGER DE COMISIONES</span>
+              <h3>Actividad reciente</h3>
+            </div>
+            <span className="ledger-status">
+              {commissionSummary ? "SUPABASE" : "SIN CONEXIÓN"}
+            </span>
+          </div>
+          {commissionSummary?.entries.length ? (
+            commissionSummary.entries.slice(0, 5).map(entry => (
+              <div className="commission-ledger-row" key={entry.id}>
+                <div>
+                  <b>
+                    {entry.commission_type === "binary"
+                      ? "Bono binario"
+                      : "Bono directo"}
+                  </b>
+                  <span>
+                    {new Date(entry.created_at).toLocaleString("es-MX")} ·{" "}
+                    {entry.status === "credited" ? "Acreditado" : "Pendiente"}
+                    {entry.leg ? ` · Pierna ${entry.leg}` : ""}
+                  </span>
+                </div>
+                <strong>{money(Number(entry.amount || 0))}</strong>
+              </div>
+            ))
+          ) : (
+            <EmptyState text="Aún no hay comisiones acreditadas." />
+          )}
+          <div className="commission-ledger-foot">
+            <span>
+              {commissionSummary
+                ? `${pendingEntries.length} pendientes o reversadas`
+                : "Ledger remoto no disponible"}
+            </span>
+            <span>
+              Total acumulado:{" "}
+              <b>{commissionSummary ? money(commissionSummary.total) : "—"}</b>
+            </span>
+          </div>
+        </section>
+        <div className="dash-lower-grid local-network-grid">
+          <section className="dash-card">
+            <span className="dash-eyebrow">PRÓXIMO RANGO</span>
+            <h3>{user.totalInvested >= 50 ? "Plata" : "Bronce"}</h3>
+            <p>Volumen personal actual: {money(user.totalInvested)}</p>
+          </section>
+        </div>
+      </div>
+    );
   }
-  return <div className="generic-panel"><span className="dash-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{copy}</p><div className="dash-card profile-card"><span className="dash-eyebrow">USUARIO LOCAL</span><h3>{user.username}</h3><p>{user.email}</p><button className="dash-primary" onClick={() => showNotice("Perfil local listo para conectar con Supabase.")}>Guardar cambios <Zap size={15} /></button></div></div>;
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">{eyebrow}</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      <div className="dash-card profile-card">
+        <span className="dash-eyebrow">USUARIO LOCAL</span>
+        <h3>{user.username}</h3>
+        <p>{user.email}</p>
+        <button
+          className="dash-primary"
+          onClick={() =>
+            showNotice("Perfil local listo para conectar con Supabase.")
+          }
+        >
+          Guardar cambios <Zap size={15} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function DepositPanel({ title, copy, localDeposit }: { title: string; copy: string; localDeposit: (amount: number) => void }) {
+function DepositPanel({
+  title,
+  copy,
+  localDeposit,
+}: {
+  title: string;
+  copy: string;
+  localDeposit: (amount: number) => void;
+}) {
   const [amount, setAmount] = useState(10);
   const [payCurrency, setPayCurrency] = useState("usdttrc20");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [invoice, setInvoice] = useState<{ invoiceUrl?: string | null; transactionId: string } | null>(null);
+  const [invoice, setInvoice] = useState<{
+    invoiceUrl?: string | null;
+    transactionId: string;
+  } | null>(null);
   const submit = async () => {
-    if (!Number.isFinite(amount) || amount < 10) return setError("El depósito mínimo es de $10.00 USDT.");
+    if (!Number.isFinite(amount) || amount < 10)
+      return setError("El depósito mínimo es de $10.00 USDT.");
     setError("");
     setLoading(true);
     try {
       const result = await createNowPaymentsInvoice(amount, payCurrency);
-      setInvoice({ invoiceUrl: result.invoiceUrl, transactionId: result.transactionId });
-      if (result.invoiceUrl) window.open(result.invoiceUrl, "_blank", "noopener,noreferrer");
+      setInvoice({
+        invoiceUrl: result.invoiceUrl,
+        transactionId: result.transactionId,
+      });
+      if (result.invoiceUrl)
+        window.open(result.invoiceUrl, "_blank", "noopener,noreferrer");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo crear el invoice de prueba.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo crear el invoice de prueba."
+      );
     } finally {
       setLoading(false);
     }
   };
-  return <div className="generic-panel"><span className="dash-eyebrow">BALANCE DE CUENTA</span><h2>{title}</h2><p>{copy}</p><section className="dash-card money-form payment-form"><label>Monto del depósito<input type="number" min="10" step="0.01" value={amount} onChange={(event) => { setAmount(Number(event.target.value)); setError(""); }} /></label><label>Moneda de pago<select value={payCurrency} onChange={(event) => setPayCurrency(event.target.value)}><option value="usdttrc20">USDT TRC20</option><option value="usdtbsc">USDT BEP20</option><option value="usdterc20">USDT ERC20</option><option value="btc">Bitcoin</option></select></label><small>Modo de prueba · El invoice se crea en NOWPayments Sandbox y queda pendiente hasta recibir un callback IPN válido.</small>{error && <div className="form-error" role="alert">{error}</div>}{invoice && <div className="form-success" role="status">Invoice creado: <strong>{invoice.transactionId}</strong>{invoice.invoiceUrl && <> · <button className="inline-link" onClick={() => window.open(invoice.invoiceUrl!, "_blank", "noopener,noreferrer")}>Abrir pago</button></>}</div>}<button className="dash-primary" disabled={loading || !Number.isFinite(amount) || amount < 10} onClick={submit}>{loading ? "Creando invoice…" : "Pagar con NOWPayments"} <Zap size={15} /></button><button className="confirm-cancel local-fallback" onClick={() => localDeposit(amount)}>Usar depósito local de prueba</button></section></div>;
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">BALANCE DE CUENTA</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      <section className="dash-card money-form payment-form">
+        <label>
+          Monto del depósito
+          <input
+            type="number"
+            min="10"
+            step="0.01"
+            value={amount}
+            onChange={event => {
+              setAmount(Number(event.target.value));
+              setError("");
+            }}
+          />
+        </label>
+        <label>
+          Moneda de pago
+          <select
+            value={payCurrency}
+            onChange={event => setPayCurrency(event.target.value)}
+          >
+            <option value="usdttrc20">USDT TRC20</option>
+            <option value="usdtbsc">USDT BEP20</option>
+            <option value="usdterc20">USDT ERC20</option>
+            <option value="btc">Bitcoin</option>
+          </select>
+        </label>
+        <small>
+          Modo de prueba · El invoice se crea en NOWPayments Sandbox y queda
+          pendiente hasta recibir un callback IPN válido.
+        </small>
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
+        {invoice && (
+          <div className="form-success" role="status">
+            Invoice creado: <strong>{invoice.transactionId}</strong>
+            {invoice.invoiceUrl && (
+              <>
+                {" "}
+                ·{" "}
+                <button
+                  className="inline-link"
+                  onClick={() =>
+                    window.open(
+                      invoice.invoiceUrl!,
+                      "_blank",
+                      "noopener,noreferrer"
+                    )
+                  }
+                >
+                  Abrir pago
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        <button
+          className="dash-primary"
+          disabled={loading || !Number.isFinite(amount) || amount < 10}
+          onClick={submit}
+        >
+          {loading ? "Creando invoice…" : "Pagar con NOWPayments"}{" "}
+          <Zap size={15} />
+        </button>
+        <button
+          className="confirm-cancel local-fallback"
+          onClick={() => localDeposit(amount)}
+        >
+          Usar depósito local de prueba
+        </button>
+      </section>
+    </div>
+  );
 }
 
-function WithdrawalForm({ title, copy, user, onSubmit }: { title: string; copy: string; user: LocalUserState; onSubmit: (amount: number, network: string, wallet: string, fee: number) => void }) {
+function WithdrawalForm({
+  title,
+  copy,
+  user,
+  onSubmit,
+}: {
+  title: string;
+  copy: string;
+  user: LocalUserState;
+  onSubmit: (
+    amount: number,
+    network: string,
+    wallet: string,
+    fee: number
+  ) => void;
+}) {
   const [amount, setAmount] = useState(10);
   const [network, setNetwork] = useState("Ethereum");
   const [wallet, setWallet] = useState("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const todayKey = new Date().toISOString().slice(0, 10);
-  const usedToday = user.movements.filter((movement) => movement.type === "withdraw" && movement.date.slice(0, 10) === todayKey).reduce((sum, movement) => sum + Math.abs(movement.amount), 0);
+  const usedToday = user.movements
+    .filter(
+      movement =>
+        movement.type === "withdraw" && movement.date.slice(0, 10) === todayKey
+    )
+    .reduce((sum, movement) => sum + Math.abs(movement.amount), 0);
   const fee = Math.max(1, amount * WITHDRAW_FEE_RATE);
   const net = Math.max(0, amount - fee);
   const validate = () => {
-    if (!Number.isFinite(amount) || amount < 10) return "El monto mínimo de retiro es de $10.00 USDT.";
-    if (amount > user.balance) return `No puedes retirar más de ${money(user.balance)} disponibles.`;
-    if (usedToday + amount > WITHDRAW_DAILY_LIMIT) return `Superas el límite diario de ${money(WITHDRAW_DAILY_LIMIT)}. Ya solicitaste ${money(usedToday)} hoy.`;
+    if (!Number.isFinite(amount) || amount < 10)
+      return "El monto mínimo de retiro es de $10.00 USDT.";
+    if (amount > user.balance)
+      return `No puedes retirar más de ${money(user.balance)} disponibles.`;
+    if (usedToday + amount > WITHDRAW_DAILY_LIMIT)
+      return `Superas el límite diario de ${money(WITHDRAW_DAILY_LIMIT)}. Ya solicitaste ${money(usedToday)} hoy.`;
     if (!wallet.trim()) return "Introduce la dirección de la wallet.";
-    if (!WALLET_RULES[network].test.test(wallet.trim())) return `La dirección no coincide con el formato esperado para ${network}.`;
+    if (!WALLET_RULES[network].test.test(wallet.trim()))
+      return `La dirección no coincide con el formato esperado para ${network}.`;
     if (net <= 0) return "El monto neto debe ser mayor que cero.";
     return "";
   };
-  const requestConfirmation = () => { const nextError = validate(); setError(nextError); if (!nextError) setConfirming(true); };
-  return <div className="generic-panel"><span className="dash-eyebrow">BALANCE LOCAL</span><h2>{title}</h2><p>{copy}</p><section className="dash-card money-form withdrawal-form"><label>Monto a retirar<input type="number" min="10" max={user.balance} step="0.01" value={Number.isFinite(amount) ? amount : ""} aria-invalid={Boolean(error)} onChange={(event) => { setAmount(Number(event.target.value)); setError(""); }} /></label><div className="form-grid"><label>Red<select value={network} onChange={(event) => { setNetwork(event.target.value); setError(""); }}>{NETWORKS.map((item) => <option key={item}>{item}</option>)}</select></label><label>Dirección de wallet<input type="text" value={wallet} placeholder={WALLET_RULES[network].placeholder} aria-invalid={Boolean(error && wallet)} onChange={(event) => { setWallet(event.target.value); setError(""); }} /></label></div><small>Disponible: {money(user.balance)} · Límite diario: {money(WITHDRAW_DAILY_LIMIT)} · Usado hoy: {money(usedToday)}</small><div className="fee-summary"><span>Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(2)}%) <strong>{money(fee)}</strong></span><span>Recibirás <strong>{money(net)} USDT</strong></span></div>{error && <div className="form-error" role="alert">{error}</div>}<button className="dash-primary" disabled={Boolean(error)} onClick={requestConfirmation}>Revisar retiro <Zap size={15} /></button></section>{confirming && <div className="confirm-backdrop"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="withdraw-confirm-title"><span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span><h3 id="withdraw-confirm-title">¿Confirmar retiro?</h3><p>Red: <strong>{network}</strong><br />Wallet: <strong className="wallet-preview">{wallet}</strong><br />Monto: <strong>{money(amount)} USDT</strong><br />Comisión: <strong>{money(fee)}</strong><br />Recibirás: <strong>{money(net)} USDT</strong></p><div className="confirm-actions"><button className="confirm-cancel" onClick={() => setConfirming(false)}>Cancelar</button><button className="dash-primary" onClick={() => { setConfirming(false); onSubmit(amount, network, wallet.trim(), fee); }}>Confirmar retiro <Zap size={15} /></button></div></section></div>}</div>;
+  const requestConfirmation = () => {
+    const nextError = validate();
+    setError(nextError);
+    if (!nextError) setConfirming(true);
+  };
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">BALANCE LOCAL</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      <section className="dash-card money-form withdrawal-form">
+        <label>
+          Monto a retirar
+          <input
+            type="number"
+            min="10"
+            max={user.balance}
+            step="0.01"
+            value={Number.isFinite(amount) ? amount : ""}
+            aria-invalid={Boolean(error)}
+            onChange={event => {
+              setAmount(Number(event.target.value));
+              setError("");
+            }}
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Red
+            <select
+              value={network}
+              onChange={event => {
+                setNetwork(event.target.value);
+                setError("");
+              }}
+            >
+              {NETWORKS.map(item => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dirección de wallet
+            <input
+              type="text"
+              value={wallet}
+              placeholder={WALLET_RULES[network].placeholder}
+              aria-invalid={Boolean(error && wallet)}
+              onChange={event => {
+                setWallet(event.target.value);
+                setError("");
+              }}
+            />
+          </label>
+        </div>
+        <small>
+          Disponible: {money(user.balance)} · Límite diario:{" "}
+          {money(WITHDRAW_DAILY_LIMIT)} · Usado hoy: {money(usedToday)}
+        </small>
+        <div className="fee-summary">
+          <span>
+            Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(2)}%){" "}
+            <strong>{money(fee)}</strong>
+          </span>
+          <span>
+            Recibirás <strong>{money(net)} USDT</strong>
+          </span>
+        </div>
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
+        <button
+          className="dash-primary"
+          disabled={Boolean(error)}
+          onClick={requestConfirmation}
+        >
+          Revisar retiro <Zap size={15} />
+        </button>
+      </section>
+      {confirming && (
+        <div className="confirm-backdrop">
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="withdraw-confirm-title"
+          >
+            <span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span>
+            <h3 id="withdraw-confirm-title">¿Confirmar retiro?</h3>
+            <p>
+              Red: <strong>{network}</strong>
+              <br />
+              Wallet: <strong className="wallet-preview">{wallet}</strong>
+              <br />
+              Monto: <strong>{money(amount)} USDT</strong>
+              <br />
+              Comisión: <strong>{money(fee)}</strong>
+              <br />
+              Recibirás: <strong>{money(net)} USDT</strong>
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="confirm-cancel"
+                onClick={() => setConfirming(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="dash-primary"
+                onClick={() => {
+                  setConfirming(false);
+                  onSubmit(amount, network, wallet.trim(), fee);
+                }}
+              >
+                Confirmar retiro <Zap size={15} />
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function MoneyForm({ title, copy, label, button, onSubmit, max }: { title: string; copy: string; label: string; button: string; onSubmit: (amount: number) => void; max?: number }) {
+function MoneyForm({
+  title,
+  copy,
+  label,
+  button,
+  onSubmit,
+  max,
+}: {
+  title: string;
+  copy: string;
+  label: string;
+  button: string;
+  onSubmit: (amount: number) => void;
+  max?: number;
+}) {
   const [amount, setAmount] = useState(10);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const validate = (value: number) => {
-    if (!Number.isFinite(value) || value <= 0) return "Introduce un monto válido mayor que cero.";
+    if (!Number.isFinite(value) || value <= 0)
+      return "Introduce un monto válido mayor que cero.";
     if (value < 10) return "El monto mínimo es de $10.00 USDT.";
-    if (max !== undefined && value > max) return `No puedes retirar más de ${money(max)} disponibles.`;
+    if (max !== undefined && value > max)
+      return `No puedes retirar más de ${money(max)} disponibles.`;
     return "";
   };
-  const handleChange = (value: number) => { setAmount(value); setError(validate(value)); };
-  const requestConfirmation = () => { const nextError = validate(amount); setError(nextError); if (!nextError) setConfirming(true); };
-  return <div className="generic-panel"><span className="dash-eyebrow">BALANCE LOCAL</span><h2>{title}</h2><p>{copy}</p><section className="dash-card money-form"><label>{label}<input type="number" min="10" max={max} step="0.01" value={Number.isFinite(amount) ? amount : ""} aria-invalid={Boolean(error)} aria-describedby={error ? "money-error" : undefined} onChange={(e) => handleChange(Number(e.target.value))} /></label>{max !== undefined && <small>Disponible: {money(max)}</small>}{error && <div className="form-error" id="money-error" role="alert">{error}</div>}<button className="dash-primary" disabled={Boolean(error) || !amount} onClick={requestConfirmation}> {button} <Zap size={15} /></button></section>{confirming && <div className="confirm-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span><h3 id="confirm-title">¿Confirmar {title.toLowerCase()}?</h3><p>Vas a procesar <strong>{money(amount)} USDT</strong> en el modo local. Revisa el monto antes de continuar.</p><div className="confirm-actions"><button className="confirm-cancel" onClick={() => setConfirming(false)}>Cancelar</button><button className="dash-primary" onClick={() => { setConfirming(false); onSubmit(amount); }}>Confirmar operación <Zap size={15} /></button></div></section></div>}</div>;
+  const handleChange = (value: number) => {
+    setAmount(value);
+    setError(validate(value));
+  };
+  const requestConfirmation = () => {
+    const nextError = validate(amount);
+    setError(nextError);
+    if (!nextError) setConfirming(true);
+  };
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">BALANCE LOCAL</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      <section className="dash-card money-form">
+        <label>
+          {label}
+          <input
+            type="number"
+            min="10"
+            max={max}
+            step="0.01"
+            value={Number.isFinite(amount) ? amount : ""}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "money-error" : undefined}
+            onChange={e => handleChange(Number(e.target.value))}
+          />
+        </label>
+        {max !== undefined && <small>Disponible: {money(max)}</small>}
+        {error && (
+          <div className="form-error" id="money-error" role="alert">
+            {error}
+          </div>
+        )}
+        <button
+          className="dash-primary"
+          disabled={Boolean(error) || !amount}
+          onClick={requestConfirmation}
+        >
+          {" "}
+          {button} <Zap size={15} />
+        </button>
+      </section>
+      {confirming && (
+        <div className="confirm-backdrop" role="presentation">
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+          >
+            <span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span>
+            <h3 id="confirm-title">¿Confirmar {title.toLowerCase()}?</h3>
+            <p>
+              Vas a procesar <strong>{money(amount)} USDT</strong> en el modo
+              local. Revisa el monto antes de continuar.
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="confirm-cancel"
+                onClick={() => setConfirming(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="dash-primary"
+                onClick={() => {
+                  setConfirming(false);
+                  onSubmit(amount);
+                }}
+              >
+                Confirmar operación <Zap size={15} />
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
-function EmptyState({ text }: { text: string }) { return <div className="empty-ledger"><Activity size={26} /><span>{text}</span><small>Esta vista se conectará con Supabase en la siguiente etapa.</small></div>; }
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="empty-ledger">
+      <Activity size={26} />
+      <span>{text}</span>
+      <small>Esta vista se conectará con Supabase en la siguiente etapa.</small>
+    </div>
+  );
+}
+
+function BinaryTree({ nodes, currentUserId }: { nodes: Array<{ user_id: string; parent_id: string | null; leg: "left" | "right" | null }>; currentUserId?: string }) {
+  const root = nodes.find((node) => node.user_id === currentUserId) || nodes.find((node) => !node.parent_id);
+  const child = (leg: "left" | "right") => nodes.find((node) => node.parent_id === root?.user_id && node.leg === leg);
+  const label = (id?: string) => id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "Disponible";
+  return <section className="binary-tree-card dash-card"><div className="dash-card-head"><div><span className="dash-eyebrow">ÁRBOL BINARIO</span><h3>Estructura de red</h3></div><span className="ledger-status">LEFT / RIGHT</span></div><div className="binary-tree-visual"><div className={`tree-node root ${root ? "filled" : "empty"}`}><span>RAÍZ</span><b>{label(root?.user_id)}</b></div><div className="tree-connector" /><div className="tree-legs"><div className={`tree-leg left ${child("left") ? "filled" : "empty"}`}><span>PIERNA IZQUIERDA</span><b>{label(child("left")?.user_id)}</b></div><div className={`tree-leg right ${child("right") ? "filled" : "empty"}`}><span>PIERNA DERECHA</span><b>{label(child("right")?.user_id)}</b></div></div></div><p className="binary-tree-note">Cada activación se coloca una sola vez en la primera posición disponible.</p></section>;
+}
