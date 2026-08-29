@@ -875,6 +875,12 @@ function SectionPanel({
             Copiar enlace <Copy size={15} />
           </button>
         </div>
+        <div className="commission-detail-grid">
+          {([['izquierda', 'PIERNA IZQUIERDA', '←'], ['derecha', 'PIERNA DERECHA', '→']] as const).map(([side, label, arrow]) => {
+            const link = `https://bitnode.space/r/${user.referralCode}/${side}`;
+            return <div className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`} key={side}><div><span className="dash-eyebrow">{arrow} {label}</span><strong>{link}</strong></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(link); showNotice(`Enlace de pierna ${side} copiado.`); }}>Copiar <Copy size={14} /></button></div>;
+          })}
+        </div>
         <BinaryTree nodes={commissionSummary?.networkNodes || []} currentUserId={currentUserId} />
         <div className="commission-detail-grid">
           <section className="commission-detail-card direct">
