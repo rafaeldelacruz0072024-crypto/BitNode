@@ -44,6 +44,7 @@ import { requestManualDeposit } from "@/lib/depositClient";
 import {
   activateContractAndCommissions,
   completeDailyTask,
+  fetchDailyTaskProgress,
   fetchCommissionSummary,
   type CommissionSummary,
 } from "@/lib/commissionsClient";
@@ -66,11 +67,45 @@ function DailyTasksPanel({
   const [cycleDay, setCycleDay] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState("24:00:00");
   const activeContract = user.contracts.find(contract => contract.status === "active");
 
   if (!activeContract)
     return <div className="generic-panel"><span className="dash-eyebrow">TAREAS DIARIAS</span><h2>Activa un nodo primero</h2><p>Necesitas un contrato activo para realizar las cuatro tareas y recibir el pasivo.</p></div>;
   const activeContractId = activeContract.id;
+
+  useEffect(() => {
+    fetchDailyTaskProgress(activeContractId)
+      .then(progress => {
+        if (!progress) return;
+        setCompleted(progress.completed_tasks || []);
+        setCycleDay(progress.cycle_day || 0);
+        setDeadline(progress.last_task_at ? new Date(progress.last_task_at).getTime() + 86400000 : null);
+      })
+      .catch(() => undefined);
+  }, [activeContractId]);
+
+  useEffect(() => {
+    const tick = () => {
+      if (!deadline) return setTimeLeft("24:00:00");
+      const remaining = Math.max(0, deadline - Date.now());
+      if (remaining === 0) {
+        setCompleted([]);
+        setCycleDay(0);
+        setTimeLeft("Ciclo reiniciado");
+        return;
+      }
+      const totalSeconds = Math.floor(remaining / 1000);
+      const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, "0");
+      const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, "0");
+      const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+      setTimeLeft(`${hours}:${minutes}:${seconds}`);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
 
   async function complete(taskKey: string) {
     setBusy(taskKey);
@@ -79,6 +114,7 @@ function DailyTasksPanel({
       const result = await completeDailyTask(activeContractId, taskKey);
       setCompleted(result.completed_tasks || []);
       setCycleDay(result.cycle_day || 0);
+      setDeadline(Date.now() + 86400000);
       if (result.status === "credited" && result.reward) {
         onReward(result.reward, result.transaction_id);
         setMessage(`Pasivo acreditado: ${money(result.reward)}. Capital preservado.`);
@@ -98,6 +134,7 @@ function DailyTasksPanel({
     <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
     <h2>Activa tu nodo hoy</h2>
     <p>Completa las cuatro tareas cada 24 horas. La cuarta acredita automáticamente el pasivo variable del ciclo.</p>
+    <div className="dash-card" style={{ marginBottom: 18 }}><span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span><strong style={{ fontFamily: "'IBM Plex Mono'", fontSize: 28 }}>{timeLeft}</strong><p>Si llega a cero sin completar las cuatro tareas, el progreso y los días vuelven a cero. Tu capital permanece intacto.</p></div>
     <div className="local-plan-grid">
       {DAILY_TASKS.map(([key, name, description]) => {
         const done = completed.includes(key);

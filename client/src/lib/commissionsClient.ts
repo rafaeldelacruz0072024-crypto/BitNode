@@ -22,6 +22,17 @@ export async function completeDailyTask(contractId: string, taskKey: string) {
   return data as DailyTaskResult;
 }
 
+export async function fetchDailyTaskProgress(contractId: string) {
+  if (!supabase) throw new Error("Supabase no está configurado.");
+  const { data, error } = await supabase
+    .from("daily_task_progress")
+    .select("cycle_day, completed_tasks, last_task_at")
+    .eq("contract_id", contractId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as { cycle_day: number; completed_tasks: string[]; last_task_at: string | null } | null;
+}
+
 export type CommissionSummary = {
   direct: number;
   binary: number;
