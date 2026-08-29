@@ -1012,25 +1012,7 @@ function SectionPanel({
             {commissionError}
           </div>
         )}
-        <div className="network-link-card dash-card">
-          <div>
-            <span className="dash-eyebrow">ENLACE PERSONAL</span>
-            <h3>bitnode.space/r/{user.referralCode}</h3>
-            <p>Comparte este enlace para registrar indicaciones directas.</p>
-          </div>
-          <button
-            className="dash-primary"
-            onClick={() => {
-              navigator.clipboard?.writeText(
-                `bitnode.space/r/${user.referralCode}`
-              );
-              showNotice("Enlace copiado al portapapeles.");
-            }}
-          >
-            Copiar enlace <Copy size={15} />
-          </button>
-        </div>
-        <div className="commission-detail-grid">
+        <div className="commission-detail-grid binary-invite-links">
           {([['izquierda', 'PIERNA IZQUIERDA', '←'], ['derecha', 'PIERNA DERECHA', '→']] as const).map(([side, label, arrow]) => {
             const link = `https://bitnode.space/r/${user.referralCode}/${side}`;
             return <div className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`} key={side}><div><span className="dash-eyebrow">{arrow} {label}</span><strong>{link}</strong></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(link); showNotice(`Enlace de pierna ${side} copiado.`); }}>Copiar <Copy size={14} /></button></div>;

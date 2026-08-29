@@ -17,6 +17,7 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/dashboard/:section"} component={Dashboard} />
+      <Route path={"/r/:referralCode/:side"} component={AuthPage} />
       <Route path={"/auth"} component={AuthPage} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
