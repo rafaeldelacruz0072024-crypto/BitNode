@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
+import { BrandMark } from "@/components/BrandMark";
 import {
   ArrowLeft,
   BarChart3,
@@ -1119,9 +1120,7 @@ export default function Admin() {
     return (
       <main className="admin-shell admin-gate-shell">
         <section className="admin-gate">
-          <div className="admin-brand-mark">
-            B<span>·</span>
-          </div>
+          <BrandMark className="admin-official-logo admin-gate-logo" />
           <p className="admin-kicker">BITNODE / PRIVATE OPERATIONS</p>
           <h1>Acceso administrativo</h1>
           <p>
@@ -1171,11 +1170,8 @@ export default function Admin() {
     <main className="admin-shell">
       <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
         <div className="admin-brand-row">
-          <div className="admin-brand-mark">
-            B<span>·</span>
-          </div>
+          <BrandMark className="admin-official-logo" />
           <div>
-            <strong>bitnode.</strong>
             <small>OPERATIONS CONSOLE</small>
           </div>
           <button

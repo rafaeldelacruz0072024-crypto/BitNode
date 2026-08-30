@@ -581,9 +581,6 @@ export default function Dashboard() {
       <aside className={`dashboard-sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="dash-brand">
           <BrandMark className="brand-mark" />
-          <span>
-            bitnode<span>.</span>
-          </span>
         </div>
         <div className="dash-nav">
           {nav.map(([label, href, Icon]) => (

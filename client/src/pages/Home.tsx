@@ -52,7 +52,7 @@ export default function Home() {
     <div className="site-shell">
       {notice && <div className="notice" role="status">{notice}</div>}
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="BitNode inicio"><BrandMark className="brand-mark" /><span>bitnode<span className="brand-dot">.</span></span></a>
+        <a className="brand" href="#top" aria-label="BitNode inicio"><BrandMark className="brand-mark" /></a>
         <nav className={menuOpen ? "nav-links open" : "nav-links"}>
           <a href="#contratos" onClick={() => setMenuOpen(false)}>Contratos</a>
           <a href="#red" onClick={() => setMenuOpen(false)}>Programa de red</a>
@@ -74,7 +74,7 @@ export default function Home() {
         <section className="section faq-section container" id="faq"><div className="section-head"><div className="section-index">05 — FAQ</div><div className="section-rule" /></div><div className="split-heading"><h2>Preguntas<br /><span>frecuentes.</span></h2><p>¿Algo más? Escríbenos desde tu panel una vez registrado.</p></div><div className="faq-list">{faqs.map(([question, answer], index) => <div className={`faq-item ${openFaq === index ? "is-open" : ""}`} key={question}><button onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><ChevronDown size={18} /></button>{openFaq === index && <p>{answer}</p>}</div>)}</div></section>
         <section className="closing"><div className="closing-orbit" aria-hidden="true" /><div className="container closing-inner"><div className="status-pill"><span className="live-dot" /> REGISTRO GRATUITO</div><h2>Pon un nodo a trabajar<br /><em>para ti hoy.</em></h2><p>Registro gratuito. Contratos desde $10 USDT. Rendimientos de lunes a viernes.</p><div className="hero-actions"><WouterLink className="action action-primary" href="/auth">Crear cuenta gratis <ArrowRight size={15} /></WouterLink><WouterLink className="action action-secondary" href="/auth">Ya tengo cuenta <ArrowRight size={15} /></WouterLink></div></div></section>
       </main>
-      <footer className="footer container"><a className="brand" href="#top"><BrandMark className="brand-mark" /><span>bitnode<span className="brand-dot">.</span></span></a><span>Infraestructura que trabaja.</span><span>© 2026 BitNode</span></footer>
+      <footer className="footer container"><a className="brand" href="#top" aria-label="BitNode inicio"><BrandMark className="brand-mark" /></a><span>Infraestructura que trabaja.</span><span>© 2026 BitNode</span></footer>
     </div>
   );
 }
