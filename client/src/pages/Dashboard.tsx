@@ -48,6 +48,7 @@ import {
   fetchDailyTaskProgress,
   fetchCommissionSummary,
   type CommissionSummary,
+  type DailyNodeReward,
 } from "@/lib/commissionsClient";
 
 const DAILY_TASKS = [
@@ -67,10 +68,10 @@ function binaryReferralUrl(code: string, side: "izquierda" | "derecha") {
 
 function DailyTasksPanel({
   user,
-  onReward,
+  onRewards,
 }: {
   user: LocalUserState;
-  onReward: (amount: number, transactionId?: string) => void;
+  onRewards: (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => void;
 }) {
   const [completed, setCompleted] = useState<string[]>([]);
   const [cycleDay, setCycleDay] = useState(0);
@@ -78,6 +79,7 @@ function DailyTasksPanel({
   const [message, setMessage] = useState("");
   const [deadline, setDeadline] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState("24:00:00");
+  const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
   const activeContract = user.contracts.find(contract => contract.status === "active");
 
   if (!activeContract)
@@ -125,8 +127,14 @@ function DailyTasksPanel({
       setCycleDay(result.cycle_day || 0);
       setDeadline(current => current ?? Date.now() + 86400000);
       if (result.status === "credited" && result.reward) {
-        onReward(result.reward, result.transaction_id);
-        setMessage(`Pasivo acreditado: ${money(result.reward)}. Capital preservado.`);
+        const rewards = Array.isArray(result.rewards) ? result.rewards : [];
+        setNodeRewards(rewards);
+        onRewards(rewards, { amount: result.reward, transactionId: result.transaction_id });
+        setMessage(
+          rewards.length
+            ? `${rewards.length} nodo${rewards.length === 1 ? "" : "s"} acreditado${rewards.length === 1 ? "" : "s"}: ${money(result.reward)} en total. Capital preservado.`
+            : `Pasivo acreditado: ${money(result.reward)}. Capital preservado.`
+        );
       } else if (result.status === "already_completed") {
         setMessage("Esta tarea ya fue realizada durante el período actual.");
       } else {
@@ -158,6 +166,19 @@ function DailyTasksPanel({
       })}
     </div>
     {message && <div className="form-success" role="status">{message}</div>}
+    {nodeRewards.length > 0 && <div className="dash-card local-ledger" aria-label="ROI acreditado por nodo">
+      <span className="dash-eyebrow">RESULTADO POR NODO</span>
+      {nodeRewards.map(node => <div className="movement-row" key={node.transaction_id || node.contract_id}>
+        <div>
+          <b>{node.plan_name}</b>
+          <span>{node.contract_id} · CAPITAL {money(Number(node.capital))}</span>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <strong className="positive">+{money(Number(node.reward))}</strong>
+          <span>ROI {Number(node.rate_percent).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}%</span>
+        </div>
+      </div>)}
+    </div>}
   </div>;
 }
 
@@ -475,21 +496,43 @@ export default function Dashboard() {
       );
     }
   };
-  const reward = (amount: number, transactionId?: string) => {
-    const movement = {
-      id: transactionId || newId("YIELD"),
-      type: "yield" as const,
-      label: "Pasivo diario acreditado",
-      amount,
-      status: "completed" as const,
-      date: new Date().toISOString(),
-    };
+  const reward = (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => {
+    const now = new Date().toISOString();
+    const movements = rewards.length
+      ? rewards.map(node => ({
+          id: node.transaction_id || newId("YIELD"),
+          type: "yield" as const,
+          label: `Pasivo ${node.plan_name} · ROI ${Number(node.rate_percent).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}%`,
+          amount: Number(node.reward),
+          status: "completed" as const,
+          date: now,
+        }))
+      : fallback?.amount
+        ? [{
+            id: fallback.transactionId || newId("YIELD"),
+            type: "yield" as const,
+            label: "Pasivo diario acreditado",
+            amount: fallback.amount,
+            status: "completed" as const,
+            date: now,
+          }]
+        : [];
+    const total = movements.reduce((sum, movement) => sum + movement.amount, 0);
     setUser(prev => ({
       ...prev,
-      balance: prev.balance + amount,
-      totalYield: prev.totalYield + amount,
-      movements: [movement, ...prev.movements],
+      balance: prev.balance + total,
+      totalYield: prev.totalYield + total,
+      movements: [...movements, ...prev.movements],
     }));
+    if (authUserId) {
+      fetchTransactions(authUserId)
+        .then(remote => {
+          if (remote === null) return;
+          const ledger = summarizeCompletedLedger(remote);
+          setUser(prev => ({ ...prev, ...ledger, movements: remote }));
+        })
+        .catch(() => undefined);
+    }
   };
 
   if (authLoading)
@@ -794,7 +837,7 @@ function SectionPanel({
     fee: number
   ) => void;
   activate: (item: (typeof catalog)[number], amount: number) => void;
-  reward: (amount: number, transactionId?: string) => void;
+  reward: (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => void;
 }) {
   const [activationAmounts, setActivationAmounts] = useState<Record<string, string>>(
     () => Object.fromEntries(catalog.map(item => [item.id, String(item.min)]))
@@ -895,7 +938,7 @@ function SectionPanel({
       </div>
     );
   if (section === "tasks")
-    return <DailyTasksPanel user={user} onReward={reward} />;
+    return <DailyTasksPanel user={user} onRewards={reward} />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} localDeposit={deposit} />;
   if (section === "withdraw")

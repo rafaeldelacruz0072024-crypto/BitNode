@@ -10,6 +10,18 @@ export type DailyTaskResult = {
   transaction_id?: string;
   credited?: boolean;
   capital_preserved?: boolean;
+  rewards?: DailyNodeReward[];
+};
+
+export type DailyNodeReward = {
+  contract_id: string;
+  plan_id?: string;
+  plan_name: string;
+  capital: number;
+  rate: number;
+  rate_percent: number;
+  reward: number;
+  transaction_id?: string;
 };
 
 export async function completeDailyTask(contractId: string, taskKey: string) {
