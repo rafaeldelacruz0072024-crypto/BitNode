@@ -3,6 +3,7 @@
  * persistente en localStorage y adaptadores listos para backend posterior.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
@@ -43,7 +44,7 @@ import {
 } from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
-import { createNowPaymentsInvoice } from "@/lib/nowpaymentsClient";
+import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
 import { requestManualDeposit } from "@/lib/depositClient";
 import {
@@ -1579,31 +1580,57 @@ function DepositPanel({
   localDeposit: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState(10);
-  const [payCurrency, setPayCurrency] = useState("usdttrc20");
+  const [payCurrency, setPayCurrency] = useState("usdtbsc");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [invoice, setInvoice] = useState<{
-    invoiceUrl?: string | null;
+  const [payment, setPayment] = useState<{
     transactionId: string;
+    paymentId: string;
+    payAddress: string;
+    payAmount: string;
+    payCurrency: string;
   } | null>(null);
+  const [qrImage, setQrImage] = useState("");
+  useEffect(() => {
+    if (!payment?.payAddress) {
+      setQrImage("");
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(payment.payAddress, {
+      width: 220,
+      margin: 1,
+      color: { dark: "#060812", light: "#ffffff" },
+    })
+      .then(image => {
+        if (!cancelled) setQrImage(image);
+      })
+      .catch(() => {
+        if (!cancelled) setQrImage("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [payment?.payAddress]);
   const submit = async () => {
     if (!Number.isFinite(amount) || amount < 10)
       return setError("El depósito mínimo es de $10.00 USDT.");
     setError("");
     setLoading(true);
     try {
-      const result = await createNowPaymentsInvoice(amount, payCurrency);
-      setInvoice({
-        invoiceUrl: result.invoiceUrl,
+      const result = await createNowPaymentsPayment(amount, payCurrency);
+      setPayment({
         transactionId: result.transactionId,
+        paymentId: result.paymentId,
+        payAddress: result.payAddress,
+        payAmount: result.payAmount,
+        payCurrency: result.payCurrency,
       });
-      if (result.invoiceUrl)
-        window.open(result.invoiceUrl, "_blank", "noopener,noreferrer");
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "No se pudo crear el invoice."
+          : "No se pudo crear el depósito."
       );
     } finally {
       setLoading(false);
@@ -1647,26 +1674,34 @@ function DepositPanel({
             {error}
           </div>
         )}
-        {invoice && (
-          <div className="form-success" role="status">
-            Invoice creado: <strong>{invoice.transactionId}</strong>
-            {invoice.invoiceUrl && (
-              <>
-                {" "}
-                ·{" "}
-                <button
-                  className="inline-link"
-                  onClick={() =>
-                    window.open(
-                      invoice.invoiceUrl!,
-                      "_blank",
-                      "noopener,noreferrer"
-                    )
-                  }
-                >
-                  Abrir pago
-                </button>
-              </>
+        {payment && (
+          <div className="direct-payment" role="status">
+            <div>
+              <span className="dash-eyebrow">DEPÓSITO DIRECTO</span>
+              <h3>
+                Envía exactamente {payment.payAmount} {payment.payCurrency.toUpperCase()}
+              </h3>
+              <p>
+                Red: {payment.payCurrency === "usdttrc20" ? "TRC20" : "BEP20"}. Envía
+                únicamente por esta red.
+              </p>
+              <code>{payment.payAddress}</code>
+              <button
+                type="button"
+                className="inline-link"
+                onClick={() => navigator.clipboard?.writeText(payment.payAddress)}
+              >
+                Copiar dirección
+              </button>
+              <small>
+                Referencia: {payment.transactionId}. El balance se acredita al confirmarse
+                el pago.
+              </small>
+            </div>
+            {qrImage ? (
+              <img className="payment-qr" src={qrImage} alt="Código QR de depósito" />
+            ) : (
+              <div className="payment-qr-loading">Generando QR…</div>
             )}
           </div>
         )}
@@ -1675,7 +1710,7 @@ function DepositPanel({
           disabled={loading || !Number.isFinite(amount) || amount < 10}
           onClick={submit}
         >
-          {loading ? "Creando invoice…" : "Pagar con NOWPayments"}{" "}
+          {loading ? "Generando depósito…" : "Generar QR de depósito"}{" "}
           <Zap size={15} />
         </button>
         <button

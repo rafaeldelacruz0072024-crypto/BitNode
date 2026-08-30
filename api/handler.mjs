@@ -719,7 +719,7 @@ function validDepositCurrency(value) {
   return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
 }
 function registerNowPaymentsRoutes(app2) {
-  app2.post("/api/payments/nowpayments/invoice", async (req, res) => {
+  app2.post("/api/payments/nowpayments/payment", async (req, res) => {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin3 = adminClient();
@@ -728,12 +728,12 @@ function registerNowPaymentsRoutes(app2) {
       const { data: authData, error: authError } = await admin3.auth.getUser(token3);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesión inválida." });
       const amount = Number(req.body?.amount);
-      const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdttrc20");
+      const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
       if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_API_URL}/invoice`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -743,12 +743,13 @@ function registerNowPaymentsRoutes(app2) {
           order_id: transactionId,
           order_description: `BitNode deposit ${authData.user.id}`,
           ipn_callback_url: callbackUrl,
-          success_url: `${origin(req)}/dashboard/deposit?payment=success`,
-          cancel_url: `${origin(req)}/dashboard/deposit?payment=cancelled`
+          is_fixed_rate: true
         })
       });
-      const invoice = await response.json().catch(() => ({}));
-      if (!response.ok) return res.status(502).json({ error: "NOWPayments rechaz\xF3 la creaci\xF3n del invoice.", details: invoice });
+      const payment = await response.json().catch(() => ({}));
+      if (!response.ok) return res.status(502).json({ error: "NOWPayments rechaz\xF3 la creaci\xF3n del pago.", details: payment });
+      if (!payment.payment_id || !payment.pay_address || !payment.pay_amount || !payment.pay_currency)
+        return res.status(502).json({ error: "NOWPayments no devolvi\xF3 los datos de dep\xF3sito esperados.", details: payment });
       const { error: insertError } = await admin3.from("transactions").insert({
         id: transactionId,
         user_id: authData.user.id,
@@ -758,14 +759,21 @@ function registerNowPaymentsRoutes(app2) {
         amount,
         status: "pending",
         network: payCurrency,
-        provider_payment_id: invoice.payment_id ? String(invoice.payment_id) : null,
-        provider_status: "waiting",
+        provider_payment_id: String(payment.payment_id),
+        provider_status: String(payment.payment_status || "waiting"),
         created_at: (/* @__PURE__ */ new Date()).toISOString()
       });
       if (insertError) return res.status(500).json({ error: "No se pudo registrar el dep\xF3sito.", details: insertError.message });
-      return res.json({ transactionId, invoiceId: invoice.id || invoice.payment_id, invoiceUrl: invoice.invoice_url || invoice.pay_address || null, status: "pending" });
+      return res.json({
+        transactionId,
+        paymentId: String(payment.payment_id),
+        payAddress: String(payment.pay_address),
+        payAmount: String(payment.pay_amount),
+        payCurrency: String(payment.pay_currency),
+        status: String(payment.payment_status || "waiting")
+      });
     } catch (error) {
-      console.error("[NOWPayments] invoice error", error);
+      console.error("[NOWPayments] payment error", error);
       return res.status(500).json({ error: "No se pudo iniciar el depósito." });
     }
   });

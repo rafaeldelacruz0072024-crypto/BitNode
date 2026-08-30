@@ -46,7 +46,7 @@ export function validDepositCurrency(value: unknown) {
 }
 
 export function registerNowPaymentsRoutes(app: Express) {
-  app.post("/api/payments/nowpayments/invoice", async (req: Request, res: Response) => {
+  app.post("/api/payments/nowpayments/payment", async (req: Request, res: Response) => {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin = adminClient();
@@ -56,13 +56,13 @@ export function registerNowPaymentsRoutes(app: Express) {
       if (authError || !authData.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
 
       const amount = Number(req.body?.amount);
-      const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdttrc20");
+      const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
       if (!Number.isFinite(amount) || amount < 10 || amount > 100000) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten depósitos USDT por TRC20 o BEP20." });
 
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_API_URL}/invoice`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,12 +72,13 @@ export function registerNowPaymentsRoutes(app: Express) {
           order_id: transactionId,
           order_description: `BitNode deposit ${authData.user.id}`,
           ipn_callback_url: callbackUrl,
-          success_url: `${origin(req)}/dashboard/deposit?payment=success`,
-          cancel_url: `${origin(req)}/dashboard/deposit?payment=cancelled`,
+          is_fixed_rate: true,
         }),
       });
-      const invoice = await response.json().catch(() => ({}));
-      if (!response.ok) return res.status(502).json({ error: "NOWPayments rechazó la creación del invoice.", details: invoice });
+      const payment = await response.json().catch(() => ({}));
+      if (!response.ok) return res.status(502).json({ error: "NOWPayments rechazó la creación del pago.", details: payment });
+      if (!payment.payment_id || !payment.pay_address || !payment.pay_amount || !payment.pay_currency)
+        return res.status(502).json({ error: "NOWPayments no devolvió los datos de depósito esperados.", details: payment });
 
       const { error: insertError } = await admin.from("transactions").insert({
         id: transactionId,
@@ -88,14 +89,21 @@ export function registerNowPaymentsRoutes(app: Express) {
         amount,
         status: "pending",
         network: payCurrency,
-        provider_payment_id: invoice.payment_id ? String(invoice.payment_id) : null,
-        provider_status: "waiting",
+        provider_payment_id: String(payment.payment_id),
+        provider_status: String(payment.payment_status || "waiting"),
         created_at: new Date().toISOString(),
       });
       if (insertError) return res.status(500).json({ error: "No se pudo registrar el depósito.", details: insertError.message });
-      return res.json({ transactionId, invoiceId: invoice.id || invoice.payment_id, invoiceUrl: invoice.invoice_url || invoice.pay_address || null, status: "pending" });
+      return res.json({
+        transactionId,
+        paymentId: String(payment.payment_id),
+        payAddress: String(payment.pay_address),
+        payAmount: String(payment.pay_amount),
+        payCurrency: String(payment.pay_currency),
+        status: String(payment.payment_status || "waiting"),
+      });
     } catch (error) {
-      console.error("[NOWPayments] invoice error", error);
+      console.error("[NOWPayments] payment error", error);
       return res.status(500).json({ error: "No se pudo iniciar el depósito." });
     }
   });
