@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export async function createNowPaymentsInvoice(amount: number, payCurrency = "usdttrc20") {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio de pagos no está configurado.");
   const session = (await supabase.auth.getSession()).data.session;
   if (!session?.access_token) throw new Error("Inicia sesión para crear un pago.");
   const response = await fetch("/api/payments/nowpayments/invoice", {

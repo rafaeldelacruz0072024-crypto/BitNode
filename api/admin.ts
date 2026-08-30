@@ -9,7 +9,7 @@ const headerValue = (value: string | string[] | undefined) => Array.isArray(valu
 async function supabaseUser(accessToken: string): Promise<SupabaseUser | null> {
   const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!baseUrl || !serviceKey) throw new Error("Supabase server credentials are not configured.");
+  if (!baseUrl || !serviceKey) throw new Error("Las credenciales del servidor no están configuradas.");
   const response = await fetch(`${baseUrl}/auth/v1/user`, { headers: { apikey: serviceKey, Authorization: `Bearer ${accessToken}` } });
   if (!response.ok) return null;
   return await response.json() as SupabaseUser;
@@ -18,7 +18,7 @@ async function supabaseUser(accessToken: string): Promise<SupabaseUser | null> {
 async function userProfile(userId: string): Promise<Profile | null> {
   const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!baseUrl || !serviceKey) throw new Error("Supabase service role credentials are not configured.");
+  if (!baseUrl || !serviceKey) throw new Error("Las credenciales administrativas del servidor no están configuradas.");
   const response = await fetch(`${baseUrl}/rest/v1/profiles?select=id,username,role&id=eq.${encodeURIComponent(userId)}&limit=1`, { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } });
   if (!response.ok) throw new Error(`Profile lookup failed with ${response.status}.`);
   const profiles = await response.json() as Profile[];
@@ -32,11 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const authorization = headerValue(req.headers.authorization);
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  if (!accessToken) return res.status(401).json({ error: "Sesión Supabase requerida.", status: "unauthenticated" });
+  if (!accessToken) return res.status(401).json({ error: "Sesión requerida.", status: "unauthenticated" });
 
   try {
     const user = await supabaseUser(accessToken);
-    if (!user) return res.status(401).json({ error: "La sesión Supabase no es válida o expiró.", status: "unauthenticated" });
+    if (!user) return res.status(401).json({ error: "La sesión no es válida o expiró.", status: "unauthenticated" });
     const profile = await userProfile(user.id);
     if (!profile || profile.role !== "admin") return res.status(403).json({ error: "El usuario no tiene rol administrativo.", status: "forbidden" });
     if ((user.email || "").toLowerCase() !== "gentecash@gmail.com") return res.status(403).json({ error: "Correo administrativo no autorizado.", status: "forbidden" });

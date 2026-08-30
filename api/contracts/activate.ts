@@ -15,7 +15,7 @@ const headerValue = (value: string | string[] | undefined) => Array.isArray(valu
 function credentials() {
   const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!baseUrl || !serviceKey) throw new Error("Supabase server credentials are not configured.");
+  if (!baseUrl || !serviceKey) throw new Error("Las credenciales del servidor no están configuradas.");
   return { baseUrl, serviceKey };
 }
 
@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const accessToken = (headerValue(req.headers.authorization) || "").replace(/^Bearer\s+/i, "").trim();
-  if (!accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
+  if (!accessToken) return res.status(401).json({ error: "Sesión requerida." });
 
   const body = (req.body || {}) as Record<string, unknown>;
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : "";
@@ -44,9 +44,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { baseUrl, serviceKey } = credentials();
     const authHeaders = { apikey: serviceKey, Authorization: `Bearer ${accessToken}` };
     const authResponse = await fetch(`${baseUrl}/auth/v1/user`, { headers: authHeaders });
-    if (!authResponse.ok) return res.status(401).json({ error: "La sesión Supabase no es válida o expiró." });
+    if (!authResponse.ok) return res.status(401).json({ error: "La sesión no es válida o expiró." });
     const user = await authResponse.json() as { id?: string };
-    if (!user.id) return res.status(401).json({ error: "Usuario Supabase inválido." });
+    if (!user.id) return res.status(401).json({ error: "Usuario inválido." });
 
     const serviceHeaders = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" };
     const placementResponse = await fetch(`${baseUrl}/rest/v1/rpc/place_network_node`, {

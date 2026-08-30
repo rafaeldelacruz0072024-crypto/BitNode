@@ -25,7 +25,7 @@ export type DailyNodeReward = {
 };
 
 export async function completeDailyTask(contractId: string, taskKey: string) {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio no está configurado.");
   const { data, error } = await supabase.rpc("complete_daily_task", {
     p_contract_id: contractId,
     p_task_key: taskKey,
@@ -35,7 +35,7 @@ export async function completeDailyTask(contractId: string, taskKey: string) {
 }
 
 export async function fetchDailyTaskProgress(contractId: string) {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio no está configurado.");
   const { data, error } = await supabase
     .from("daily_task_progress")
     .select("cycle_day, completed_tasks, last_task_at")
@@ -105,7 +105,7 @@ export async function activateContractAndCommissions(input: {
 }) {
   const token = await accessToken();
   if (!token)
-    throw new Error("Sesión Supabase requerida para activar contratos.");
+    throw new Error("Inicia sesión para activar nodos.");
 
   const response = await fetch("/api/contracts/activate", {
     method: "POST",
@@ -128,7 +128,7 @@ export async function activateContractAndCommissions(input: {
 export async function processConfirmedContractCommission(contractId: string) {
   const token = await accessToken();
   if (!token)
-    throw new Error("Sesión Supabase requerida para liquidar comisiones.");
+    throw new Error("Inicia sesión para liquidar comisiones.");
 
   const response = await fetch("/api/commissions/contract-confirmed", {
     method: "POST",

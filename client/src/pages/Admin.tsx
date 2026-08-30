@@ -902,7 +902,7 @@ function ConfigurationSection({
         <div className="runtime-row">
           <span>
             <i className="runtime-dot ready" />
-            Supabase Auth + perfil admin
+            Acceso seguro + perfil admin
           </span>
           <b>ACTIVO</b>
         </div>
@@ -976,7 +976,7 @@ export default function Admin() {
   useEffect(() => {
     if (!supabase) {
       setApiState("offline");
-      setAuthError("Faltan las variables públicas de Supabase.");
+      setAuthError("Falta la configuración pública del servicio de acceso.");
       return;
     }
     let mounted = true;
@@ -1066,7 +1066,7 @@ export default function Admin() {
     event.preventDefault();
     setAuthError("");
     if (!supabase) {
-      setAuthError("Supabase no está configurado en este entorno.");
+      setAuthError("El servicio de acceso no está configurado en este entorno.");
       return;
     }
     setApiState("checking");
@@ -1124,7 +1124,7 @@ export default function Admin() {
           <p className="admin-kicker">BITNODE / PRIVATE OPERATIONS</p>
           <h1>Acceso administrativo</h1>
           <p>
-            Inicia sesión con Supabase. La función server-side verificará el
+              Inicia sesión con tu cuenta. La función server-side verificará el
             token y consultará el rol administrativo en <code>profiles</code>.
           </p>
           <form onSubmit={authorize} className="admin-gate-form">
@@ -1144,7 +1144,7 @@ export default function Admin() {
               type="password"
               value={password}
               onChange={event => setPassword(event.target.value)}
-              placeholder="Contraseña de Supabase"
+              placeholder="Contraseña"
               autoComplete="current-password"
               required
             />

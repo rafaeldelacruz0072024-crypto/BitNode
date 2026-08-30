@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .replace(/^Bearer\s+/i, "")
     .trim();
   if (!accessToken)
-    return res.status(401).json({ error: "Sesión Supabase requerida." });
+    return res.status(401).json({ error: "Sesión requerida." });
 
   try {
     const baseUrl = (
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ).replace(/\/$/, "");
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
     if (!baseUrl || !serviceKey)
-      throw new Error("Supabase server credentials are not configured.");
+      throw new Error("Las credenciales del servidor no están configuradas.");
 
     const authResponse = await fetch(`${baseUrl}/auth/v1/user`, {
       headers: { apikey: serviceKey, Authorization: `Bearer ${accessToken}` },
@@ -41,10 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResponse.ok)
       return res
         .status(401)
-        .json({ error: "La sesión Supabase no es válida o expiró." });
+        .json({ error: "La sesión no es válida o expiró." });
     const user = (await authResponse.json()) as { id?: string };
     if (!user.id)
-      return res.status(401).json({ error: "Usuario Supabase inválido." });
+      return res.status(401).json({ error: "Usuario inválido." });
 
     const ownedUserFilter = encodeURIComponent(user.id);
     const query = `select=id,type,label,amount,status,network,wallet,fee,net_amount,created_at&user_id=eq.${ownedUserFilter}&order=created_at.desc&limit=200`;

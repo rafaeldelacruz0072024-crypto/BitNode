@@ -90,13 +90,13 @@ function respond(res: VercelResponse, status: number, body: Record<string, unkno
 function credentials() {
   const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!baseUrl || !serviceKey) throw new Error("Supabase service role credentials are not configured.");
+  if (!baseUrl || !serviceKey) throw new Error("Las credenciales administrativas del servidor no están configuradas.");
   return { baseUrl, serviceKey };
 }
 
 async function fetchDataset<T>(url: string, headers: Record<string, string>): Promise<Dataset<T>> {
   const response = await fetch(url, { headers: { ...headers, Prefer: "count=exact" } });
-  if (!response.ok) throw new Error(`Supabase query failed with ${response.status}.`);
+  if (!response.ok) throw new Error(`La consulta de datos falló con ${response.status}.`);
   const rows = await response.json() as T[];
   const contentRange = response.headers.get("content-range") || "";
   const countMatch = contentRange.match(/\/([0-9]+)$/);
@@ -127,11 +127,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const authorization = firstHeader(req.headers.authorization);
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  if (!accessToken) return respond(res, 401, { error: "Sesión Supabase requerida.", status: "unauthenticated" });
+  if (!accessToken) return respond(res, 401, { error: "Sesión requerida.", status: "unauthenticated" });
 
   try {
     const admin = await authenticateAdmin(accessToken);
-    if (!admin) return respond(res, 401, { error: "La sesión Supabase no es válida o expiró.", status: "unauthenticated" });
+    if (!admin) return respond(res, 401, { error: "La sesión no es válida o expiró.", status: "unauthenticated" });
     if ("forbidden" in admin) return respond(res, 403, { error: "El usuario no tiene rol administrativo.", status: "forbidden" });
 
     const { baseUrl, serviceHeaders, user, profile } = admin;

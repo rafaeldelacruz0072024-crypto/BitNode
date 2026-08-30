@@ -58,7 +58,7 @@ export async function persistTransaction(
       body: JSON.stringify(body),
     }
   );
-  if (!response.ok) throw new Error(`Supabase respondió ${response.status}`);
+  if (!response.ok) throw new Error(`El servicio respondió ${response.status}`);
   return "remote";
 }
 

@@ -793,12 +793,12 @@ function HomePanel({
         <Metric
           label="INICIO RÁPIDO"
           value={money(commissionSummary?.direct ?? user.quickBonus)}
-          note={commissionSummary ? "ledger Supabase" : "estado local"}
+          note={commissionSummary ? "registro verificado" : "estado local"}
         />
         <Metric
           label="BINARIO"
           value={money(commissionSummary?.binary ?? user.binaryBonus)}
-          note={commissionSummary ? "ledger Supabase" : "estado local"}
+          note={commissionSummary ? "registro verificado" : "estado local"}
         />
         <Metric
           label="RANGOS"
@@ -1188,7 +1188,7 @@ function SectionPanel({
         <p>{copy}</p>
         {commissionLoading && (
           <div className="commission-state" role="status">
-            Consultando ledger y volumen binario en Supabase…
+            Consultando movimientos y volumen binario…
           </div>
         )}
         {commissionError && (
@@ -1304,7 +1304,7 @@ function SectionPanel({
               <h3>Actividad reciente</h3>
             </div>
             <span className="ledger-status">
-              {commissionSummary ? "SUPABASE" : "SIN CONEXIÓN"}
+              {commissionSummary ? "VERIFICADO" : "SIN CONEXIÓN"}
             </span>
           </div>
           {commissionSummary?.entries.length ? (
@@ -1928,7 +1928,7 @@ function EmptyState({ text }: { text: string }) {
     <div className="empty-ledger">
       <Activity size={26} />
       <span>{text}</span>
-      <small>Esta vista se conectará con Supabase en la siguiente etapa.</small>
+      <small>Esta vista estará disponible en la siguiente etapa.</small>
     </div>
   );
 }

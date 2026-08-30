@@ -724,9 +724,9 @@ function registerNowPaymentsRoutes(app2) {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin3 = adminClient();
       const token3 = bearer(req);
-      if (!apiKey || !admin3 || !token3) return res.status(401).json({ error: "Supabase Auth requerida." });
+      if (!apiKey || !admin3 || !token3) return res.status(401).json({ error: "Sesión requerida." });
       const { data: authData, error: authError } = await admin3.auth.getUser(token3);
-      if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+      if (authError || !authData.user) return res.status(401).json({ error: "Sesión inválida." });
       const amount = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdttrc20");
       if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
@@ -772,7 +772,7 @@ function registerNowPaymentsRoutes(app2) {
   app2.post("/api/payments/nowpayments/ipn", async (req, res) => {
     if (!validIpnSignature(req.body, req.header("x-nowpayments-sig"))) return res.status(401).json({ error: "Firma IPN inv\xE1lida." });
     const admin3 = adminClient();
-    if (!admin3) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
+    if (!admin3) return res.status(503).json({ error: "El servicio no está configurado." });
     const body = req.body;
     const orderId = body.order_id ? String(body.order_id) : "";
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
@@ -815,9 +815,9 @@ function registerWithdrawalRoutes(app2) {
   app2.post("/api/withdrawals/request", async (req, res) => {
     const client = admin();
     const accessToken = token(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
-    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    if (authError || !data.user) return res.status(401).json({ error: "Sesión inválida." });
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
@@ -890,7 +890,7 @@ function summarizeCommissionRows(rows) {
 }
 async function getCommissionSummary(userId) {
   const client = adminClient2();
-  if (!client) throw new Error("Supabase server credentials are not configured.");
+  if (!client) throw new Error("Las credenciales del servidor no están configuradas.");
   const { data, error } = await client.from("commission_ledger").select("id, source_user_id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata").eq("beneficiary_id", userId).order("created_at", { ascending: false });
   if (error) throw new Error(`Commission ledger query failed: ${error.message}`);
   const rows = data || [];
@@ -973,9 +973,9 @@ function registerCommissionRoutes(app2) {
   app2.get("/api/commissions/summary", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
     try {
       return res.json(await getCommissionSummary(data.user.id));
     } catch (error2) {
@@ -986,9 +986,9 @@ function registerCommissionRoutes(app2) {
   app2.post("/api/contracts/activate", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
     const contractId = String(req.body?.contractId || "").trim();
     const label = String(req.body?.label || "").trim();
     const amount = Number(req.body?.amount);
@@ -1010,9 +1010,9 @@ function registerCommissionRoutes(app2) {
   app2.post("/api/commissions/contract-confirmed", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
     const contractId = String(req.body?.contractId || "").trim();
     if (!contractId) return res.status(400).json({ error: "contractId es requerido." });
     try {
@@ -1045,9 +1045,9 @@ function registerDepositRoutes(app2) {
   app2.post("/api/deposits/request", async (req, res) => {
     const client = admin2();
     const accessToken = token2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
-    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    if (authError || !data.user) return res.status(401).json({ error: "Sesión inválida." });
     const amount = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount);
     if (validationError) return res.status(400).json({ error: validationError });

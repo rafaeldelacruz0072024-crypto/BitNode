@@ -77,7 +77,7 @@ export default function AuthPage() {
     setError("");
     setMessage("");
     if (!supabase)
-      return setError("Supabase no está configurado en este entorno.");
+      return setError("El servicio de acceso no está disponible en este entorno.");
     if (!email.trim() || !email.includes("@"))
       return setError("Introduce un correo válido.");
     if (password.length < 8)
@@ -130,7 +130,7 @@ export default function AuthPage() {
           <BrandMark className="brand-mark" />
         </Link>
         <div className="auth-kicker">
-          <ShieldCheck size={15} /> AUTH / SUPABASE
+          <ShieldCheck size={15} /> ACCESO SEGURO
         </div>
         <h1>{mode === "login" ? "Entra a tu panel." : "Crea tu cuenta."}</h1>
         <p>

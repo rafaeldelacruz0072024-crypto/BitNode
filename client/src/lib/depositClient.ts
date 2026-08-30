@@ -2,7 +2,7 @@ import { supabase } from "./supabaseClient";
 
 export async function requestManualDeposit(amount: number) {
   const token = (await supabase?.auth.getSession())?.data.session?.access_token;
-  if (!token) throw new Error("Sesión Supabase requerida para registrar depósitos.");
+  if (!token) throw new Error("Inicia sesión para registrar depósitos.");
 
   const response = await fetch("/api/deposits/request", {
     method: "POST",
