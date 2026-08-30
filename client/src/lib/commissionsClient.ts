@@ -78,6 +78,12 @@ export type CommissionSummary = {
     leg: "left" | "right" | null;
     sponsor_id: string | null;
   }>;
+  directReferrals?: Array<{
+    user_id: string;
+    username: string;
+    leg: "left" | "right" | null;
+    active_nodes: number;
+  }>;
 };
 
 async function accessToken() {

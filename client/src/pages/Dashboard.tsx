@@ -1233,6 +1233,48 @@ function SectionPanel({
           currentUserId={currentUserId}
           ownerName={user.username}
         />
+        <section className="direct-referrals-card dash-card">
+          <div className="dash-card-head">
+            <div>
+              <span className="dash-eyebrow">TUS INDICACIONES DIRECTAS</span>
+              <h3>Mis directos</h3>
+            </div>
+            <span className="ledger-status">
+              {commissionSummary ? `${commissionSummary.directReferrals?.length || 0} TOTAL` : "CARGANDO"}
+            </span>
+          </div>
+          <p className="direct-referrals-copy">
+            Personas registradas directamente con tu enlace. Solo tú puedes ver esta información.
+          </p>
+          {commissionSummary?.directReferrals?.length ? (
+            <div className="direct-referral-list">
+              {commissionSummary.directReferrals.map(referral => (
+                <div className="direct-referral-row" key={referral.user_id}>
+                  <div className="direct-referral-avatar" aria-hidden="true">
+                    {referral.username.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <b>{referral.username}</b>
+                    <span>
+                      {referral.leg
+                        ? `Pierna ${referral.leg === "left" ? "izquierda" : "derecha"}`
+                        : "Ubicación en red pendiente"}
+                    </span>
+                  </div>
+                  <span className={referral.active_nodes > 0 ? "direct-referral-status active" : "direct-referral-status"}>
+                    {referral.active_nodes > 0
+                      ? `${referral.active_nodes} nodo${referral.active_nodes === 1 ? "" : "s"} activo${referral.active_nodes === 1 ? "" : "s"}`
+                      : "Sin nodo activo"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : commissionSummary ? (
+            <EmptyState text="Aún no tienes usuarios directos. Comparte uno de tus enlaces binarios para comenzar." />
+          ) : (
+            <div className="commission-state" role="status">Consultando tus indicaciones directas…</div>
+          )}
+        </section>
         <div className="commission-detail-grid">
           <section className="commission-detail-card direct">
             <div className="commission-detail-heading">

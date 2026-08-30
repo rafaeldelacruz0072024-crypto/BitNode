@@ -134,12 +134,31 @@ export async function getCommissionSummary(userId: string) {
     ? await client.from("profiles").select("id, username").in("id", networkUserIds)
     : { data: [] };
   const networkNamesById = new Map((networkProfiles || []).map(profile => [profile.id, profile.username]));
+  const directNodes = (networkNodes || []).filter(node => node.sponsor_id === userId);
+  const directUserIds = directNodes.map(node => node.user_id);
+  const { data: directContracts } = directUserIds.length
+    ? await client.from("contracts").select("user_id, status").in("user_id", directUserIds)
+    : { data: [] };
+  const activeNodesByUserId = new Map<string, number>();
+  for (const contract of directContracts || []) {
+    if (contract.status !== "active") continue;
+    activeNodesByUserId.set(
+      contract.user_id,
+      (activeNodesByUserId.get(contract.user_id) || 0) + 1
+    );
+  }
   return {
     ...summarizeCommissionRows(rows),
     entries: enrichedRows,
     networkNodes: (networkNodes || []).map(node => ({
       ...node,
       username: networkNamesById.get(node.user_id) || "Usuario",
+    })),
+    directReferrals: directNodes.map(node => ({
+      user_id: node.user_id,
+      username: networkNamesById.get(node.user_id) || "Usuario",
+      leg: node.parent_id === userId ? node.leg : null,
+      active_nodes: activeNodesByUserId.get(node.user_id) || 0,
     })),
   };
 }
