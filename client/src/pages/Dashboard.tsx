@@ -43,6 +43,12 @@ import { createNowPaymentsInvoice } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
 import { requestManualDeposit } from "@/lib/depositClient";
 import {
+  emptyPrivateUserDetails,
+  fetchPrivateUserDetails,
+  savePrivateUserDetails,
+  type PrivateUserDetails,
+} from "@/lib/profileClient";
+import {
   activateContractAndCommissions,
   completeDailyTask,
   fetchDailyTaskProgress,
@@ -312,7 +318,11 @@ export default function Dashboard() {
   }, [authLoading, authConfigured, authUser, navigate]);
   useEffect(() => {
     if (authUser)
-      setUser(prev => ({ ...prev, username: displayAuthName(authUser) }));
+      setUser(prev => ({
+        ...prev,
+        username: displayAuthName(authUser),
+        email: authUser.email || prev.email,
+      }));
   }, [authUser]);
   useEffect(() => {
     let active = true;
@@ -1020,6 +1030,8 @@ function SectionPanel({
         </div>
       </div>
     );
+  if (section === "profile")
+    return <ProfilePanel user={user} eyebrow={eyebrow} title={title} copy={copy} showNotice={showNotice} />;
   if (section === "network") {
     const directEntries = (commissionSummary?.entries || []).filter(
       entry => entry.commission_type === "direct" && entry.status === "credited"
@@ -1171,26 +1183,88 @@ function SectionPanel({
       </div>
     );
   }
-  return (
-    <div className="generic-panel">
-      <span className="dash-eyebrow">{eyebrow}</span>
-      <h2>{title}</h2>
-      <p>{copy}</p>
-      <div className="dash-card profile-card">
-        <span className="dash-eyebrow">USUARIO LOCAL</span>
-        <h3>{user.username}</h3>
-        <p>{user.email}</p>
-        <button
-          className="dash-primary"
-          onClick={() =>
-            showNotice("Perfil local listo para conectar con Supabase.")
-          }
-        >
-          Guardar cambios <Zap size={15} />
-        </button>
-      </div>
-    </div>
-  );
+  return null;
+}
+
+function ProfilePanel({
+  user,
+  eyebrow,
+  title,
+  copy,
+  showNotice,
+}: {
+  user: LocalUserState;
+  eyebrow: string;
+  title: string;
+  copy: string;
+  showNotice: (message: string) => void;
+}) {
+  const [details, setDetails] = useState<PrivateUserDetails>(emptyPrivateUserDetails);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchPrivateUserDetails()
+      .then(value => { if (active) setDetails(value); })
+      .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "No se pudo cargar el perfil."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const update = (field: keyof PrivateUserDetails, value: string) =>
+    setDetails(current => ({ ...current, [field]: value }));
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const bep20 = details.wallet_bep20.trim();
+    const trc20 = details.wallet_trc20.trim();
+    if (bep20 && !/^0x[0-9a-fA-F]{40}$/.test(bep20)) return setError("La wallet BEP20 no tiene un formato válido.");
+    if (trc20 && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trc20)) return setError("La wallet TRC20 no tiene un formato válido.");
+    setSaving(true);
+    try {
+      await savePrivateUserDetails(details);
+      showNotice("Perfil y wallets guardados correctamente.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo guardar el perfil.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <div className="generic-panel">
+    <span className="dash-eyebrow">{eyebrow}</span>
+    <h2>{title}</h2>
+    <p>{copy}</p>
+    <form className="profile-form" onSubmit={submit}>
+      <section className="dash-card profile-section">
+        <span className="dash-eyebrow">DATOS PERSONALES</span>
+        <div className="profile-fields">
+          <label><span>Usuario</span><input value={user.username} disabled /></label>
+          <label><span>Correo</span><input type="email" value={user.email} disabled /></label>
+          <label><span>Nombre completo</span><input value={details.full_name} maxLength={120} onChange={event => update("full_name", event.target.value)} placeholder="Nombre y apellido" /></label>
+          <label><span>Teléfono</span><input type="tel" value={details.phone} maxLength={30} onChange={event => update("phone", event.target.value)} placeholder="+1 809 000 0000" /></label>
+          <label><span>País</span><input value={details.country} maxLength={80} onChange={event => update("country", event.target.value)} placeholder="República Dominicana" /></label>
+          <label><span>Ciudad</span><input value={details.city} maxLength={80} onChange={event => update("city", event.target.value)} placeholder="Santo Domingo" /></label>
+        </div>
+      </section>
+      <section className="dash-card profile-section">
+        <span className="dash-eyebrow">WALLETS DE RETIRO · USDT</span>
+        <p>Guarda tus direcciones preferidas. Verifica siempre la red antes de solicitar un retiro.</p>
+        <div className="profile-wallets">
+          <label><span>USDT BEP20</span><input value={details.wallet_bep20} maxLength={42} onChange={event => update("wallet_bep20", event.target.value)} placeholder="0x…" spellCheck={false} /></label>
+          <label><span>USDT TRC20</span><input value={details.wallet_trc20} maxLength={34} onChange={event => update("wallet_trc20", event.target.value)} placeholder="T…" spellCheck={false} /></label>
+        </div>
+      </section>
+      {loading && <div className="form-success" role="status">Cargando perfil…</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
+      <button className="dash-primary profile-save" disabled={loading || saving}>
+        {saving ? "Guardando…" : "Guardar cambios"} <Zap size={15} />
+      </button>
+    </form>
+  </div>;
 }
 
 function DepositPanel({
