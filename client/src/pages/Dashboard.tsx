@@ -2,7 +2,7 @@
  * BitNode dashboard local: misma consola nocturna de la referencia, con estado
  * persistente en localStorage y adaptadores listos para backend posterior.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
@@ -36,7 +36,11 @@ import {
   newId,
   saveLocalUser,
 } from "@/lib/localUserStore";
-import { fetchTransactions, summarizeCompletedLedger } from "@/lib/supabaseAdapter";
+import {
+  fetchAccountSummary,
+  fetchTransactions,
+  summarizeCompletedLedger,
+} from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsInvoice } from "@/lib/nowpaymentsClient";
@@ -66,9 +70,11 @@ const DAILY_TASKS = [
 
 function binaryReferralUrl(code: string, side: "izquierda" | "derecha") {
   const configuredUrl = import.meta.env.VITE_APP_URL as string | undefined;
-  const origin = configuredUrl || (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? window.location.origin
-    : "https://bit-node.vercel.app");
+  const origin =
+    configuredUrl ||
+    (typeof window !== "undefined" && window.location.hostname === "localhost"
+      ? window.location.origin
+      : "https://bit-node.vercel.app");
   return `${origin.replace(/\/$/, "")}/r/${encodeURIComponent(code)}/${side}`;
 }
 
@@ -77,7 +83,10 @@ function DailyTasksPanel({
   onRewards,
 }: {
   user: LocalUserState;
-  onRewards: (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => void;
+  onRewards: (
+    rewards: DailyNodeReward[],
+    fallback?: { amount: number; transactionId?: string }
+  ) => void;
 }) {
   const [completed, setCompleted] = useState<string[]>([]);
   const [cycleDay, setCycleDay] = useState(0);
@@ -86,10 +95,21 @@ function DailyTasksPanel({
   const [deadline, setDeadline] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState("24:00:00");
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
-  const activeContract = user.contracts.find(contract => contract.status === "active");
+  const activeContract = user.contracts.find(
+    contract => contract.status === "active"
+  );
 
   if (!activeContract)
-    return <div className="generic-panel"><span className="dash-eyebrow">TAREAS DIARIAS</span><h2>Activa un nodo primero</h2><p>Necesitas un contrato activo para realizar las cuatro tareas y recibir el pasivo.</p></div>;
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">TAREAS DIARIAS</span>
+        <h2>Activa un nodo primero</h2>
+        <p>
+          Necesitas un contrato activo para realizar las cuatro tareas y recibir
+          el pasivo.
+        </p>
+      </div>
+    );
   const activeContractId = activeContract.id;
 
   useEffect(() => {
@@ -98,7 +118,11 @@ function DailyTasksPanel({
         if (!progress) return;
         setCompleted(progress.completed_tasks || []);
         setCycleDay(progress.cycle_day || 0);
-        setDeadline(progress.last_task_at ? new Date(progress.last_task_at).getTime() + 86400000 : null);
+        setDeadline(
+          progress.last_task_at
+            ? new Date(progress.last_task_at).getTime() + 86400000
+            : null
+        );
       })
       .catch(() => undefined);
   }, [activeContractId]);
@@ -114,8 +138,12 @@ function DailyTasksPanel({
         return;
       }
       const totalSeconds = Math.floor(remaining / 1000);
-      const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, "0");
-      const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, "0");
+      const hours = Math.floor(totalSeconds / 3600)
+        .toString()
+        .padStart(2, "0");
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+        .toString()
+        .padStart(2, "0");
       const seconds = (totalSeconds % 60).toString().padStart(2, "0");
       setTimeLeft(`${hours}:${minutes}:${seconds}`);
     };
@@ -129,13 +157,18 @@ function DailyTasksPanel({
     setMessage("");
     try {
       const result = await completeDailyTask(activeContractId, taskKey);
-      setCompleted(current => Array.from(new Set([...(result.completed_tasks || current), taskKey])));
+      setCompleted(current =>
+        Array.from(new Set([...(result.completed_tasks || current), taskKey]))
+      );
       setCycleDay(result.cycle_day || 0);
       setDeadline(current => current ?? Date.now() + 86400000);
       if (result.status === "credited" && result.reward) {
         const rewards = Array.isArray(result.rewards) ? result.rewards : [];
         setNodeRewards(rewards);
-        onRewards(rewards, { amount: result.reward, transactionId: result.transaction_id });
+        onRewards(rewards, {
+          amount: result.reward,
+          transactionId: result.transaction_id,
+        });
         setMessage(
           rewards.length
             ? `${rewards.length} nodo${rewards.length === 1 ? "" : "s"} acreditado${rewards.length === 1 ? "" : "s"}: ${money(result.reward)} en total. Capital preservado.`
@@ -147,45 +180,102 @@ function DailyTasksPanel({
         setMessage(`Tarea completada. Faltan ${result.remaining_tasks ?? 0}.`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo completar la tarea.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo completar la tarea."
+      );
     } finally {
       setBusy(null);
     }
   }
 
-  return <div className="generic-panel">
-    <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
-    <h2>Activa tu nodo hoy</h2>
-    <p>Completa las cuatro tareas una vez cada 24 horas. La primera inicia el contador y la cuarta acredita automáticamente el pasivo variable del ciclo.</p>
-    <div className="dash-card" style={{ marginBottom: 18 }}><span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span><strong style={{ fontFamily: "'IBM Plex Mono'", fontSize: 28 }}>{timeLeft}</strong><p>Si llega a cero sin completar las cuatro tareas, el progreso y los días vuelven a cero. Tu capital permanece intacto.</p></div>
-    <div className="local-plan-grid">
-      {DAILY_TASKS.map(([key, name, description]) => {
-        const done = completed.includes(key);
-        return <article className="dash-card local-plan" key={key}>
-          <span className="dash-eyebrow">{done ? "COMPLETADA" : "PENDIENTE"}</span>
-          <h3>{name}</h3>
-          <p>{description}</p>
-          <button className="dash-primary" disabled={done || busy !== null} onClick={() => complete(key)}>
-            {busy === key ? "Procesando…" : done ? "Completada" : "Realizar tarea"} {done ? <CheckCircle2 size={15} /> : <RefreshCw size={15} />}
-          </button>
-        </article>;
-      })}
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
+      <h2>Activa tu nodo hoy</h2>
+      <p>
+        Completa las cuatro tareas una vez cada 24 horas. La primera inicia el
+        contador y la cuarta acredita automáticamente el pasivo variable del
+        ciclo.
+      </p>
+      <div className="dash-card" style={{ marginBottom: 18 }}>
+        <span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span>
+        <strong style={{ fontFamily: "'IBM Plex Mono'", fontSize: 28 }}>
+          {timeLeft}
+        </strong>
+        <p>
+          Si llega a cero sin completar las cuatro tareas, el progreso y los
+          días vuelven a cero. Tu capital permanece intacto.
+        </p>
+      </div>
+      <div className="local-plan-grid">
+        {DAILY_TASKS.map(([key, name, description]) => {
+          const done = completed.includes(key);
+          return (
+            <article className="dash-card local-plan" key={key}>
+              <span className="dash-eyebrow">
+                {done ? "COMPLETADA" : "PENDIENTE"}
+              </span>
+              <h3>{name}</h3>
+              <p>{description}</p>
+              <button
+                className="dash-primary"
+                disabled={done || busy !== null}
+                onClick={() => complete(key)}
+              >
+                {busy === key
+                  ? "Procesando…"
+                  : done
+                    ? "Completada"
+                    : "Realizar tarea"}{" "}
+                {done ? <CheckCircle2 size={15} /> : <RefreshCw size={15} />}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+      {message && (
+        <div className="form-success" role="status">
+          {message}
+        </div>
+      )}
+      {nodeRewards.length > 0 && (
+        <div
+          className="dash-card local-ledger"
+          aria-label="ROI acreditado por nodo"
+        >
+          <span className="dash-eyebrow">RESULTADO POR NODO</span>
+          {nodeRewards.map(node => (
+            <div
+              className="movement-row"
+              key={node.transaction_id || node.contract_id}
+            >
+              <div>
+                <b>{node.plan_name}</b>
+                <span>
+                  {node.contract_id} · CAPITAL {money(Number(node.capital))}
+                </span>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <strong className="positive">
+                  +{money(Number(node.reward))}
+                </strong>
+                <span>
+                  ROI{" "}
+                  {Number(node.rate_percent)
+                    .toFixed(4)
+                    .replace(/0+$/, "")
+                    .replace(/\.$/, "")}
+                  %
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-    {message && <div className="form-success" role="status">{message}</div>}
-    {nodeRewards.length > 0 && <div className="dash-card local-ledger" aria-label="ROI acreditado por nodo">
-      <span className="dash-eyebrow">RESULTADO POR NODO</span>
-      {nodeRewards.map(node => <div className="movement-row" key={node.transaction_id || node.contract_id}>
-        <div>
-          <b>{node.plan_name}</b>
-          <span>{node.contract_id} · CAPITAL {money(Number(node.capital))}</span>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <strong className="positive">+{money(Number(node.reward))}</strong>
-          <span>ROI {Number(node.rate_percent).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}%</span>
-        </div>
-      </div>)}
-    </div>}
-  </div>;
+  );
 }
 
 const nav = [
@@ -306,7 +396,8 @@ export default function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [liveNodes, setLiveNodes] = useState(15014);
-  const [user, setUser] = useState<LocalUserState>(loadLocalUser);
+  const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
+  const hydratedUserId = useRef<string | null>(null);
   const [commissionSummary, setCommissionSummary] =
     useState<CommissionSummary | null>(null);
   const [commissionLoading, setCommissionLoading] = useState(false);
@@ -317,13 +408,14 @@ export default function Dashboard() {
     if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
   }, [authLoading, authConfigured, authUser, navigate]);
   useEffect(() => {
-    if (authUser)
-      setUser(prev => ({
-        ...prev,
-        username: displayAuthName(authUser),
-        email: authUser.email || prev.email,
-      }));
-  }, [authUser]);
+    if (!authUserId || !authUser) return;
+    const stored = loadLocalUser(authUserId);
+    setUser({
+      ...stored,
+      username: displayAuthName(authUser),
+      email: authUser.email || stored.email,
+    });
+  }, [authUserId, authUser]);
   useEffect(() => {
     let active = true;
     if (!authUserId)
@@ -354,24 +446,30 @@ export default function Dashboard() {
   }, [authUserId]);
   const isHome = section === "home";
   useEffect(() => {
-    saveLocalUser(user);
-  }, [user]);
+    if (!authUserId) return;
+    if (hydratedUserId.current !== authUserId) {
+      hydratedUserId.current = authUserId;
+      return;
+    }
+    saveLocalUser(user, authUserId);
+  }, [user, authUserId]);
   useEffect(() => {
     let active = true;
     if (!authUserId)
       return () => {
         active = false;
       };
-    fetchTransactions(authUserId)
-      .then(remote => {
-        if (!active || remote === null) return;
-        const ledger = summarizeCompletedLedger(remote);
+    fetchAccountSummary()
+      .then(summary => {
+        if (!active || summary === null) return;
+        const ledger = summarizeCompletedLedger(summary.movements);
         setUser(prev => ({
           ...prev,
           balance: ledger.balance,
           totalInvested: ledger.totalInvested,
           totalYield: ledger.totalYield,
-          movements: remote,
+          contracts: summary.contracts,
+          movements: summary.movements,
         }));
       })
       .catch(() => undefined);
@@ -506,7 +604,10 @@ export default function Dashboard() {
       );
     }
   };
-  const reward = (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => {
+  const reward = (
+    rewards: DailyNodeReward[],
+    fallback?: { amount: number; transactionId?: string }
+  ) => {
     const now = new Date().toISOString();
     const movements = rewards.length
       ? rewards.map(node => ({
@@ -518,14 +619,16 @@ export default function Dashboard() {
           date: now,
         }))
       : fallback?.amount
-        ? [{
-            id: fallback.transactionId || newId("YIELD"),
-            type: "yield" as const,
-            label: "Pasivo diario acreditado",
-            amount: fallback.amount,
-            status: "completed" as const,
-            date: now,
-          }]
+        ? [
+            {
+              id: fallback.transactionId || newId("YIELD"),
+              type: "yield" as const,
+              label: "Pasivo diario acreditado",
+              amount: fallback.amount,
+              status: "completed" as const,
+              date: now,
+            },
+          ]
         : [];
     const total = movements.reduce((sum, movement) => sum + movement.amount, 0);
     setUser(prev => ({
@@ -754,10 +857,13 @@ function HomePanel({
             </div>
             <Users size={20} />
           </div>
-          <p>
-            Comparte únicamente el enlace izquierdo o derecho desde tu red.
-          </p>
-          <button className="dash-primary" onClick={() => navigate("/dashboard/network")}>Ver enlaces binarios <ArrowRight size={15} /></button>
+          <p>Comparte únicamente el enlace izquierdo o derecho desde tu red.</p>
+          <button
+            className="dash-primary"
+            onClick={() => navigate("/dashboard/network")}
+          >
+            Ver enlaces binarios <ArrowRight size={15} />
+          </button>
         </section>
         <section className="dash-card progress-card">
           <div className="dash-card-head">
@@ -844,11 +950,14 @@ function SectionPanel({
     fee: number
   ) => void;
   activate: (item: (typeof catalog)[number], amount: number) => void;
-  reward: (rewards: DailyNodeReward[], fallback?: { amount: number; transactionId?: string }) => void;
+  reward: (
+    rewards: DailyNodeReward[],
+    fallback?: { amount: number; transactionId?: string }
+  ) => void;
 }) {
-  const [activationAmounts, setActivationAmounts] = useState<Record<string, string>>(
-    () => Object.fromEntries(catalog.map(item => [item.id, String(item.min)]))
-  );
+  const [activationAmounts, setActivationAmounts] = useState<
+    Record<string, string>
+  >(() => Object.fromEntries(catalog.map(item => [item.id, String(item.min)])));
   const labels: Record<string, [string, string, string]> = {
     activate: [
       "CONTRATOS DISPONIBLES",
@@ -914,32 +1023,50 @@ function SectionPanel({
           {catalog.map(item => {
             const rawAmount = activationAmounts[item.id] ?? String(item.min);
             const amount = Number(rawAmount);
-            const valid = Number.isFinite(amount) && amount >= item.min && amount <= user.balance;
-            return <article className="dash-card local-plan" key={item.name}>
-              <span className="dash-eyebrow">{item.duration}</span>
-              <h3>{item.name}</h3>
-              <strong>{item.rate}</strong>
-              <p>
-                Generación de lunes a viernes. Mínimo local: {money(item.min)}.
-              </p>
-              <label className="activation-amount">
-                <span>Monto a activar (USD)</span>
-                <input
-                  type="number"
-                  min={item.min}
-                  max={user.balance}
-                  step="0.01"
-                  inputMode="decimal"
-                  value={rawAmount}
-                  aria-invalid={!valid}
-                  onChange={event => setActivationAmounts(current => ({ ...current, [item.id]: event.target.value }))}
-                />
-                <small>Disponible: {money(user.balance)}</small>
-              </label>
-              <button className="dash-primary" disabled={!valid} onClick={() => activate(item, amount)}>
-                {amount >= item.min && Number.isFinite(amount) ? `Activar por ${money(amount)}` : `Mínimo ${money(item.min)}`} <Zap size={15} />
-              </button>
-            </article>;
+            const valid =
+              Number.isFinite(amount) &&
+              amount >= item.min &&
+              amount <= user.balance;
+            return (
+              <article className="dash-card local-plan" key={item.name}>
+                <span className="dash-eyebrow">{item.duration}</span>
+                <h3>{item.name}</h3>
+                <strong>{item.rate}</strong>
+                <p>
+                  Generación de lunes a viernes. Mínimo local: {money(item.min)}
+                  .
+                </p>
+                <label className="activation-amount">
+                  <span>Monto a activar (USD)</span>
+                  <input
+                    type="number"
+                    min={item.min}
+                    max={user.balance}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={rawAmount}
+                    aria-invalid={!valid}
+                    onChange={event =>
+                      setActivationAmounts(current => ({
+                        ...current,
+                        [item.id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <small>Disponible: {money(user.balance)}</small>
+                </label>
+                <button
+                  className="dash-primary"
+                  disabled={!valid}
+                  onClick={() => activate(item, amount)}
+                >
+                  {amount >= item.min && Number.isFinite(amount)
+                    ? `Activar por ${money(amount)}`
+                    : `Mínimo ${money(item.min)}`}{" "}
+                  <Zap size={15} />
+                </button>
+              </article>
+            );
           })}
         </div>
       </div>
@@ -1028,7 +1155,15 @@ function SectionPanel({
       </div>
     );
   if (section === "profile")
-    return <ProfilePanel user={user} eyebrow={eyebrow} title={title} copy={copy} showNotice={showNotice} />;
+    return (
+      <ProfilePanel
+        user={user}
+        eyebrow={eyebrow}
+        title={title}
+        copy={copy}
+        showNotice={showNotice}
+      />
+    );
   if (section === "network") {
     const directEntries = (commissionSummary?.entries || []).filter(
       entry => entry.commission_type === "direct" && entry.status === "credited"
@@ -1062,12 +1197,42 @@ function SectionPanel({
           </div>
         )}
         <div className="commission-detail-grid binary-invite-links">
-          {([['izquierda', 'PIERNA IZQUIERDA', '←'], ['derecha', 'PIERNA DERECHA', '→']] as const).map(([side, label, arrow]) => {
+          {(
+            [
+              ["izquierda", "PIERNA IZQUIERDA", "←"],
+              ["derecha", "PIERNA DERECHA", "→"],
+            ] as const
+          ).map(([side, label, arrow]) => {
             const link = binaryReferralUrl(user.referralCode, side);
-            return <div className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`} key={side}><div><span className="dash-eyebrow">{arrow} {label}</span><strong>{link}</strong></div><button className="dash-primary" onClick={() => { navigator.clipboard?.writeText(link); showNotice(`Enlace de pierna ${side} copiado.`); }}>Copiar <Copy size={14} /></button></div>;
+            return (
+              <div
+                className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`}
+                key={side}
+              >
+                <div>
+                  <span className="dash-eyebrow">
+                    {arrow} {label}
+                  </span>
+                  <strong>{link}</strong>
+                </div>
+                <button
+                  className="dash-primary"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(link);
+                    showNotice(`Enlace de pierna ${side} copiado.`);
+                  }}
+                >
+                  Copiar <Copy size={14} />
+                </button>
+              </div>
+            );
           })}
         </div>
-        <BinaryTree nodes={commissionSummary?.networkNodes || []} currentUserId={currentUserId} ownerName={user.username} />
+        <BinaryTree
+          nodes={commissionSummary?.networkNodes || []}
+          currentUserId={currentUserId}
+          ownerName={user.username}
+        />
         <div className="commission-detail-grid">
           <section className="commission-detail-card direct">
             <div className="commission-detail-heading">
@@ -1088,7 +1253,10 @@ function SectionPanel({
               <span>{directEntries.length} eventos acreditados</span>
               <span>Rate 10%</span>
             </div>
-            <CommissionEntryDetails entries={directEntries} empty="Aún no hay bonos directos." />
+            <CommissionEntryDetails
+              entries={directEntries}
+              empty="Aún no hay bonos directos."
+            />
           </section>
           <section className="commission-detail-card binary">
             <div className="commission-detail-heading">
@@ -1123,7 +1291,10 @@ function SectionPanel({
               <span>{binaryEntries.length} eventos acreditados</span>
               <span>Rate 8%</span>
             </div>
-            <CommissionEntryDetails entries={binaryEntries} empty="Aún no hay bonos binarios." />
+            <CommissionEntryDetails
+              entries={binaryEntries}
+              empty="Aún no hay bonos binarios."
+            />
           </section>
         </div>
         <section className="network-ledger-card dash-card">
@@ -1196,7 +1367,9 @@ function ProfilePanel({
   copy: string;
   showNotice: (message: string) => void;
 }) {
-  const [details, setDetails] = useState<PrivateUserDetails>(emptyPrivateUserDetails);
+  const [details, setDetails] = useState<PrivateUserDetails>(
+    emptyPrivateUserDetails
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1204,10 +1377,23 @@ function ProfilePanel({
   useEffect(() => {
     let active = true;
     fetchPrivateUserDetails()
-      .then(value => { if (active) setDetails(value); })
-      .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "No se pudo cargar el perfil."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .then(value => {
+        if (active) setDetails(value);
+      })
+      .catch(cause => {
+        if (active)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo cargar el perfil."
+          );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const update = (field: keyof PrivateUserDetails, value: string) =>
@@ -1218,50 +1404,127 @@ function ProfilePanel({
     setError("");
     const bep20 = details.wallet_bep20.trim();
     const trc20 = details.wallet_trc20.trim();
-    if (bep20 && !/^0x[0-9a-fA-F]{40}$/.test(bep20)) return setError("La wallet BEP20 no tiene un formato válido.");
-    if (trc20 && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trc20)) return setError("La wallet TRC20 no tiene un formato válido.");
+    if (bep20 && !/^0x[0-9a-fA-F]{40}$/.test(bep20))
+      return setError("La wallet BEP20 no tiene un formato válido.");
+    if (trc20 && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trc20))
+      return setError("La wallet TRC20 no tiene un formato válido.");
     setSaving(true);
     try {
       await savePrivateUserDetails(details);
       showNotice("Perfil y wallets guardados correctamente.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo guardar el perfil.");
+      setError(
+        cause instanceof Error ? cause.message : "No se pudo guardar el perfil."
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  return <div className="generic-panel">
-    <span className="dash-eyebrow">{eyebrow}</span>
-    <h2>{title}</h2>
-    <p>{copy}</p>
-    <form className="profile-form" onSubmit={submit}>
-      <section className="dash-card profile-section">
-        <span className="dash-eyebrow">DATOS PERSONALES</span>
-        <div className="profile-fields">
-          <label><span>Usuario</span><input value={user.username} disabled /></label>
-          <label><span>Correo</span><input type="email" value={user.email} disabled /></label>
-          <label><span>Nombre completo</span><input value={details.full_name} maxLength={120} onChange={event => update("full_name", event.target.value)} placeholder="Nombre y apellido" /></label>
-          <label><span>Teléfono</span><input type="tel" value={details.phone} maxLength={30} onChange={event => update("phone", event.target.value)} placeholder="+1 809 000 0000" /></label>
-          <label><span>País</span><input value={details.country} maxLength={80} onChange={event => update("country", event.target.value)} placeholder="República Dominicana" /></label>
-          <label><span>Ciudad</span><input value={details.city} maxLength={80} onChange={event => update("city", event.target.value)} placeholder="Santo Domingo" /></label>
-        </div>
-      </section>
-      <section className="dash-card profile-section">
-        <span className="dash-eyebrow">WALLETS DE RETIRO · USDT</span>
-        <p>Guarda tus direcciones preferidas. Verifica siempre la red antes de solicitar un retiro.</p>
-        <div className="profile-wallets">
-          <label><span>USDT BEP20</span><input value={details.wallet_bep20} maxLength={42} onChange={event => update("wallet_bep20", event.target.value)} placeholder="0x…" spellCheck={false} /></label>
-          <label><span>USDT TRC20</span><input value={details.wallet_trc20} maxLength={34} onChange={event => update("wallet_trc20", event.target.value)} placeholder="T…" spellCheck={false} /></label>
-        </div>
-      </section>
-      {loading && <div className="form-success" role="status">Cargando perfil…</div>}
-      {error && <div className="form-error" role="alert">{error}</div>}
-      <button className="dash-primary profile-save" disabled={loading || saving}>
-        {saving ? "Guardando…" : "Guardar cambios"} <Zap size={15} />
-      </button>
-    </form>
-  </div>;
+  return (
+    <div className="generic-panel">
+      <span className="dash-eyebrow">{eyebrow}</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      <form className="profile-form" onSubmit={submit}>
+        <section className="dash-card profile-section">
+          <span className="dash-eyebrow">DATOS PERSONALES</span>
+          <div className="profile-fields">
+            <label>
+              <span>Usuario</span>
+              <input value={user.username} disabled />
+            </label>
+            <label>
+              <span>Correo</span>
+              <input type="email" value={user.email} disabled />
+            </label>
+            <label>
+              <span>Nombre completo</span>
+              <input
+                value={details.full_name}
+                maxLength={120}
+                onChange={event => update("full_name", event.target.value)}
+                placeholder="Nombre y apellido"
+              />
+            </label>
+            <label>
+              <span>Teléfono</span>
+              <input
+                type="tel"
+                value={details.phone}
+                maxLength={30}
+                onChange={event => update("phone", event.target.value)}
+                placeholder="+1 809 000 0000"
+              />
+            </label>
+            <label>
+              <span>País</span>
+              <input
+                value={details.country}
+                maxLength={80}
+                onChange={event => update("country", event.target.value)}
+                placeholder="República Dominicana"
+              />
+            </label>
+            <label>
+              <span>Ciudad</span>
+              <input
+                value={details.city}
+                maxLength={80}
+                onChange={event => update("city", event.target.value)}
+                placeholder="Santo Domingo"
+              />
+            </label>
+          </div>
+        </section>
+        <section className="dash-card profile-section">
+          <span className="dash-eyebrow">WALLETS DE RETIRO · USDT</span>
+          <p>
+            Guarda tus direcciones preferidas. Verifica siempre la red antes de
+            solicitar un retiro.
+          </p>
+          <div className="profile-wallets">
+            <label>
+              <span>USDT BEP20</span>
+              <input
+                value={details.wallet_bep20}
+                maxLength={42}
+                onChange={event => update("wallet_bep20", event.target.value)}
+                placeholder="0x…"
+                spellCheck={false}
+              />
+            </label>
+            <label>
+              <span>USDT TRC20</span>
+              <input
+                value={details.wallet_trc20}
+                maxLength={34}
+                onChange={event => update("wallet_trc20", event.target.value)}
+                placeholder="T…"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+        </section>
+        {loading && (
+          <div className="form-success" role="status">
+            Cargando perfil…
+          </div>
+        )}
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
+        <button
+          className="dash-primary profile-save"
+          disabled={loading || saving}
+        >
+          {saving ? "Guardando…" : "Guardar cambios"} <Zap size={15} />
+        </button>
+      </form>
+    </div>
+  );
 }
 
 function DepositPanel({
@@ -1335,7 +1598,8 @@ function DepositPanel({
         </label>
         <small>
           Redes disponibles: TRC20 y BEP20. Modo de prueba: el invoice se crea
-          en NOWPayments Sandbox y queda pendiente hasta recibir un callback IPN válido.
+          en NOWPayments Sandbox y queda pendiente hasta recibir un callback IPN
+          válido.
         </small>
         {error && (
           <div className="form-error" role="alert">
@@ -1677,33 +1941,96 @@ function CommissionEntryDetails({
   empty: string;
 }) {
   if (!entries.length) return <p className="commission-entry-empty">{empty}</p>;
-  return <div className="commission-entry-list">
-    {entries.slice(0, 6).map(entry => {
-      const matchedVolume = Number(entry.metadata?.matched_volume || 0);
-      return <div className="commission-entry-item" key={entry.id}>
-        <div>
-          <b>{entry.node_name || "Nodo no identificado"}</b>
-          <span>
-            Origen: {entry.source_username || "Usuario referido"}
-            {entry.contract_amount ? ` · Capital ${money(entry.contract_amount)}` : ""}
-            {matchedVolume ? ` · Emparejado ${money(matchedVolume)}` : ""}
-          </span>
-          <span>
-            {new Date(entry.created_at).toLocaleString("es-MX")} · Tasa {(Number(entry.rate || 0) * 100).toFixed(2)}%
-            {entry.leg ? ` · Pierna ${entry.leg}` : ""}
-          </span>
-        </div>
-        <strong>{money(Number(entry.amount || 0))}</strong>
-      </div>;
-    })}
-  </div>;
+  return (
+    <div className="commission-entry-list">
+      {entries.slice(0, 6).map(entry => {
+        const matchedVolume = Number(entry.metadata?.matched_volume || 0);
+        return (
+          <div className="commission-entry-item" key={entry.id}>
+            <div>
+              <b>{entry.node_name || "Nodo no identificado"}</b>
+              <span>
+                Origen: {entry.source_username || "Usuario referido"}
+                {entry.contract_amount
+                  ? ` · Capital ${money(entry.contract_amount)}`
+                  : ""}
+                {matchedVolume ? ` · Emparejado ${money(matchedVolume)}` : ""}
+              </span>
+              <span>
+                {new Date(entry.created_at).toLocaleString("es-MX")} · Tasa{" "}
+                {(Number(entry.rate || 0) * 100).toFixed(2)}%
+                {entry.leg ? ` · Pierna ${entry.leg}` : ""}
+              </span>
+            </div>
+            <strong>{money(Number(entry.amount || 0))}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function BinaryTree({ nodes, currentUserId, ownerName }: { nodes: Array<{ user_id: string; username?: string; parent_id: string | null; leg: "left" | "right" | null }>; currentUserId?: string; ownerName: string }) {
-  const root = nodes.find((node) => node.user_id === currentUserId) || nodes.find((node) => !node.parent_id);
-  const child = (leg: "left" | "right") => nodes.find((node) => node.parent_id === root?.user_id && node.leg === leg);
+function BinaryTree({
+  nodes,
+  currentUserId,
+  ownerName,
+}: {
+  nodes: Array<{
+    user_id: string;
+    username?: string;
+    parent_id: string | null;
+    leg: "left" | "right" | null;
+  }>;
+  currentUserId?: string;
+  ownerName: string;
+}) {
+  const root =
+    nodes.find(node => node.user_id === currentUserId) ||
+    nodes.find(node => !node.parent_id);
+  const child = (leg: "left" | "right") =>
+    nodes.find(node => node.parent_id === root?.user_id && node.leg === leg);
   const left = child("left");
   const right = child("right");
-  const label = (node?: { username?: string; user_id: string }) => node?.username || "Disponible";
-  return <section className="binary-tree-card dash-card"><div className="dash-card-head"><div><span className="dash-eyebrow">ÁRBOL BINARIO</span><h3>Estructura de red</h3></div><span className="ledger-status">LEFT / RIGHT</span></div><div className="binary-tree-visual"><div className="tree-node root filled"><i className="tree-status-dot" /><span>DUEÑO DE LA CUENTA</span><b>{root?.username || ownerName}</b><small>NODO PRINCIPAL</small></div><div className="tree-connector"><i /></div><div className="tree-legs"><div className={`tree-leg left ${left ? "filled" : "empty"}`}><i className="tree-status-dot" /><span>PIERNA IZQUIERDA</span><b>{label(left)}</b><small>{left ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small></div><div className={`tree-leg right ${right ? "filled" : "empty"}`}><i className="tree-status-dot" /><span>PIERNA DERECHA</span><b>{label(right)}</b><small>{right ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small></div></div></div><p className="binary-tree-note">La red se actualiza automáticamente cuando una nueva indicación ocupa una posición.</p></section>;
+  const label = (node?: { username?: string; user_id: string }) =>
+    node?.username || "Disponible";
+  return (
+    <section className="binary-tree-card dash-card">
+      <div className="dash-card-head">
+        <div>
+          <span className="dash-eyebrow">ÁRBOL BINARIO</span>
+          <h3>Estructura de red</h3>
+        </div>
+        <span className="ledger-status">LEFT / RIGHT</span>
+      </div>
+      <div className="binary-tree-visual">
+        <div className="tree-node root filled">
+          <i className="tree-status-dot" />
+          <span>DUEÑO DE LA CUENTA</span>
+          <b>{root?.username || ownerName}</b>
+          <small>NODO PRINCIPAL</small>
+        </div>
+        <div className="tree-connector">
+          <i />
+        </div>
+        <div className="tree-legs">
+          <div className={`tree-leg left ${left ? "filled" : "empty"}`}>
+            <i className="tree-status-dot" />
+            <span>PIERNA IZQUIERDA</span>
+            <b>{label(left)}</b>
+            <small>{left ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small>
+          </div>
+          <div className={`tree-leg right ${right ? "filled" : "empty"}`}>
+            <i className="tree-status-dot" />
+            <span>PIERNA DERECHA</span>
+            <b>{label(right)}</b>
+            <small>{right ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small>
+          </div>
+        </div>
+      </div>
+      <p className="binary-tree-note">
+        La red se actualiza automáticamente cuando una nueva indicación ocupa
+        una posición.
+      </p>
+    </section>
+  );
 }
