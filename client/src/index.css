@@ -114,7 +114,7 @@ h1 em,h2 span { color:var(--indigo); font-style:normal; }
 .brand{gap:0}.brand img.brand-mark{width:96px;height:62px;object-fit:contain}
 .dash-brand{height:92px;justify-content:center;padding:7px 22px}.dash-brand .brand-mark{width:118px;height:78px;flex:none;object-fit:contain}
 .empty-contracts .brand-mark{width:126px;height:102px;opacity:.82;object-fit:contain}
-.auth-brand{margin-bottom:28px}.auth-brand .brand-mark{width:150px;height:112px;object-fit:contain}
+.auth-brand{width:100%;justify-content:center;margin-bottom:28px}.auth-brand .brand-mark{width:150px;height:112px;object-fit:contain}
 .admin-official-logo{width:88px;height:66px;flex:none;object-fit:contain}.admin-gate-logo{width:142px;height:112px;margin-bottom:24px}
 @media(max-width:600px){.brand img.brand-mark{width:82px;height:54px}.dash-brand .brand-mark{width:104px;height:70px}.auth-brand .brand-mark{width:132px;height:100px}}
 .tree-node,.tree-leg{position:relative;overflow:hidden;transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease,background .25s ease}
