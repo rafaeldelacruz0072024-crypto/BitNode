@@ -31,7 +31,6 @@ import { BrandMark } from "@/components/BrandMark";
 import {
   Contract,
   LocalUserState,
-  addPendingDeposit,
   loadLocalUser,
   money,
   newId,
@@ -46,7 +45,6 @@ import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
-import { requestManualDeposit } from "@/lib/depositClient";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -492,31 +490,6 @@ export default function Dashboard() {
   const activeLabel =
     nav.find(item => item[1] === location)?.[0] ||
     (isHome ? "Inicio" : "Panel");
-  const mutateDeposit = async (amount: number) => {
-    if (!amount || amount < 10)
-      return showNotice("El depósito mínimo es de $10.00.");
-    try {
-      const result = await requestManualDeposit(amount);
-      const movement = {
-        id: result.id,
-        type: "deposit" as const,
-        label: "Depósito manual · pendiente",
-        amount,
-        status: "pending" as const,
-        date: new Date().toISOString(),
-      };
-      setUser(prev => addPendingDeposit(prev, movement));
-      showNotice(
-        "Depósito registrado para confirmación; el balance no se acredita todavía."
-      );
-    } catch (error) {
-      showNotice(
-        error instanceof Error
-          ? error.message
-          : "No se pudo registrar el depósito."
-      );
-    }
-  };
   const mutateWithdraw = async (
     amount: number,
     network: string,
@@ -669,7 +642,6 @@ export default function Dashboard() {
       commissionLoading={commissionLoading}
       commissionError={commissionError}
       showNotice={showNotice}
-      deposit={mutateDeposit}
       withdraw={mutateWithdraw}
       activate={activate}
       reward={reward}
@@ -931,7 +903,6 @@ function SectionPanel({
   commissionLoading,
   commissionError,
   showNotice,
-  deposit,
   withdraw,
   activate,
   reward,
@@ -943,7 +914,6 @@ function SectionPanel({
   commissionLoading: boolean;
   commissionError: string | null;
   showNotice: (message: string) => void;
-  deposit: (amount: number) => void;
   withdraw: (
     amount: number,
     network: string,
@@ -1075,7 +1045,7 @@ function SectionPanel({
   if (section === "tasks")
     return <DailyTasksPanel user={user} onRewards={reward} />;
   if (section === "deposit")
-    return <DepositPanel title={title} copy={copy} localDeposit={deposit} />;
+    return <DepositPanel title={title} copy={copy} />;
   if (section === "withdraw")
     return (
       <WithdrawalForm
@@ -1573,11 +1543,9 @@ function ProfilePanel({
 function DepositPanel({
   title,
   copy,
-  localDeposit,
 }: {
   title: string;
   copy: string;
-  localDeposit: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState(10);
   const [payCurrency, setPayCurrency] = useState("usdtbsc");
@@ -1712,12 +1680,6 @@ function DepositPanel({
         >
           {loading ? "Generando depósito…" : "Generar QR de depósito"}{" "}
           <Zap size={15} />
-        </button>
-        <button
-          className="confirm-cancel local-fallback"
-          onClick={() => localDeposit(amount)}
-        >
-          Usar depósito local de prueba
         </button>
       </section>
     </div>
