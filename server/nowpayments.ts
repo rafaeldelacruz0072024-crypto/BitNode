@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 
-const NOWPAYMENTS_SANDBOX_URL = "https://api-sandbox.nowpayments.io/v1";
+const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 export const SUPPORTED_DEPOSIT_CURRENCIES = new Set(["usdttrc20", "usdtbsc"]);
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -62,7 +62,7 @@ export function registerNowPaymentsRoutes(app: Express) {
 
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_SANDBOX_URL}/invoice`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL}/invoice`, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -96,7 +96,7 @@ export function registerNowPaymentsRoutes(app: Express) {
       return res.json({ transactionId, invoiceId: invoice.id || invoice.payment_id, invoiceUrl: invoice.invoice_url || invoice.pay_address || null, status: "pending" });
     } catch (error) {
       console.error("[NOWPayments] invoice error", error);
-      return res.status(500).json({ error: "No se pudo iniciar el depósito de prueba." });
+      return res.status(500).json({ error: "No se pudo iniciar el depósito." });
     }
   });
 

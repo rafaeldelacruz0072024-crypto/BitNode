@@ -682,7 +682,7 @@ async function createContext(opts) {
 // server/nowpayments.ts
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-var NOWPAYMENTS_SANDBOX_URL = "https://api-sandbox.nowpayments.io/v1";
+var NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 var SUPPORTED_DEPOSIT_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
 var supabaseUrl = process.env.VITE_SUPABASE_URL;
 var serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -733,7 +733,7 @@ function registerNowPaymentsRoutes(app2) {
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_SANDBOX_URL}/invoice`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL}/invoice`, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -766,7 +766,7 @@ function registerNowPaymentsRoutes(app2) {
       return res.json({ transactionId, invoiceId: invoice.id || invoice.payment_id, invoiceUrl: invoice.invoice_url || invoice.pay_address || null, status: "pending" });
     } catch (error) {
       console.error("[NOWPayments] invoice error", error);
-      return res.status(500).json({ error: "No se pudo iniciar el dep\xF3sito de prueba." });
+      return res.status(500).json({ error: "No se pudo iniciar el depósito." });
     }
   });
   app2.post("/api/payments/nowpayments/ipn", async (req, res) => {

@@ -1561,7 +1561,7 @@ function DepositPanel({
       setError(
         cause instanceof Error
           ? cause.message
-          : "No se pudo crear el invoice de prueba."
+          : "No se pudo crear el invoice."
       );
     } finally {
       setLoading(false);
@@ -1597,9 +1597,8 @@ function DepositPanel({
           </select>
         </label>
         <small>
-          Redes disponibles: TRC20 y BEP20. Modo de prueba: el invoice se crea
-          en NOWPayments Sandbox y queda pendiente hasta recibir un callback IPN
-          válido.
+          Redes disponibles: TRC20 y BEP20. El balance se acredita
+          automáticamente cuando recibimos la confirmación IPN válida.
         </small>
         {error && (
           <div className="form-error" role="alert">
