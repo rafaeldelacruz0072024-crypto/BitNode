@@ -1,5 +1,3 @@
-import { createRequire } from 'module'; const require = createRequire(import.meta.url);
-
 // server/app.ts
 import express from "express";
 import helmet from "helmet";
@@ -79,18 +77,14 @@ async function getDb() {
   return _db;
 }
 async function upsertUser(user) {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot upsert user: database not available");
     return;
   }
   try {
-    const values = {
-      openId: user.openId
-    };
+    const values = { openId: user.openId };
     const updateSet = {};
     const textFields = ["name", "email", "loginMethod"];
     const assignNullable = (field) => {
@@ -112,15 +106,9 @@ async function upsertUser(user) {
       values.role = "admin";
       updateSet.role = "admin";
     }
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet
-    });
+    if (!values.lastSignedIn) values.lastSignedIn = /* @__PURE__ */ new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = /* @__PURE__ */ new Date();
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -175,42 +163,26 @@ var OAuthService = class {
   constructor(client) {
     this.client = client;
     console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
-    }
+    if (!ENV.oAuthServerUrl) console.error("[OAuth] ERROR: OAUTH_SERVER_URL is not configured!");
   }
   decodeState(state) {
     return decodeOAuthState(state).redirectUri;
   }
   async getTokenByCode(code, state) {
-    const payload = {
+    const { data } = await this.client.post(EXCHANGE_TOKEN_PATH, {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
       redirectUri: this.decodeState(state)
-    };
-    const { data } = await this.client.post(
-      EXCHANGE_TOKEN_PATH,
-      payload
-    );
+    });
     return data;
   }
-  async getUserInfoByToken(token3) {
-    const { data } = await this.client.post(
-      GET_USER_INFO_PATH,
-      {
-        accessToken: token3.accessToken
-      }
-    );
+  async getUserInfoByToken(token4) {
+    const { data } = await this.client.post(GET_USER_INFO_PATH, { accessToken: token4.accessToken });
     return data;
   }
 };
-var createOAuthHttpClient = () => axios.create({
-  baseURL: ENV.oAuthServerUrl,
-  timeout: AXIOS_TIMEOUT_MS
-});
+var createOAuthHttpClient = () => axios.create({ baseURL: ENV.oAuthServerUrl, timeout: AXIOS_TIMEOUT_MS });
 var SDKServer = class {
   client;
   oauthService;
@@ -221,81 +193,37 @@ var SDKServer = class {
   deriveLoginMethod(platforms, fallback) {
     if (fallback && fallback.length > 0) return fallback;
     if (!Array.isArray(platforms) || platforms.length === 0) return null;
-    const set = new Set(
-      platforms.filter((p) => typeof p === "string")
-    );
+    const set = new Set(platforms.filter((p) => typeof p === "string"));
     if (set.has("REGISTERED_PLATFORM_EMAIL")) return "email";
     if (set.has("REGISTERED_PLATFORM_GOOGLE")) return "google";
     if (set.has("REGISTERED_PLATFORM_APPLE")) return "apple";
-    if (set.has("REGISTERED_PLATFORM_MICROSOFT") || set.has("REGISTERED_PLATFORM_AZURE"))
-      return "microsoft";
+    if (set.has("REGISTERED_PLATFORM_MICROSOFT") || set.has("REGISTERED_PLATFORM_AZURE")) return "microsoft";
     if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
     const first = Array.from(set)[0];
     return first ? first.toLowerCase() : null;
   }
-  /**
-   * Exchange OAuth authorization code for access token
-   * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-   */
   async exchangeCodeForToken(code, state) {
     return this.oauthService.getTokenByCode(code, state);
   }
-  /**
-   * Get user information using access token
-   * @example
-   * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-   */
   async getUserInfo(accessToken) {
-    const data = await this.oauthService.getUserInfoByToken({
-      accessToken
-    });
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
+    const data = await this.oauthService.getUserInfoByToken({ accessToken });
+    const loginMethod = this.deriveLoginMethod(data?.platforms, data?.platform ?? data.platform ?? null);
+    return { ...data, platform: loginMethod, loginMethod };
   }
   parseCookies(cookieHeader) {
-    if (!cookieHeader) {
-      return /* @__PURE__ */ new Map();
-    }
-    const parsed = parseCookieHeader(cookieHeader);
-    return new Map(Object.entries(parsed));
+    if (!cookieHeader) return /* @__PURE__ */ new Map();
+    return new Map(Object.entries(parseCookieHeader(cookieHeader)));
   }
   getSessionSecret() {
-    const secret = ENV.cookieSecret;
-    return new TextEncoder().encode(secret);
+    return new TextEncoder().encode(ENV.cookieSecret);
   }
-  /**
-   * Create a session token for a Manus user openId
-   * @example
-   * const sessionToken = await sdk.createSessionToken(userInfo.openId);
-   */
   async createSessionToken(openId, options = {}) {
-    return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || ""
-      },
-      options
-    );
+    return this.signSession({ openId, appId: ENV.appId, name: options.name || "" }, options);
   }
   async signSession(payload, options = {}) {
     const issuedAt = Date.now();
     const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
-    const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1e3);
-    const secretKey = this.getSessionSecret();
-    return new SignJWT({
-      openId: payload.openId,
-      appId: payload.appId,
-      name: payload.name
-    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expirationSeconds).sign(secretKey);
+    return new SignJWT({ openId: payload.openId, appId: payload.appId, name: payload.name }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(Math.floor((issuedAt + expiresInMs) / 1e3)).sign(this.getSessionSecret());
   }
   async verifySession(cookieValue) {
     if (!cookieValue) {
@@ -303,110 +231,55 @@ var SDKServer = class {
       return null;
     }
     try {
-      const secretKey = this.getSessionSecret();
-      const { payload } = await jwtVerify(cookieValue, secretKey, {
-        algorithms: ["HS256"]
-      });
+      const { payload } = await jwtVerify(cookieValue, this.getSessionSecret(), { algorithms: ["HS256"] });
       const { openId, appId, name } = payload;
-      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
-        console.warn("[Auth] Session payload missing required fields");
-        return null;
-      }
-      return {
-        openId,
-        appId,
-        name
-      };
+      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) return null;
+      return { openId, appId, name };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
       return null;
     }
   }
   async getUserInfoWithJwt(jwtToken) {
-    const payload = {
-      jwtToken,
-      projectId: ENV.appId
-    };
-    const { data } = await this.client.post(
-      GET_USER_INFO_WITH_JWT_PATH,
-      payload
-    );
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
+    const { data } = await this.client.post(GET_USER_INFO_WITH_JWT_PATH, { jwtToken, projectId: ENV.appId });
+    const loginMethod = this.deriveLoginMethod(data?.platforms, data?.platform ?? data.platform ?? null);
+    return { ...data, platform: loginMethod, loginMethod };
   }
   async authenticateRequest(req) {
     const cookies = this.parseCookies(req.headers.cookie);
     let sessionToken = cookies.get(COOKIE_NAME);
     if (!sessionToken) {
       const authHeader = req.headers.authorization;
-      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-        sessionToken = authHeader.slice(7);
-      }
+      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) sessionToken = authHeader.slice(7);
     }
     const session = await this.verifySession(sessionToken);
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
-    }
+    if (!session) throw ForbiddenError("Invalid session cookie");
     if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
       const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-      const taskUid = userInfo.taskUid ?? null;
-      if (!taskUid) {
-        throw ForbiddenError("Cron session missing task_uid");
-      }
+      if (!userInfo.taskUid) throw ForbiddenError("Cron session missing task_uid");
       return buildCronUser(userInfo);
     }
-    const sessionUserId = session.openId;
     const signedInAt = /* @__PURE__ */ new Date();
-    let user = await getUserByOpenId(sessionUserId);
+    let user = await getUserByOpenId(session.openId);
     if (!user) {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt
-        });
+        await upsertUser({ openId: userInfo.openId, name: userInfo.name || null, email: userInfo.email ?? null, loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null, lastSignedIn: signedInAt });
         user = await getUserByOpenId(userInfo.openId);
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
         throw ForbiddenError("Failed to sync user info");
       }
     }
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-    await upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt
-    });
+    if (!user) throw ForbiddenError("User not found");
+    await upsertUser({ openId: user.openId, lastSignedIn: signedInAt });
     return user;
   }
 };
 var CRON_OPEN_ID_PREFIX = "cron_";
 function buildCronUser(userInfo) {
   const now = /* @__PURE__ */ new Date();
-  return {
-    id: -1,
-    openId: userInfo.openId,
-    name: userInfo.name || "Manus Scheduled Task",
-    email: null,
-    loginMethod: null,
-    role: "user",
-    createdAt: now,
-    updatedAt: now,
-    lastSignedIn: now,
-    taskUid: userInfo.taskUid ?? void 0,
-    isCron: true
-  };
+  return { id: -1, openId: userInfo.openId, name: userInfo.name || "Manus Scheduled Task", email: null, loginMethod: null, role: "user", createdAt: now, updatedAt: now, lastSignedIn: now, taskUid: userInfo.taskUid ?? void 0, isCron: true };
 }
 var sdk = new SDKServer();
 
@@ -723,10 +596,10 @@ function registerNowPaymentsRoutes(app2) {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin3 = adminClient();
-      const token3 = bearer(req);
-      if (!apiKey || !admin3 || !token3) return res.status(401).json({ error: "Sesión requerida." });
-      const { data: authData, error: authError } = await admin3.auth.getUser(token3);
-      if (authError || !authData.user) return res.status(401).json({ error: "Sesión inválida." });
+      const token4 = bearer(req);
+      if (!apiKey || !admin3 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
+      const { data: authData, error: authError } = await admin3.auth.getUser(token4);
+      if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
       const amount = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
       if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
@@ -774,13 +647,13 @@ function registerNowPaymentsRoutes(app2) {
       });
     } catch (error) {
       console.error("[NOWPayments] payment error", error);
-      return res.status(500).json({ error: "No se pudo iniciar el depósito." });
+      return res.status(500).json({ error: "No se pudo iniciar el dep\xF3sito." });
     }
   });
   app2.post("/api/payments/nowpayments/ipn", async (req, res) => {
     if (!validIpnSignature(req.body, req.header("x-nowpayments-sig"))) return res.status(401).json({ error: "Firma IPN inv\xE1lida." });
     const admin3 = adminClient();
-    if (!admin3) return res.status(503).json({ error: "El servicio no está configurado." });
+    if (!admin3) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
     const body = req.body;
     const orderId = body.order_id ? String(body.order_id) : "";
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
@@ -823,9 +696,9 @@ function registerWithdrawalRoutes(app2) {
   app2.post("/api/withdrawals/request", async (req, res) => {
     const client = admin();
     const accessToken = token(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
-    if (authError || !data.user) return res.status(401).json({ error: "Sesión inválida." });
+    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
@@ -898,9 +771,13 @@ function summarizeCommissionRows(rows) {
 }
 async function getCommissionSummary(userId) {
   const client = adminClient2();
-  if (!client) throw new Error("Las credenciales del servidor no están configuradas.");
-  const { data, error } = await client.from("commission_ledger").select("id, source_user_id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata").eq("beneficiary_id", userId).order("created_at", { ascending: false });
-  if (error) throw new Error(`Commission ledger query failed: ${error.message}`);
+  if (!client)
+    throw new Error("Supabase server credentials are not configured.");
+  const { data, error } = await client.from("commission_ledger").select(
+    "id, source_user_id, commission_type, amount, rate, leg, status, source_event_id, created_at, metadata"
+  ).eq("beneficiary_id", userId).order("created_at", { ascending: false });
+  if (error)
+    throw new Error(`Commission ledger query failed: ${error.message}`);
   const rows = data || [];
   const sourceUserIds = Array.from(new Set(rows.map((row) => row.source_user_id).filter(Boolean)));
   const contractIds = Array.from(new Set(rows.map((row) => String(row.metadata?.contract_id || "")).filter(Boolean)));
@@ -914,7 +791,8 @@ async function getCommissionSummary(userId) {
   const contractsById = new Map((sourceContracts || []).map((contract) => [contract.id, contract]));
   const plansById = new Map((sourcePlans || []).map((plan) => [plan.id, plan.name]));
   const enrichedRows = rows.map((row) => {
-    const contract = contractsById.get(String(row.metadata?.contract_id || ""));
+    const metadata = row.metadata || {};
+    const contract = contractsById.get(String(metadata.contract_id || ""));
     return {
       ...row,
       source_username: profilesById.get(row.source_user_id) || "Usuario referido",
@@ -922,14 +800,9 @@ async function getCommissionSummary(userId) {
       contract_amount: contract ? Number(contract.amount) : null
     };
   });
-  const { data: volumeRows, error: volumeError } = await client.from("network_volume").select("leg, volume, matched_volume, updated_at").eq("user_id", userId);
-  if (volumeError) throw new Error(`Network volume query failed: ${volumeError.message}`);
-  const left = Number(volumeRows?.find((row) => row.leg === "left")?.volume || 0);
-  const right = Number(volumeRows?.find((row) => row.leg === "right")?.volume || 0);
-  const matched = Math.min(left, right);
-  const updatedAt = volumeRows?.reduce((latest, row) => !latest || String(row.updated_at) > latest ? String(row.updated_at) : latest, null);
   const { data: networkNodes, error: networkError } = await client.from("network_nodes").select("user_id, parent_id, leg, sponsor_id").or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
-  if (networkError) throw new Error(`Network tree query failed: ${networkError.message}`);
+  if (networkError)
+    throw new Error(`Network tree query failed: ${networkError.message}`);
   const networkUserIds = Array.from(new Set((networkNodes || []).map((node) => node.user_id)));
   const { data: networkProfiles } = networkUserIds.length ? await client.from("profiles").select("id, username").in("id", networkUserIds) : { data: [] };
   const networkNamesById = new Map((networkProfiles || []).map((profile) => [profile.id, profile.username]));
@@ -939,17 +812,13 @@ async function getCommissionSummary(userId) {
   const activeNodesByUserId = /* @__PURE__ */ new Map();
   for (const contract of directContracts || []) {
     if (contract.status !== "active") continue;
-    activeNodesByUserId.set(contract.user_id, (activeNodesByUserId.get(contract.user_id) || 0) + 1);
+    activeNodesByUserId.set(
+      contract.user_id,
+      (activeNodesByUserId.get(contract.user_id) || 0) + 1
+    );
   }
   return {
     ...summarizeCommissionRows(rows),
-    binaryVolume: {
-      left,
-      right,
-      matched,
-      status: matched > 0 ? "paired" : left > 0 || right > 0 ? "awaiting_pair" : "no_volume",
-      updatedAt
-    },
     entries: enrichedRows,
     networkNodes: (networkNodes || []).map((node) => ({
       ...node,
@@ -964,24 +833,39 @@ async function getCommissionSummary(userId) {
   };
 }
 async function activateContractAndCommissions(client, input) {
-  if (!input.contractId || !input.label || !Number.isFinite(input.amount) || input.amount < 10) {
+  if (!input.contractId || !input.planId || !Number.isFinite(input.amount) || input.amount < 10) {
     throw new Error("Invalid contract activation input.");
   }
-  const { data, error } = await client.rpc("activate_contract_and_commissions", {
+  const { data: placement, error: placementError } = await client.rpc(
+    "place_network_node",
+    {
+      p_user_id: input.userId,
+      p_sponsor_id: null,
+      p_preferred_leg: null
+    }
+  );
+  if (placementError)
+    throw new Error(`Network placement RPC failed: ${placementError.message}`);
+  const { data, error } = await client.rpc("activate_plan_and_node", {
     p_user_id: input.userId,
     p_contract_id: input.contractId,
-    p_username: input.username || null,
-    p_label: input.label,
-    p_amount: input.amount
+    p_plan_id: input.planId,
+    p_amount: input.amount,
+    p_parent_id: placement?.parent_id ?? null,
+    p_leg: placement?.leg ?? null,
+    p_username: input.username || null
   });
-  if (error) throw new Error(`Contract activation RPC failed: ${error.message}`);
-  return data;
+  if (error) throw new Error(`Plan activation RPC failed: ${error.message}`);
+  return { ...data, placement };
 }
 async function processConfirmedContractCommissions(client, userId, contractId) {
   const { data: transaction, error: transactionError } = await client.from("transactions").select("id, user_id, type, status, amount").eq("id", contractId).eq("user_id", userId).maybeSingle();
-  if (transactionError) throw new Error(`Contract lookup failed: ${transactionError.message}`);
+  if (transactionError)
+    throw new Error(`Contract lookup failed: ${transactionError.message}`);
   if (!transaction || transaction.type !== "contract" || transaction.status !== "completed") {
-    throw new Error("Only completed contract transactions can generate commissions.");
+    throw new Error(
+      "Only completed contract transactions can generate commissions."
+    );
   }
   return processContractCommissionsWithClient(client, {
     sourceEventId: `contract:${contractId}:confirmed`,
@@ -995,9 +879,11 @@ function registerCommissionRoutes(app2) {
   app2.get("/api/commissions/summary", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
+    if (!client || !accessToken)
+      return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
+    if (error || !data.user)
+      return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     try {
       return res.json(await getCommissionSummary(data.user.id));
     } catch (error2) {
@@ -1008,52 +894,122 @@ function registerCommissionRoutes(app2) {
   app2.post("/api/contracts/activate", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
+    if (!client || !accessToken)
+      return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
+    if (error || !data.user)
+      return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const contractId = String(req.body?.contractId || "").trim();
-    const label = String(req.body?.label || "").trim();
+    const planId = String(req.body?.planId || "").trim();
     const amount = Number(req.body?.amount);
-    if (!contractId || !label || !Number.isFinite(amount)) return res.status(400).json({ error: "Datos de contrato incompletos." });
+    if (!contractId || !planId || !Number.isFinite(amount))
+      return res.status(400).json({ error: "Datos de contrato incompletos." });
     try {
       const result = await activateContractAndCommissions(client, {
         userId: data.user.id,
         contractId,
+        planId,
         username: data.user.user_metadata?.username || data.user.email?.split("@")[0],
-        label,
         amount
       });
       return res.json(result);
     } catch (error2) {
       console.error("[Contracts] activation error", error2);
-      return res.status(400).json({ error: error2 instanceof Error ? error2.message : "No se pudo activar el contrato." });
+      return res.status(400).json({
+        error: error2 instanceof Error ? error2.message : "No se pudo activar el contrato."
+      });
     }
   });
-  app2.post("/api/commissions/contract-confirmed", async (req, res) => {
-    const client = adminClient2();
-    const accessToken = bearer2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
-    const { data, error } = await client.auth.getUser(accessToken);
-    if (error || !data.user) return res.status(401).json({ error: "Sesión inválida." });
-    const contractId = String(req.body?.contractId || "").trim();
-    if (!contractId) return res.status(400).json({ error: "contractId es requerido." });
-    try {
-      const result = await processConfirmedContractCommissions(client, data.user.id, contractId);
-      return res.json(result);
-    } catch (error2) {
-      console.error("[Commissions] contract confirmation error", error2);
-      return res.status(400).json({ error: error2 instanceof Error ? error2.message : "No se pudo procesar la comisi\xF3n." });
+  app2.post(
+    "/api/commissions/contract-confirmed",
+    async (req, res) => {
+      const client = adminClient2();
+      const accessToken = bearer2(req);
+      if (!client || !accessToken)
+        return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+      const { data, error } = await client.auth.getUser(accessToken);
+      if (error || !data.user)
+        return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+      const contractId = String(req.body?.contractId || "").trim();
+      if (!contractId)
+        return res.status(400).json({ error: "contractId es requerido." });
+      try {
+        const result = await processConfirmedContractCommissions(
+          client,
+          data.user.id,
+          contractId
+        );
+        return res.json(result);
+      } catch (error2) {
+        console.error("[Commissions] contract confirmation error", error2);
+        return res.status(400).json({
+          error: error2 instanceof Error ? error2.message : "No se pudo procesar la comisi\xF3n."
+        });
+      }
     }
+  );
+}
+
+// server/secureCommissionEndpoint.ts
+import { createClient as createClient4 } from "@supabase/supabase-js";
+function adminClient3() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && serviceRoleKey2 ? createClient4(url, serviceRoleKey2, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+}
+function bearer3(req) {
+  const value = req.header("authorization") || "";
+  return value.startsWith("Bearer ") ? value.slice(7) : null;
+}
+function registerSecureCommissionRoutes(app2) {
+  app2.post("/api/commissions/process", async (req, res) => {
+    const client = adminClient3();
+    const accessToken = bearer3(req);
+    if (!client || !accessToken) {
+      return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    }
+    const { data: authData, error: authError } = await client.auth.getUser(accessToken);
+    if (authError || !authData.user) {
+      return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    }
+    const contractId = String(req.body?.contractId || "").trim();
+    if (!contractId || contractId.length > 128) {
+      return res.status(400).json({ error: "contractId es requerido." });
+    }
+    const { data: contract, error: contractError } = await client.from("contracts").select("id, user_id, amount, status").eq("id", contractId).eq("user_id", authData.user.id).maybeSingle();
+    if (contractError) {
+      console.error("[Commissions] Contract lookup failed", contractError);
+      return res.status(500).json({ error: "No se pudo verificar el contrato." });
+    }
+    if (!contract || contract.status !== "active") {
+      return res.status(400).json({ error: "Solo los contratos activos pueden liquidar comisiones." });
+    }
+    const amount = Number(contract.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: "El monto del contrato no es v\xE1lido." });
+    }
+    const { data, error } = await client.rpc("process_contract_commissions", {
+      p_source_event_id: `contract:${contract.id}:confirmed`,
+      p_contract_id: contract.id,
+      p_user_id: authData.user.id,
+      p_amount: amount,
+      p_event_type: "contract_confirmed"
+    });
+    if (error) {
+      console.error("[Commissions] RPC failed", error);
+      return res.status(400).json({ error: "No se pudo procesar la comisi\xF3n." });
+    }
+    return res.json(data);
   });
 }
 
 // server/deposits.ts
 import crypto3 from "node:crypto";
-import { createClient as createClient4 } from "@supabase/supabase-js";
+import { createClient as createClient5 } from "@supabase/supabase-js";
 function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient4(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient5(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function token2(req) {
   const value = req.header("authorization") || "";
@@ -1067,9 +1023,9 @@ function registerDepositRoutes(app2) {
   app2.post("/api/deposits/request", async (req, res) => {
     const client = admin2();
     const accessToken = token2(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesión requerida." });
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
-    if (authError || !data.user) return res.status(401).json({ error: "Sesión inválida." });
+    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const amount = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount);
     if (validationError) return res.status(400).json({ error: validationError });
@@ -1087,6 +1043,73 @@ function registerDepositRoutes(app2) {
     });
     if (error) return res.status(500).json({ error: "No se pudo registrar el dep\xF3sito pendiente." });
     return res.status(201).json({ id, status: "pending", credited: false, message: "Dep\xF3sito registrado para confirmaci\xF3n." });
+  });
+}
+
+// server/adminWithdrawals.ts
+import { createClient as createClient6 } from "@supabase/supabase-js";
+var ADMIN_EMAIL = "gentecash@gmail.com";
+function serviceClient() {
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
+  return createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+function token3(req) {
+  const header = req.header("authorization") || "";
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+async function authenticatedAdmin(req) {
+  const client = serviceClient();
+  const accessToken = token3(req);
+  if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
+  const { data, error } = await client.auth.getUser(accessToken);
+  if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
+  const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+  if (profileError || profile?.role !== "admin" || data.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+    return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
+  }
+  return { client };
+}
+var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
+function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/admin/withdrawals", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const { data, error } = await admin3.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
+      if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
+      return res.status(200).json({ withdrawals: data || [] });
+    } catch (error) {
+      console.error("[admin-withdrawals]", error);
+      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
+    }
+  });
+  app2.post("/api/admin/withdrawals", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const id = String(req.body?.id || "").trim().slice(0, 160);
+      const action = String(req.body?.action || "").trim();
+      if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
+      const { data: withdrawal, error: lookupError } = await admin3.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
+      if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
+      const status = String(withdrawal.status);
+      const ref = cleanReference(req.body?.reference);
+      const transitions = {
+        approve: { from: ["pending"], to: "approved", provider: "manual_approved" },
+        mark_paid: { from: ["approved"], to: "completed", provider: ref ? `manual_paid:${ref}` : "manual_paid" },
+        reject: { from: ["pending", "approved"], to: "rejected", provider: ref ? `manual_rejected:${ref}` : "manual_rejected" }
+      };
+      const transition = transitions[action];
+      if (!transition.from.includes(status)) return res.status(409).json({ error: "La solicitud no permite esta acci\xF3n en su estado actual." });
+      const { error: updateError } = await admin3.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status);
+      if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
+      return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
+    } catch (error) {
+      console.error("[admin-withdrawals]", error);
+      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
+    }
   });
 }
 
@@ -1118,7 +1141,9 @@ function createApp() {
   registerNowPaymentsRoutes(app2);
   registerWithdrawalRoutes(app2);
   registerCommissionRoutes(app2);
+  registerSecureCommissionRoutes(app2);
   registerDepositRoutes(app2);
+  registerAdminWithdrawalRoutes(app2);
   app2.use(
     "/api/trpc",
     createExpressMiddleware({
