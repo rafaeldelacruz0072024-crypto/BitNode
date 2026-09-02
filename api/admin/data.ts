@@ -16,6 +16,7 @@ type AuthUser = {
   created_at?: string | null;
   email_confirmed_at?: string | null;
   banned_until?: string | null;
+  user_metadata?: Record<string, unknown> | null;
 };
 
 type Profile = {
@@ -172,6 +173,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         emailConfirmedAt: authUser?.email_confirmed_at ?? null,
         bannedUntil: authUser?.banned_until ?? null,
         status: authUser?.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "suspendido" : authUser?.email_confirmed_at ? "activo" : "pendiente",
+        details: {
+          fullName: String(authUser?.user_metadata?.full_name || ""),
+          phone: String(authUser?.user_metadata?.phone || ""),
+          country: String(authUser?.user_metadata?.country || ""),
+          city: String(authUser?.user_metadata?.city || ""),
+          walletBep20: String(authUser?.user_metadata?.wallet_bep20 || ""),
+          walletTrc20: String(authUser?.user_metadata?.wallet_trc20 || ""),
+        },
       };
     });
 

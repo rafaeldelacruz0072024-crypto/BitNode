@@ -44,6 +44,14 @@ type AdminUser = {
   emailConfirmedAt: string | null;
   bannedUntil: string | null;
   status: string;
+  details: {
+    fullName: string;
+    phone: string;
+    country: string;
+    city: string;
+    walletBep20: string;
+    walletTrc20: string;
+  };
 };
 
 type AdminTransaction = {
@@ -424,8 +432,17 @@ function SummarySection({ data }: { data: AdminData | null }) {
   );
 }
 
-export function UsersSection({ users }: { users: AdminUser[] }) {
+export function UsersSection({
+  users,
+  onUpdated,
+}: {
+  users: AdminUser[];
+  onUpdated: () => Promise<void>;
+}) {
   const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
   const filtered = useMemo(
     () =>
       users.filter(user =>
@@ -436,6 +453,52 @@ export function UsersSection({ users }: { users: AdminUser[] }) {
       ),
     [query, users]
   );
+  const selected = users.find(user => user.id === selectedId) || null;
+  const [editor, setEditor] = useState<Record<string, string>>({});
+
+  function selectUser(user: AdminUser) {
+    setSelectedId(user.id);
+    setMessage("");
+    setEditor({
+      username: user.username || "",
+      displayName: user.displayName || "",
+      email: user.email || "",
+      fullName: user.details.fullName || "",
+      phone: user.details.phone || "",
+      country: user.details.country || "",
+      city: user.details.city || "",
+      walletBep20: user.details.walletBep20 || "",
+      walletTrc20: user.details.walletTrc20 || "",
+    });
+  }
+
+  async function saveUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: selected.id, ...editor }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo actualizar el usuario.");
+      setMessage("Datos del usuario actualizados correctamente.");
+      await onUpdated();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo actualizar el usuario.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <article className="admin-card admin-card-full">
       <div className="card-heading">
@@ -482,6 +545,7 @@ export function UsersSection({ users }: { users: AdminUser[] }) {
               <th>Patrocinador</th>
               <th>Registro</th>
               <th>Último acceso</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -503,10 +567,48 @@ export function UsersSection({ users }: { users: AdminUser[] }) {
                 </td>
                 <td>{dateLabel(user.createdAt)}</td>
                 <td>{dateLabel(user.lastSignInAt)}</td>
+                <td>
+                  <button className="admin-refresh" type="button" onClick={() => selectUser(user)}>
+                    Gestionar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </DataTable>
+      )}
+      {selected && (
+        <form className="admin-user-manager" onSubmit={saveUser}>
+          <div className="card-heading">
+            <div>
+              <p className="admin-kicker">USER MANAGER</p>
+              <h2>Editar {selected.username || selected.email}</h2>
+            </div>
+            <button className="admin-refresh" type="button" onClick={() => setSelectedId("")}>Cerrar</button>
+          </div>
+          <div className="admin-user-fields">
+            {[
+              ["username", "Usuario"], ["displayName", "Nombre visible"], ["email", "Correo electrónico"],
+              ["fullName", "Nombre completo"], ["phone", "Teléfono"], ["country", "País"],
+              ["city", "Ciudad"], ["walletBep20", "Wallet USDT BEP20"], ["walletTrc20", "Wallet USDT TRC20"],
+            ].map(([key, label]) => (
+              <label key={key}>
+                {label}
+                <input
+                  type={key === "email" ? "email" : "text"}
+                  value={editor[key] || ""}
+                  onChange={event => setEditor(current => ({ ...current, [key]: event.target.value }))}
+                  required={key === "username" || key === "email"}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="config-note">El correo se actualiza directamente en el acceso del usuario. Rol y patrocinador no se modifican desde este módulo.</p>
+          <button className="admin-user-save" type="submit" disabled={saving}>
+            {saving ? "Guardando…" : "Guardar cambios"}
+          </button>
+          {message && <p className="config-note" role="status">{message}</p>}
+        </form>
       )}
     </article>
   );
@@ -1270,7 +1372,7 @@ export default function Admin() {
         {activeSection === "Resumen" && <SummarySection data={adminData} />}
         {activeSection === "Usuarios" &&
           (adminData ? (
-            <UsersSection users={adminData.users} />
+            <UsersSection users={adminData.users} onUpdated={refreshData} />
           ) : (
             <LoadingState />
           ))}
