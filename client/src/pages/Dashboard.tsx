@@ -297,12 +297,33 @@ const nav = [
   ["Historial", "/dashboard/history", Clock3],
   ["Perfil", "/dashboard/profile", Settings],
 ] as const;
-const liveRows = [
-  ["BN-Y9F4UG", "Ethereum", "2,501 ops", "+$2.0430"],
-  ["BN-8DX8W6", "Solana", "3,264 ops", "+$0.2208"],
-  ["BN-4SDMIE", "Arbitrum", "3,232 ops", "+$1.6028"],
-  ["BN-5WHG14", "Bitcoin", "4,165 ops", "+$1.0476"],
+type LiveFarmEvent = {
+  id: string;
+  node: string;
+  network: string;
+  operations: number;
+  commission: number;
+};
+
+const liveRows: LiveFarmEvent[] = [
+  { id: "seed-1", node: "BN-Y9F4UG", network: "Ethereum", operations: 2501, commission: 2.043 },
+  { id: "seed-2", node: "BN-8DX8W6", network: "Solana", operations: 3264, commission: 0.2208 },
+  { id: "seed-3", node: "BN-4SDMIE", network: "Arbitrum", operations: 3232, commission: 1.6028 },
+  { id: "seed-4", node: "BN-5WHG14", network: "Bitcoin", operations: 4165, commission: 1.0476 },
 ];
+const liveNetworks = ["Ethereum", "Solana", "Arbitrum", "Bitcoin", "BNB Chain", "Polygon"];
+
+function nextLiveFarmEvent(): LiveFarmEvent {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const node = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return {
+    id: `${Date.now()}-${node}`,
+    node: `BN-${node}`,
+    network: liveNetworks[Math.floor(Math.random() * liveNetworks.length)],
+    operations: 1800 + Math.floor(Math.random() * 4500),
+    commission: Number((0.12 + Math.random() * 3.85).toFixed(4)),
+  };
+}
 const catalog = [
   {
     id: "daily",
@@ -873,6 +894,18 @@ function HomePanel({
 }
 
 function LiveFarm({ liveNodes }: { liveNodes: number }) {
+  const [events, setEvents] = useState(liveRows);
+  const [latestEventId, setLatestEventId] = useState(liveRows[0].id);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const next = nextLiveFarmEvent();
+      setLatestEventId(next.id);
+      setEvents(current => [next, ...current].slice(0, 4));
+    }, 4200);
+    return () => window.clearInterval(interval);
+  }, []);
+
   return (
     <section className="live-farm">
       <div className="live-farm-title">
@@ -897,15 +930,15 @@ function LiveFarm({ liveNodes }: { liveNodes: number }) {
         <strong>99.77%</strong>
         <span>UPTIME</span>
       </div>
-      {liveRows.map(row => (
-        <div className="farm-row" key={row[0]}>
+      {events.map(row => (
+        <div className={`farm-row${row.id === latestEventId ? " is-new" : ""}`} key={row.id}>
           <div>
-            <b>{row[0]}</b>
+            <b>{row.node}</b>
             <span>
-              {row[1]} · {row[2]}
+              {row.network} · {row.operations.toLocaleString("en-US")} ops
             </span>
           </div>
-          <strong>{row[3]}</strong>
+          <strong>+${row.commission.toFixed(4)}</strong>
         </div>
       ))}
     </section>
