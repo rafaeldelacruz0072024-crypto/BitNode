@@ -115,6 +115,11 @@ function DailyTasksPanel({
             ? new Date(progress.deadline_at).getTime()
             : null
         );
+        if (progress.cycle_reset) {
+          setMessage(
+            "El plazo de 24 horas venció: se reinició el ciclo y sus ganancias provisionales. Tu capital permanece intacto."
+          );
+        }
       })
       .catch(() => undefined);
   }, [hasActiveContracts]);

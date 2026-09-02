@@ -44,6 +44,7 @@ export async function fetchDailyTaskProgress() {
     completed_tasks: string[];
     deadline_at: string | null;
     last_task_at: string | null;
+    cycle_reset?: boolean;
   };
 }
 
