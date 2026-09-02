@@ -2,7 +2,7 @@
  * BitNode dashboard local: misma consola nocturna de la referencia, con estado
  * persistente en localStorage y adaptadores listos para backend posterior.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { Link, useLocation } from "wouter";
 import {
@@ -1293,10 +1293,10 @@ function SectionPanel({
               ["derecha", "PIERNA DERECHA", "→"],
             ] as const
           ).map(([side, label, arrow]) => {
-            const link = binaryReferralUrl(
-              commissionSummary?.referralCode || user.referralCode,
-              side
-            );
+            const referralCode = commissionSummary?.referralCode?.trim();
+            const link = referralCode
+              ? binaryReferralUrl(referralCode, side)
+              : "";
             return (
               <div
                 className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`}
@@ -1306,11 +1306,13 @@ function SectionPanel({
                   <span className="dash-eyebrow">
                     {arrow} {label}
                   </span>
-                  <strong>{link}</strong>
+                  <strong>{link || "Enlace no disponible"}</strong>
                 </div>
                 <button
                   className="dash-primary"
+                  disabled={!link}
                   onClick={() => {
+                    if (!link) return;
                     navigator.clipboard?.writeText(link);
                     showNotice(`Enlace de pierna ${side} copiado.`);
                   }}
@@ -1324,7 +1326,7 @@ function SectionPanel({
         <BinaryTree
           nodes={commissionSummary?.networkNodes || []}
           currentUserId={currentUserId}
-          ownerName={user.username}
+          ownerName={commissionSummary?.ownerUsername || user.username}
         />
         <section className="direct-referrals-card dash-card">
           <div className="dash-card-head">
@@ -2147,12 +2149,41 @@ function BinaryTree({
   const root =
     nodes.find(node => node.user_id === currentUserId) ||
     nodes.find(node => !node.parent_id);
-  const child = (leg: "left" | "right") =>
-    nodes.find(node => node.parent_id === root?.user_id && node.leg === leg);
-  const left = child("left");
-  const right = child("right");
-  const label = (node?: { username?: string; user_id: string }) =>
-    node?.username || "Disponible";
+  const childrenByParent = new Map<string, typeof nodes>();
+  for (const node of nodes) {
+    if (!node.parent_id) continue;
+    const children = childrenByParent.get(node.parent_id) || [];
+    children.push(node);
+    childrenByParent.set(node.parent_id, children);
+  }
+
+  const renderChildren = (parentId: string, depth = 1): ReactNode => {
+    const children = childrenByParent.get(parentId) || [];
+    const child = (leg: "left" | "right") =>
+      children.find(node => node.leg === leg);
+    const left = child("left");
+    const right = child("right");
+    if (depth > 1 && !left && !right) return null;
+
+    return (
+      <div className="tree-level" data-depth={depth}>
+        {(["left", "right"] as const).map(leg => {
+          const node = leg === "left" ? left : right;
+          return (
+            <div className="tree-branch" key={`${parentId}-${leg}`}>
+              <div className={`tree-leg ${leg} ${node ? "filled" : "empty"}`}>
+                <i className="tree-status-dot" />
+                <span>PIERNA {leg === "left" ? "IZQUIERDA" : "DERECHA"}</span>
+                <b>{node?.username || "Disponible"}</b>
+                <small>{node ? `NIVEL ${depth}` : "ESPERANDO REFERIDO"}</small>
+              </div>
+              {node ? renderChildren(node.user_id, depth + 1) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
   return (
     <section className="binary-tree-card dash-card">
       <div className="dash-card-head">
@@ -2169,23 +2200,7 @@ function BinaryTree({
           <b>{root?.username || ownerName}</b>
           <small>NODO PRINCIPAL</small>
         </div>
-        <div className="tree-connector">
-          <i />
-        </div>
-        <div className="tree-legs">
-          <div className={`tree-leg left ${left ? "filled" : "empty"}`}>
-            <i className="tree-status-dot" />
-            <span>PIERNA IZQUIERDA</span>
-            <b>{label(left)}</b>
-            <small>{left ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small>
-          </div>
-          <div className={`tree-leg right ${right ? "filled" : "empty"}`}>
-            <i className="tree-status-dot" />
-            <span>PIERNA DERECHA</span>
-            <b>{label(right)}</b>
-            <small>{right ? "POSICIÓN ACTIVA" : "ESPERANDO REFERIDO"}</small>
-          </div>
-        </div>
+        {root ? renderChildren(root.user_id) : null}
       </div>
       <p className="binary-tree-note">
         La red se actualiza automáticamente cuando una nueva indicación ocupa

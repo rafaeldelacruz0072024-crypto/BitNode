@@ -45,3 +45,8 @@ export function createApp(): Express {
 
   return app;
 }
+
+// Vercel requires the serverless entrypoint to export a callable handler.
+// An Express application is itself a request handler.
+const app = createApp();
+export default app;

@@ -20,7 +20,7 @@ describe("commission endpoint contract", () => {
 
   it("sends trusted identifiers and amount to the RPC", async () => {
     const rpc = vi.fn().mockResolvedValue({
-      data: { status: "processed", direct: 10, binary: 30 },
+      data: { status: "processed", direct: 10, binary: 8 },
       error: null,
     });
     const result = await processContractCommissionsWithClient({ rpc }, {
@@ -30,7 +30,7 @@ describe("commission endpoint contract", () => {
       amount: 100,
     });
 
-    expect(result).toEqual({ status: "processed", direct: 10, binary: 30 });
+    expect(result).toEqual({ status: "processed", direct: 10, binary: 8 });
     expect(rpc).toHaveBeenCalledWith("process_contract_commissions", {
       p_source_event_id: "contract:c-100:confirmed",
       p_contract_id: "c-100",
@@ -71,7 +71,7 @@ describe("commission endpoint contract", () => {
   2. Ejecutar process_contract_commissions para un contrato de 100.
   3. Verificar una fila direct de 10 para el sponsor inmediato.
   4. Ejecutar contratos en ambas piernas, por ejemplo 300 en left y 200 en
-     right; verificar binary = 20 sobre el volumen emparejado de 200.
+     right; verificar binary = 16 sobre el volumen emparejado de 200.
   5. Repetir el mismo source_event_id; verificar status = duplicate y que
      commission_ledger no tenga filas adicionales.
   6. Ejecutar dos eventos concurrentes y comprobar que matched_volume y el

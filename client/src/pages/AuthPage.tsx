@@ -4,6 +4,16 @@ import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { BrandMark } from "@/components/BrandMark";
 
+type PendingReferral = { code: string; leg: "left" | "right" };
+
+export function referralFromMetadata(
+  metadata: Record<string, unknown> | undefined
+): PendingReferral | null {
+  const code = String(metadata?.sponsor_referral_code || "").trim();
+  const leg = metadata?.preferred_leg;
+  return code && (leg === "left" || leg === "right") ? { code, leg } : null;
+}
+
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const referral = useMemo(() => {
@@ -33,7 +43,7 @@ export default function AuthPage() {
   const applyReferral = async (
     userId: string,
     profileName: string,
-    pendingReferral: { code: string; leg: "left" | "right" }
+    pendingReferral: PendingReferral
   ) => {
     if (!supabase || referralApplied.current) return;
     referralApplied.current = true;
@@ -58,18 +68,12 @@ export default function AuthPage() {
   };
 
   useEffect(() => {
-    if (!referral || !supabase) return;
+    if (!supabase) return;
     supabase.auth.getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session) return;
-      const metadataSponsor = String(
-        session.user.user_metadata?.sponsor_referral_code || ""
-      ).trim();
-      const metadataLeg = session.user.user_metadata?.preferred_leg;
-      const pendingReferral = referral ||
-        (metadataSponsor && (metadataLeg === "left" || metadataLeg === "right")
-          ? { code: metadataSponsor, leg: metadataLeg }
-          : null);
+      const pendingReferral =
+        referral || referralFromMetadata(session.user.user_metadata);
       if (!pendingReferral) return;
       try {
         await applyReferral(
@@ -125,9 +129,15 @@ export default function AuthPage() {
       );
       return;
     }
-    if (referral && result.data.user) {
+    const pendingReferral =
+      referral || referralFromMetadata(result.data.user?.user_metadata);
+    if (pendingReferral && result.data.user) {
       try {
-        await applyReferral(result.data.user.id, username, referral);
+        await applyReferral(
+          result.data.user.id,
+          String(result.data.user.user_metadata?.username || username),
+          pendingReferral
+        );
       } catch (cause) {
         return setError(
           cause instanceof Error
