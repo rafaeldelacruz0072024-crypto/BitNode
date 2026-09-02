@@ -46,6 +46,7 @@ import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
+import "@/task-interactions.css";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -251,7 +252,7 @@ function DailyTasksPanel({
         </p>
       </div>
       <div className="local-plan-grid">
-        {DAILY_TASKS.map(([key, name, description]) => {
+        {DAILY_TASKS.map(([key, name, description], index) => {
           const done = completed.includes(key);
           const processing = busy === key;
           return (
@@ -259,14 +260,18 @@ function DailyTasksPanel({
               className={`dash-card local-plan task-card${done ? " is-complete" : ""}${lastAction === key ? " is-active" : ""}`}
               key={key}
             >
+              <span className="task-sequence-badge" aria-hidden="true">
+                {done ? <CheckCircle2 size={16} /> : index + 1}
+              </span>
               <span className="dash-eyebrow task-state">
-                {done ? "COMPLETADA" : "PENDIENTE"}
+                {done ? "COMPLETADA" : processing ? "VERIFICANDO…" : "PENDIENTE"}
               </span>
               <h3>{name}</h3>
               <p>{description}</p>
               <button
                 className={`dash-primary task-button${processing ? " is-processing" : ""}`}
                 disabled={done || busy !== null}
+                aria-busy={processing}
                 onClick={() => complete(key)}
               >
                 {processing
@@ -730,7 +735,7 @@ export default function Dashboard() {
             <Link
               key={href}
               href={href}
-              className={location === href ? "active" : ""}
+              className={`${location === href ? "active" : ""}${href === "/dashboard/tasks" ? " daily-tasks-link" : ""}`.trim()}
               onClick={() => setMobileOpen(false)}
             >
               <Icon size={19} />
