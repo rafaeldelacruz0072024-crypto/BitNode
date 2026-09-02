@@ -288,8 +288,8 @@ function getQueryParam(req, key) {
   const value = req.query[key];
   return typeof value === "string" ? value : void 0;
 }
-function registerOAuthRoutes(app) {
-  app.get("/api/oauth/callback", async (req, res) => {
+function registerOAuthRoutes(app2) {
+  app2.get("/api/oauth/callback", async (req, res) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
     if (!code || !state) {
@@ -332,8 +332,8 @@ function registerOAuthRoutes(app) {
 }
 
 // server/_core/storageProxy.ts
-function registerStorageProxy(app) {
-  app.get("/manus-storage/*", async (req, res) => {
+function registerStorageProxy(app2) {
+  app2.get("/manus-storage/*", async (req, res) => {
     const key = req.params[0];
     if (!key) {
       res.status(400).send("Missing storage key");
@@ -591,8 +591,8 @@ function validDepositCurrency(value) {
   const currency = String(value || "").toLowerCase();
   return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
 }
-function registerNowPaymentsRoutes(app) {
-  app.post("/api/payments/nowpayments/payment", async (req, res) => {
+function registerNowPaymentsRoutes(app2) {
+  app2.post("/api/payments/nowpayments/payment", async (req, res) => {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin3 = adminClient();
@@ -650,7 +650,7 @@ function registerNowPaymentsRoutes(app) {
       return res.status(500).json({ error: "No se pudo iniciar el dep\xF3sito." });
     }
   });
-  app.post("/api/payments/nowpayments/ipn", async (req, res) => {
+  app2.post("/api/payments/nowpayments/ipn", async (req, res) => {
     if (!validIpnSignature(req.body, req.header("x-nowpayments-sig"))) return res.status(401).json({ error: "Firma IPN inv\xE1lida." });
     const admin3 = adminClient();
     if (!admin3) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
@@ -692,8 +692,8 @@ function validateWithdrawalInput(amount, network, wallet, usedToday) {
   if (usedToday + amount > LIMIT) return `L\xEDmite diario excedido. Ya solicitaste ${usedToday.toFixed(2)} USDT hoy.`;
   return null;
 }
-function registerWithdrawalRoutes(app) {
-  app.post("/api/withdrawals/request", async (req, res) => {
+function registerWithdrawalRoutes(app2) {
+  app2.post("/api/withdrawals/request", async (req, res) => {
     const client = admin();
     const accessToken = token(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
@@ -779,7 +779,12 @@ async function getCommissionSummary(userId) {
   if (error)
     throw new Error(`Commission ledger query failed: ${error.message}`);
   const rows = data || [];
-  const { data: ownerProfile, error: ownerProfileError } = await client.from("profiles").select("referral_code").eq("id", userId).maybeSingle();
+  const [ownerResult, treeResult, volumeResult] = await Promise.all([
+    client.from("profiles").select("username, referral_code").eq("id", userId).maybeSingle(),
+    client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 12 }),
+    client.from("network_volume").select("leg, volume, matched_volume, updated_at").eq("user_id", userId)
+  ]);
+  const { data: ownerProfile, error: ownerProfileError } = ownerResult;
   if (ownerProfileError)
     throw new Error(`Owner profile query failed: ${ownerProfileError.message}`);
   const sourceUserIds = Array.from(new Set(rows.map((row) => row.source_user_id).filter(Boolean)));
@@ -803,9 +808,12 @@ async function getCommissionSummary(userId) {
       contract_amount: contract ? Number(contract.amount) : null
     };
   });
-  const { data: networkNodes, error: networkError } = await client.from("network_nodes").select("user_id, parent_id, leg, sponsor_id").or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
+  const networkError = treeResult.error;
+  const networkNodes = treeResult.data || [];
   if (networkError)
     throw new Error(`Network tree query failed: ${networkError.message}`);
+  if (volumeResult.error)
+    throw new Error(`Network volume query failed: ${volumeResult.error.message}`);
   const networkUserIds = Array.from(new Set((networkNodes || []).map((node) => node.user_id)));
   const { data: networkProfiles } = networkUserIds.length ? await client.from("profiles").select("id, username").in("id", networkUserIds) : { data: [] };
   const networkNamesById = new Map((networkProfiles || []).map((profile) => [profile.id, profile.username]));
@@ -820,9 +828,24 @@ async function getCommissionSummary(userId) {
       (activeNodesByUserId.get(contract.user_id) || 0) + 1
     );
   }
+  const leftVolume = Number(volumeResult.data?.find((row) => row.leg === "left")?.volume || 0);
+  const rightVolume = Number(volumeResult.data?.find((row) => row.leg === "right")?.volume || 0);
+  const matchedVolume = Math.max(
+    ...(volumeResult.data || []).map((row) => Number(row.matched_volume || 0)),
+    0
+  );
+  const updatedAt = (volumeResult.data || []).map((row) => row.updated_at).filter(Boolean).sort().at(-1) || null;
   return {
     ...summarizeCommissionRows(rows),
+    ownerUsername: ownerProfile?.username || null,
     referralCode: ownerProfile?.referral_code || null,
+    binaryVolume: {
+      left: leftVolume,
+      right: rightVolume,
+      matched: matchedVolume,
+      status: matchedVolume > 0 ? "paired" : leftVolume > 0 || rightVolume > 0 ? "awaiting_pair" : "no_volume",
+      updatedAt
+    },
     entries: enrichedRows,
     networkNodes: (networkNodes || []).map((node) => ({
       ...node,
@@ -879,8 +902,8 @@ async function processConfirmedContractCommissions(client, userId, contractId) {
     eventType: "contract_confirmed"
   });
 }
-function registerCommissionRoutes(app) {
-  app.get("/api/commissions/summary", async (req, res) => {
+function registerCommissionRoutes(app2) {
+  app2.get("/api/commissions/summary", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
     if (!client || !accessToken)
@@ -895,7 +918,7 @@ function registerCommissionRoutes(app) {
       return res.status(500).json({ error: "No se pudo leer el ledger de comisiones." });
     }
   });
-  app.post("/api/contracts/activate", async (req, res) => {
+  app2.post("/api/contracts/activate", async (req, res) => {
     const client = adminClient2();
     const accessToken = bearer2(req);
     if (!client || !accessToken)
@@ -924,7 +947,7 @@ function registerCommissionRoutes(app) {
       });
     }
   });
-  app.post(
+  app2.post(
     "/api/commissions/contract-confirmed",
     async (req, res) => {
       const client = adminClient2();
@@ -965,8 +988,8 @@ function bearer3(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
-function registerSecureCommissionRoutes(app) {
-  app.post("/api/commissions/process", async (req, res) => {
+function registerSecureCommissionRoutes(app2) {
+  app2.post("/api/commissions/process", async (req, res) => {
     const client = adminClient3();
     const accessToken = bearer3(req);
     if (!client || !accessToken) {
@@ -1023,8 +1046,8 @@ function validateManualDeposit(amount) {
   if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return "El dep\xF3sito debe estar entre $10 y $100,000 USDT.";
   return null;
 }
-function registerDepositRoutes(app) {
-  app.post("/api/deposits/request", async (req, res) => {
+function registerDepositRoutes(app2) {
+  app2.post("/api/deposits/request", async (req, res) => {
     const client = admin2();
     const accessToken = token2(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
@@ -1076,8 +1099,8 @@ async function authenticatedAdmin(req) {
   return { client };
 }
 var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
-function registerAdminWithdrawalRoutes(app) {
-  app.get("/api/admin/withdrawals", async (req, res) => {
+function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/admin/withdrawals", async (req, res) => {
     try {
       const admin3 = await authenticatedAdmin(req);
       if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
@@ -1089,7 +1112,7 @@ function registerAdminWithdrawalRoutes(app) {
       return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
     }
   });
-  app.post("/api/admin/withdrawals", async (req, res) => {
+  app2.post("/api/admin/withdrawals", async (req, res) => {
     try {
       const admin3 = await authenticatedAdmin(req);
       if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
@@ -1129,34 +1152,37 @@ function createFinancialRateLimiter(overrides = {}) {
 
 // server/app.ts
 function createApp() {
-  const app = express();
-  app.disable("x-powered-by");
-  app.set("trust proxy", 1);
-  app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(express.json({ limit: "1mb" }));
-  app.use(express.urlencoded({ limit: "64kb", extended: true }));
-  app.use("/api", createApiRateLimiter());
-  app.use(
+  const app2 = express();
+  app2.disable("x-powered-by");
+  app2.set("trust proxy", 1);
+  app2.use(helmet({ contentSecurityPolicy: false }));
+  app2.use(express.json({ limit: "1mb" }));
+  app2.use(express.urlencoded({ limit: "64kb", extended: true }));
+  app2.use("/api", createApiRateLimiter());
+  app2.use(
     ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions"],
     createFinancialRateLimiter()
   );
-  registerStorageProxy(app);
-  registerOAuthRoutes(app);
-  registerNowPaymentsRoutes(app);
-  registerWithdrawalRoutes(app);
-  registerCommissionRoutes(app);
-  registerSecureCommissionRoutes(app);
-  registerDepositRoutes(app);
-  registerAdminWithdrawalRoutes(app);
-  app.use(
+  registerStorageProxy(app2);
+  registerOAuthRoutes(app2);
+  registerNowPaymentsRoutes(app2);
+  registerWithdrawalRoutes(app2);
+  registerCommissionRoutes(app2);
+  registerSecureCommissionRoutes(app2);
+  registerDepositRoutes(app2);
+  registerAdminWithdrawalRoutes(app2);
+  app2.use(
     "/api/trpc",
     createExpressMiddleware({
       router: appRouter,
       createContext
     })
   );
-  return app;
+  return app2;
 }
+var app = createApp();
+var app_default = app;
 export {
-  createApp
+  createApp,
+  app_default as default
 };

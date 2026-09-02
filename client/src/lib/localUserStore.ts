@@ -43,8 +43,8 @@ export type LocalUserState = {
 const LEGACY_KEY = "bitnode-local-user-v1";
 const KEY_PREFIX = "bitnode-local-user-v2";
 export const initialLocalUser: LocalUserState = {
-  username: "gentecash",
-  email: "gentecash@demo.local",
+  username: "",
+  email: "",
   balance: 0,
   totalInvested: 0,
   totalYield: 0,
@@ -53,7 +53,7 @@ export const initialLocalUser: LocalUserState = {
   rankBonus: 0,
   contracts: [],
   movements: [],
-  referralCode: "gentecash",
+  referralCode: "",
 };
 
 function emptyLocalUser(): LocalUserState {

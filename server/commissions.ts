@@ -24,6 +24,15 @@ export type CommissionEventInput = {
   eventType?: "contract_confirmed" | "contract_reversed";
 };
 
+type NetworkTreeRow = {
+  user_id: string;
+  parent_id: string | null;
+  leg: "left" | "right" | null;
+  sponsor_id: string | null;
+  username?: string;
+  depth?: number;
+};
+
 export async function processContractCommissionsWithClient(
   client: Pick<SupabaseClient, "rpc">,
   input: CommissionEventInput
@@ -96,11 +105,12 @@ export async function getCommissionSummary(userId: string) {
     throw new Error(`Commission ledger query failed: ${error.message}`);
 
   const rows = data || [];
-  const { data: ownerProfile, error: ownerProfileError } = await client
-    .from("profiles")
-    .select("referral_code")
-    .eq("id", userId)
-    .maybeSingle();
+  const [ownerResult, treeResult, volumeResult] = await Promise.all([
+    client.from("profiles").select("username, referral_code").eq("id", userId).maybeSingle(),
+    client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 12 }),
+    client.from("network_volume").select("leg, volume, matched_volume, updated_at").eq("user_id", userId),
+  ]);
+  const { data: ownerProfile, error: ownerProfileError } = ownerResult;
   if (ownerProfileError)
     throw new Error(`Owner profile query failed: ${ownerProfileError.message}`);
   const sourceUserIds = Array.from(new Set(rows.map(row => row.source_user_id).filter(Boolean)));
@@ -130,12 +140,12 @@ export async function getCommissionSummary(userId: string) {
       contract_amount: contract ? Number(contract.amount) : null,
     };
   });
-  const { data: networkNodes, error: networkError } = await client
-    .from("network_nodes")
-    .select("user_id, parent_id, leg, sponsor_id")
-    .or(`user_id.eq.${userId},parent_id.eq.${userId},sponsor_id.eq.${userId}`);
+  const networkError = treeResult.error;
+  const networkNodes = (treeResult.data || []) as NetworkTreeRow[];
   if (networkError)
     throw new Error(`Network tree query failed: ${networkError.message}`);
+  if (volumeResult.error)
+    throw new Error(`Network volume query failed: ${volumeResult.error.message}`);
   const networkUserIds = Array.from(new Set((networkNodes || []).map(node => node.user_id)));
   const { data: networkProfiles } = networkUserIds.length
     ? await client.from("profiles").select("id, username").in("id", networkUserIds)
@@ -154,9 +164,28 @@ export async function getCommissionSummary(userId: string) {
       (activeNodesByUserId.get(contract.user_id) || 0) + 1
     );
   }
+  const leftVolume = Number(volumeResult.data?.find(row => row.leg === "left")?.volume || 0);
+  const rightVolume = Number(volumeResult.data?.find(row => row.leg === "right")?.volume || 0);
+  const matchedVolume = Math.max(
+    ...((volumeResult.data || []).map(row => Number(row.matched_volume || 0))),
+    0
+  );
+  const updatedAt = (volumeResult.data || [])
+    .map(row => row.updated_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
   return {
     ...summarizeCommissionRows(rows),
+    ownerUsername: ownerProfile?.username || null,
     referralCode: ownerProfile?.referral_code || null,
+    binaryVolume: {
+      left: leftVolume,
+      right: rightVolume,
+      matched: matchedVolume,
+      status: matchedVolume > 0 ? "paired" : leftVolume > 0 || rightVolume > 0 ? "awaiting_pair" : "no_volume",
+      updatedAt,
+    },
     entries: enrichedRows,
     networkNodes: (networkNodes || []).map(node => ({
       ...node,

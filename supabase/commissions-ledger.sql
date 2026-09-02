@@ -204,7 +204,7 @@ begin
         'binary', v_commission, 0.08, v_node.leg, 'credited',
         jsonb_build_object(
           'contract_id', p_contract_id,
-          'formula', 'new_matched_volume * 10%',
+          'formula', 'new_matched_volume * 8%',
           'matched_volume', v_delta,
           'left_volume', v_left,
           'right_volume', v_right
