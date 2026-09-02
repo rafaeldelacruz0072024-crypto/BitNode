@@ -96,6 +96,13 @@ export async function getCommissionSummary(userId: string) {
     throw new Error(`Commission ledger query failed: ${error.message}`);
 
   const rows = data || [];
+  const { data: ownerProfile, error: ownerProfileError } = await client
+    .from("profiles")
+    .select("referral_code")
+    .eq("id", userId)
+    .maybeSingle();
+  if (ownerProfileError)
+    throw new Error(`Owner profile query failed: ${ownerProfileError.message}`);
   const sourceUserIds = Array.from(new Set(rows.map(row => row.source_user_id).filter(Boolean)));
   const contractIds = Array.from(new Set(rows.map(row => String((row.metadata as Record<string, unknown> | null)?.contract_id || "")).filter(Boolean)));
   const [{ data: sourceProfiles }, { data: sourceContracts }] = await Promise.all([
@@ -149,6 +156,7 @@ export async function getCommissionSummary(userId: string) {
   }
   return {
     ...summarizeCommissionRows(rows),
+    referralCode: ownerProfile?.referral_code || null,
     entries: enrichedRows,
     networkNodes: (networkNodes || []).map(node => ({
       ...node,
