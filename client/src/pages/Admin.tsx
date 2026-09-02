@@ -272,7 +272,7 @@ function SummarySection({ data }: { data: AdminData | null }) {
       </div>
       <div className="admin-binary-card">
         <div>
-          <p className="admin-kicker">BINARY BONUS / 10%</p>
+          <p className="admin-kicker">BINARY BONUS / 8%</p>
           <h2>Volumen emparejado</h2>
           <p>
             Lectura agregada de `network_volume`; este panel no ejecuta créditos
@@ -818,7 +818,7 @@ function CommissionsSection({ data }: { data: AdminData }) {
           </div>
           <div>
             <span>Rate</span>
-            <strong>10%</strong>
+            <strong>8%</strong>
           </div>
         </div>
         <span className="binary-status">
@@ -927,7 +927,7 @@ function ConfigurationSection({
             <i className="runtime-dot ready" />
             Bono directo / binario
           </span>
-          <b>10% / 10%</b>
+          <b>10% / 8%</b>
         </div>
         <p className="config-note">
           Las acciones de crédito financiero y procesamiento de contratos
@@ -1251,7 +1251,7 @@ export default function Admin() {
           <ShieldCheck size={17} />
           <span>
             <strong>Consola protegida con escritura controlada.</strong> Los depósitos
-            se procesan server-side; la tasa directa es 10% y la binaria es 10%.
+            se procesan server-side; la tasa directa es 10% y la binaria es 8%.
           </span>
           <button
             className="admin-refresh"

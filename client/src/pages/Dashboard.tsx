@@ -94,46 +94,37 @@ function DailyTasksPanel({
   const [deadline, setDeadline] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState("24:00:00");
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
-  const activeContract = user.contracts.find(
+  const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
   );
 
-  if (!activeContract)
-    return (
-      <div className="generic-panel">
-        <span className="dash-eyebrow">TAREAS DIARIAS</span>
-        <h2>Activa un nodo primero</h2>
-        <p>
-          Necesitas un contrato activo para realizar las cuatro tareas y recibir
-          el pasivo.
-        </p>
-      </div>
-    );
-  const activeContractId = activeContract.id;
-
   useEffect(() => {
-    fetchDailyTaskProgress(activeContractId)
+    if (!hasActiveContracts) {
+      setCompleted([]);
+      setCycleDay(0);
+      setDeadline(null);
+      return;
+    }
+    fetchDailyTaskProgress()
       .then(progress => {
         if (!progress) return;
         setCompleted(progress.completed_tasks || []);
         setCycleDay(progress.cycle_day || 0);
         setDeadline(
-          progress.last_task_at
-            ? new Date(progress.last_task_at).getTime() + 86400000
+          progress.deadline_at
+            ? new Date(progress.deadline_at).getTime()
             : null
         );
       })
       .catch(() => undefined);
-  }, [activeContractId]);
+  }, [hasActiveContracts]);
 
   useEffect(() => {
     const tick = () => {
       if (!deadline) return setTimeLeft("24:00:00");
       const remaining = Math.max(0, deadline - Date.now());
       if (remaining === 0) {
-        setCompleted([]);
-        setCycleDay(0);
-        setTimeLeft("Ciclo reiniciado");
+        setTimeLeft("Ciclo vencido");
         return;
       }
       const totalSeconds = Math.floor(remaining / 1000);
@@ -155,23 +146,29 @@ function DailyTasksPanel({
     setBusy(taskKey);
     setMessage("");
     try {
-      const result = await completeDailyTask(activeContractId, taskKey);
+      const result = await completeDailyTask(taskKey);
       setCompleted(current =>
         Array.from(new Set([...(result.completed_tasks || current), taskKey]))
       );
       setCycleDay(result.cycle_day || 0);
-      setDeadline(current => current ?? Date.now() + 86400000);
-      if (result.status === "credited" && result.reward) {
+      setDeadline(
+        result.deadline_at ? new Date(result.deadline_at).getTime() : null
+      );
+      if (result.status === "credited") {
         const rewards = Array.isArray(result.rewards) ? result.rewards : [];
         setNodeRewards(rewards);
-        onRewards(rewards, {
-          amount: result.reward,
-          transactionId: result.transaction_id,
-        });
+        // El ledger remoto es la única fuente de balance: evita acreditar en
+        // pantalla ganancias provisionales de ciclos 7/14/21.
+        onRewards([], undefined);
+        const available = Number(result.available_reward || 0);
+        const pending = Number(result.pending_reward || 0);
+        const principal = Number(result.principal_returned || 0);
         setMessage(
-          rewards.length
-            ? `${rewards.length} nodo${rewards.length === 1 ? "" : "s"} acreditado${rewards.length === 1 ? "" : "s"}: ${money(result.reward)} en total. Capital preservado.`
-            : `Pasivo acreditado: ${money(result.reward)}. Capital preservado.`
+          available || principal
+            ? `Acreditado al balance: ${money(available + principal)}. ${pending ? `${money(pending)} queda provisional hasta cerrar su ciclo.` : "Capital preservado."}`
+            : pending
+              ? `${money(pending)} queda provisional hasta completar el ciclo del nodo. Capital preservado.`
+              : "Tareas registradas. Hoy no hay liquidación por no ser día laborable."
         );
       } else if (result.status === "already_completed") {
         setMessage("Esta tarea ya fue realizada durante el período actual.");
@@ -188,6 +185,18 @@ function DailyTasksPanel({
       setBusy(null);
     }
   }
+
+  if (!hasActiveContracts)
+    return (
+      <div className="generic-panel">
+        <span className="dash-eyebrow">TAREAS DIARIAS</span>
+        <h2>Activa un nodo primero</h2>
+        <p>
+          Necesitas un contrato activo para realizar las cuatro tareas y recibir
+          el pasivo.
+        </p>
+      </div>
+    );
 
   return (
     <div className="generic-panel">
@@ -257,11 +266,11 @@ function DailyTasksPanel({
                 </span>
               </div>
               <div style={{ textAlign: "right" }}>
-                <strong className="positive">
+                <strong className={node.status === "completed" ? "positive" : undefined}>
                   +{money(Number(node.reward))}
                 </strong>
                 <span>
-                  ROI{" "}
+                  {node.status === "pending" ? "PROVISIONAL · " : "ACREDITADO · "}ROI{" "}
                   {Number(node.rate_percent)
                     .toFixed(4)
                     .replace(/0+$/, "")
