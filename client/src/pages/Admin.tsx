@@ -27,6 +27,7 @@ type SectionName =
   | "Resumen"
   | "Usuarios"
   | "Operaciones"
+  | "Retiros"
   | "Contratos"
   | "Transacciones"
   | "Comisiones"
@@ -126,6 +127,7 @@ const sections: SectionName[] = [
   "Resumen",
   "Usuarios",
   "Operaciones",
+  "Retiros",
   "Contratos",
   "Transacciones",
   "Comisiones",
@@ -135,6 +137,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Resumen: LayoutDashboard,
   Usuarios: Users,
   Operaciones: CircleDollarSign,
+  Retiros: WalletCards,
   Contratos: FileClock,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
@@ -171,6 +174,8 @@ const statusLabel = (value: string | null | undefined) => {
     confirmed: "Confirmado",
     credited: "Acreditada",
     pending: "Pendiente",
+    approved: "Aprobada",
+    rejected: "Rechazada",
     failed: "Fallida",
     user: "Usuario",
     admin: "Admin",
@@ -710,6 +715,116 @@ function OperationsSection({
         <p className="config-note" role="status">
           {message}
         </p>
+      )}
+    </article>
+  );
+}
+
+type AdminWithdrawal = {
+  id: string;
+  user_id: string | null;
+  username: string | null;
+  amount: number | string;
+  status: string;
+  network: string | null;
+  wallet: string | null;
+  fee: number | string | null;
+  net_amount: number | string | null;
+  provider_status: string | null;
+  created_at: string | null;
+};
+
+function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> }) {
+  const [rows, setRows] = useState<AdminWithdrawal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actingId, setActingId] = useState("");
+  const [message, setMessage] = useState("");
+  const [reference, setReference] = useState<Record<string, string>>({});
+
+  async function load() {
+    setLoading(true);
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/withdrawals", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(body.error || "No se pudo cargar la cola de retiros."));
+      setRows(Array.isArray(body.withdrawals) ? body.withdrawals : []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo cargar la cola de retiros.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
+
+  async function act(row: AdminWithdrawal, action: "approve" | "mark_paid" | "reject") {
+    const descriptions = {
+      approve: "aprobar esta solicitud para pago manual",
+      mark_paid: "marcar este retiro como pagado después de enviar los fondos externamente",
+      reject: "rechazar esta solicitud",
+    };
+    if (!window.confirm(`¿Confirmas ${descriptions[action]}?`)) return;
+    setActingId(row.id);
+    setMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/withdrawals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ id: row.id, action, reference: reference[row.id] || "" }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(body.error || "No se pudo actualizar el retiro."));
+      setMessage(`Retiro ${row.id} actualizado a ${statusLabel(body.status)}.`);
+      await Promise.all([load(), onCompleted()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo actualizar el retiro.");
+    } finally {
+      setActingId("");
+    }
+  }
+
+  return (
+    <article className="admin-card admin-card-full">
+      <div className="card-heading">
+        <div>
+          <p className="admin-kicker">MANUAL PAYOUT QUEUE</p>
+          <h2>Retiros de comisiones</h2>
+        </div>
+        <button className="admin-refresh" type="button" onClick={() => void load()} disabled={loading}>
+          <RefreshCw size={14} className={loading ? "spin" : ""} /> Actualizar
+        </button>
+      </div>
+      <p className="config-note">Aprueba la solicitud, realiza el envío desde tu wallet externa y luego marca el retiro como pagado. El panel no transfiere criptomonedas automáticamente.</p>
+      {message && <p className="config-note" role="status">{message}</p>}
+      {loading ? <LoadingState /> : rows.length === 0 ? (
+        <EmptyState title="Sin retiros" detail="No hay solicitudes de retiro para revisar." />
+      ) : (
+        <DataTable label="Cola de retiros manuales">
+          <thead><tr><th>Usuario</th><th>Envío</th><th>Wallet destino</th><th>Estado</th><th>Referencia / acciones</th></tr></thead>
+          <tbody>{rows.map(row => {
+            const amount = Math.abs(Number(row.amount) || 0);
+            const net = Number(row.net_amount) || amount - (Number(row.fee) || 0);
+            const busy = actingId === row.id;
+            return <tr key={row.id}>
+              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small></td>
+              <td><strong>{money(net)}</strong><small>Solicitado {money(amount)} · Fee {money(Number(row.fee) || 0)}</small></td>
+              <td><span>{row.network || "—"}</span><small className="mono-cell admin-wallet">{row.wallet || "Wallet no registrada"}</small></td>
+              <td><StatusPill value={row.status} /><small>{row.provider_status || "manual_review"}</small></td>
+              <td className="admin-withdrawal-actions">
+                {(row.status === "pending" || row.status === "approved") && <input value={reference[row.id] || ""} onChange={event => setReference(current => ({ ...current, [row.id]: event.target.value }))} placeholder={row.status === "approved" ? "TXID / referencia" : "Nota opcional"} aria-label={`Referencia para ${row.id}`} />}
+                <div>
+                  {row.status === "pending" && <button type="button" className="withdrawal-approve" disabled={busy} onClick={() => void act(row, "approve")}>Aprobar</button>}
+                  {row.status === "approved" && <button type="button" className="withdrawal-paid" disabled={busy} onClick={() => void act(row, "mark_paid")}>{busy ? "Guardando…" : "Marcar pagado"}</button>}
+                  {(row.status === "pending" || row.status === "approved") && <button type="button" className="withdrawal-reject" disabled={busy} onClick={() => void act(row, "reject")}>Rechazar</button>}
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </DataTable>
       )}
     </article>
   );
@@ -1382,6 +1497,8 @@ export default function Admin() {
           ) : (
             <LoadingState />
           ))}
+        {activeSection === "Retiros" &&
+          (adminData ? <WithdrawalsSection onCompleted={refreshData} /> : <LoadingState />)}
         {activeSection === "Contratos" &&
           (adminData ? (
             <TransactionsSection rows={adminData.contracts} contractsOnly />
