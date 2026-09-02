@@ -1,0 +1,103 @@
+.dash-nav a.daily-tasks-link {
+  position: relative;
+  color: #c7afff;
+  border-color: rgba(173, 113, 255, 0.45);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.15), rgba(44, 226, 167, 0.035));
+  box-shadow: inset 0 0 0 1px rgba(170, 116, 255, 0.08);
+}
+
+.dash-nav a.daily-tasks-link svg {
+  color: #b982ff;
+  filter: drop-shadow(0 0 7px rgba(185, 130, 255, 0.55));
+}
+
+.dash-nav a.daily-tasks-link::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b7ff3c;
+  animation: daily-nav-pulse 2s ease-out infinite;
+}
+
+.dash-nav a.daily-tasks-link:hover {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.24), rgba(44, 226, 167, 0.07));
+  transform: translateX(2px);
+}
+
+.dash-nav a.daily-tasks-link.active {
+  color: #fff;
+  border-left-color: #b982ff;
+  background: linear-gradient(100deg, rgba(139, 92, 246, 0.31), rgba(24, 30, 54, 0.94));
+  box-shadow: 0 10px 28px rgba(91, 49, 160, 0.2), inset 0 0 0 1px rgba(185, 130, 255, 0.2);
+}
+
+.task-card {
+  padding-top: 52px;
+}
+
+.task-sequence-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(185, 130, 255, 0.36);
+  border-radius: 50%;
+  color: #d7c1ff;
+  background: rgba(139, 92, 246, 0.12);
+  font: 600 11px "IBM Plex Mono";
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.1);
+  transition: transform 0.25s, background 0.25s, color 0.25s;
+}
+
+.task-card:hover .task-sequence-badge {
+  transform: rotate(8deg) scale(1.08);
+}
+
+.task-card.is-complete .task-sequence-badge {
+  color: #b7ffdc;
+  border-color: rgba(46, 229, 173, 0.48);
+  background: rgba(46, 229, 173, 0.12);
+  animation: task-badge-complete 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.task-card.is-active {
+  animation: task-card-verified 0.52s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.task-button.is-processing {
+  background: linear-gradient(90deg, #5365ff, #9a67ff, #5365ff);
+  background-size: 200% 100%;
+}
+
+@keyframes daily-nav-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(183, 255, 60, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 9px rgba(183, 255, 60, 0); }
+}
+
+@keyframes task-badge-complete {
+  0% { transform: scale(0.3) rotate(-20deg); }
+  65% { transform: scale(1.2) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes task-card-verified {
+  0% { transform: scale(0.985); }
+  55% { transform: scale(1.012); box-shadow: 0 0 0 4px rgba(46, 229, 173, 0.11), 0 18px 35px rgba(18, 130, 99, 0.18); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-tasks-link::after,
+  .task-card.is-active,
+  .task-card.is-complete .task-sequence-badge {
+    animation: none;
+  }
+}
