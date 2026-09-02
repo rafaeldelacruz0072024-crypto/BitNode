@@ -22,6 +22,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
+  Sparkles,
   Users,
   Wallet,
   X,
@@ -95,6 +96,7 @@ function DailyTasksPanel({
   const [timeLeft, setTimeLeft] = useState("24:00:00");
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const [cycleCelebration, setCycleCelebration] = useState(false);
   const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
   );
@@ -148,6 +150,12 @@ function DailyTasksPanel({
     return () => window.clearInterval(timer);
   }, [deadline]);
 
+  useEffect(() => {
+    if (!cycleCelebration) return;
+    const timeout = window.setTimeout(() => setCycleCelebration(false), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [cycleCelebration]);
+
   async function complete(taskKey: string) {
     setBusy(taskKey);
     setLastAction(taskKey);
@@ -162,6 +170,7 @@ function DailyTasksPanel({
         result.deadline_at ? new Date(result.deadline_at).getTime() : null
       );
       if (result.status === "credited") {
+        setCycleCelebration(true);
         const rewards = Array.isArray(result.rewards) ? result.rewards : [];
         setNodeRewards(rewards);
         // El ledger remoto es la única fuente de balance: evita acreditar en
@@ -207,6 +216,17 @@ function DailyTasksPanel({
 
   return (
     <div className="generic-panel">
+      {cycleCelebration && (
+        <div className="task-celebration" role="status" aria-live="polite">
+          <span className="task-celebration-orbit task-celebration-orbit-a" />
+          <span className="task-celebration-orbit task-celebration-orbit-b" />
+          <Sparkles size={22} aria-hidden="true" />
+          <div>
+            <strong>Jornada completada</strong>
+            <span>Las 4 tareas fueron verificadas.</span>
+          </div>
+        </div>
+      )}
       <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
       <h2>Activa tu nodo hoy</h2>
       <p>
