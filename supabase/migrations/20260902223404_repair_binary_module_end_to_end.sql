@@ -19,7 +19,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+  v_role text := coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+    current_setting('request.jwt.claim.role', true),
+    ''
+  );
   v_user_id uuid := auth.uid();
 begin
   if v_role = 'service_role' then
@@ -88,7 +92,11 @@ declare
   v_new_matched numeric;
   v_delta numeric;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+    current_setting('request.jwt.claim.role', true),
+    ''
+  ) <> 'service_role' then
     raise exception 'Commission processing is restricted to service_role';
   end if;
   if nullif(trim(p_source_event_id), '') is null then raise exception 'Source event id is required'; end if;

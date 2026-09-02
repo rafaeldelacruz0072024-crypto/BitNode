@@ -83,7 +83,11 @@ declare
   v_new_matched numeric;
   v_delta numeric;
 begin
-  if coalesce(auth.role(), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+    current_setting('request.jwt.claim.role', true),
+    ''
+  ) <> 'service_role' then
     raise exception 'Direct commission processing is restricted to service_role';
   end if;
 
