@@ -98,6 +98,8 @@ function DailyTasksPanel({
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [cycleCelebration, setCycleCelebration] = useState(false);
+  const [tasksAvailable, setTasksAvailable] = useState(true);
+  const [tasksAvailableAt, setTasksAvailableAt] = useState<number | null>(null);
   const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
   );
@@ -114,6 +116,12 @@ function DailyTasksPanel({
         if (!progress) return;
         setCompleted(progress.completed_tasks || []);
         setCycleDay(progress.cycle_day || 0);
+        setTasksAvailable(progress.tasks_available !== false);
+        setTasksAvailableAt(
+          progress.tasks_available_at
+            ? new Date(progress.tasks_available_at).getTime()
+            : null
+        );
         setDeadline(
           progress.deadline_at
             ? new Date(progress.deadline_at).getTime()
@@ -130,10 +138,16 @@ function DailyTasksPanel({
 
   useEffect(() => {
     const tick = () => {
-      if (!deadline) return setTimeLeft("24:00:00");
-      const remaining = Math.max(0, deadline - Date.now());
+      const target = !tasksAvailable && tasksAvailableAt ? tasksAvailableAt : deadline;
+      if (!target) return setTimeLeft("24:00:00");
+      const remaining = Math.max(0, target - Date.now());
       if (remaining === 0) {
-        setTimeLeft("Ciclo vencido");
+        if (!tasksAvailable && tasksAvailableAt) {
+          setTasksAvailable(true);
+          setTimeLeft("00:00:00");
+        } else {
+          setTimeLeft("Ciclo vencido");
+        }
         return;
       }
       const totalSeconds = Math.floor(remaining / 1000);
@@ -149,7 +163,7 @@ function DailyTasksPanel({
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [deadline]);
+  }, [deadline, tasksAvailable, tasksAvailableAt]);
 
   useEffect(() => {
     if (!cycleCelebration) return;
@@ -215,6 +229,19 @@ function DailyTasksPanel({
       </div>
     );
 
+  if (!tasksAvailable && tasksAvailableAt)
+    return (
+      <div className="generic-panel tasks-locked-panel">
+        <span className="dash-eyebrow">REGLA DE ORO · PERÍODO DE ESPERA</span>
+        <h2>Tareas disponibles en</h2>
+        <strong className="task-unlock-clock">{timeLeft}</strong>
+        <p>
+          Tus tareas se habilitan 24 horas después de registrar la cuenta: {new Date(tasksAvailableAt).toLocaleString("es-DO")}.
+        </p>
+        <div className="task-unlock-orbit" aria-hidden="true"><Clock3 size={28} /></div>
+      </div>
+    );
+
   return (
     <div className="generic-panel">
       {cycleCelebration && (
@@ -270,7 +297,7 @@ function DailyTasksPanel({
               <p>{description}</p>
               <button
                 className={`dash-primary task-button${processing ? " is-processing" : ""}`}
-                disabled={done || busy !== null}
+                disabled={!tasksAvailable || done || busy !== null}
                 aria-busy={processing}
                 onClick={() => complete(key)}
               >

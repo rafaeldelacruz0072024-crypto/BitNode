@@ -45,6 +45,9 @@ export async function fetchDailyTaskProgress() {
     deadline_at: string | null;
     last_task_at: string | null;
     cycle_reset?: boolean;
+    registered_at?: string | null;
+    tasks_available_at?: string | null;
+    tasks_available?: boolean;
   };
 }
 
