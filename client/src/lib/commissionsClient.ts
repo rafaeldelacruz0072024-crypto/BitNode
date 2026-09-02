@@ -5,12 +5,13 @@ export type DailyTaskResult = {
   cycle_day: number;
   completed_tasks: string[];
   remaining_tasks?: number;
-  reward?: number;
-  rate?: number;
-  transaction_id?: string;
+  available_reward?: number;
+  pending_reward?: number;
+  principal_returned?: number;
   credited?: boolean;
   capital_preserved?: boolean;
   rewards?: DailyNodeReward[];
+  deadline_at?: string | null;
 };
 
 export type DailyNodeReward = {
@@ -21,28 +22,29 @@ export type DailyNodeReward = {
   rate: number;
   rate_percent: number;
   reward: number;
+  status: "pending" | "completed" | "reversed";
   transaction_id?: string;
 };
 
-export async function completeDailyTask(contractId: string, taskKey: string) {
+export async function completeDailyTask(taskKey: string) {
   if (!supabase) throw new Error("El servicio no está configurado.");
-  const { data, error } = await supabase.rpc("complete_daily_task", {
-    p_contract_id: contractId,
+  const { data, error } = await supabase.rpc("complete_daily_tasks", {
     p_task_key: taskKey,
   });
   if (error) throw new Error(error.message);
   return data as DailyTaskResult;
 }
 
-export async function fetchDailyTaskProgress(contractId: string) {
+export async function fetchDailyTaskProgress() {
   if (!supabase) throw new Error("El servicio no está configurado.");
-  const { data, error } = await supabase
-    .from("daily_task_progress")
-    .select("cycle_day, completed_tasks, last_task_at")
-    .eq("contract_id", contractId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_daily_task_cycle");
   if (error) throw new Error(error.message);
-  return data as { cycle_day: number; completed_tasks: string[]; last_task_at: string | null } | null;
+  return data as {
+    cycle_day: number;
+    completed_tasks: string[];
+    deadline_at: string | null;
+    last_task_at: string | null;
+  };
 }
 
 export type CommissionSummary = {

@@ -2,8 +2,19 @@ import { createClient, type Session, type SupabaseClient, type User } from "@sup
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const hasValidSupabaseUrl = (() => {
+  if (!supabaseUrl) return false;
+  try {
+    const url = new URL(supabaseUrl);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+})();
 
-export const supabase: SupabaseClient | null = supabaseUrl && publishableKey
+// Un entorno local incompleto no puede romper el árbol React antes de que la
+// aplicación muestre su estado de configuración.
+export const supabase: SupabaseClient | null = hasValidSupabaseUrl && supabaseUrl && publishableKey
   ? createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     })
