@@ -1,0 +1,57 @@
+.admin-operation-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(149, 157, 205, 0.28);
+  background: #070a15;
+  color: #7d86a3;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.admin-operation-search:focus-within {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(109, 124, 255, 0.12);
+}
+
+.admin-gate-form .admin-operation-search input {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-operation-search button {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 4px;
+  color: #9ba5c5;
+  background: transparent;
+}
+
+.admin-operation-results {
+  display: block;
+  margin-top: 7px;
+  color: #737d9d;
+  font: 9px "IBM Plex Mono";
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.admin-gate-form select {
+  width: 100%;
+  padding: 13px 14px;
+  color: #f5f6fb;
+  border: 1px solid rgba(149, 157, 205, 0.28);
+  outline: none;
+  background: #070a15;
+  font: 13px "IBM Plex Mono";
+}
+
+.admin-gate-form select:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(109, 124, 255, 0.12);
+}

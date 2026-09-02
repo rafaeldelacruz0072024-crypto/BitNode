@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
+import "@/admin-operations.css";
 import {
   ArrowLeft,
   BarChart3,
@@ -630,6 +631,17 @@ function OperationsSection({
   const [amount, setAmount] = useState(10);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
+  const filteredUsers = useMemo(
+    () => users.filter(user => matchesAdminSearch(
+      [user.email, user.username, user.displayName, user.details.fullName],
+      userQuery
+    )),
+    [users, userQuery]
+  );
+  useEffect(() => {
+    if (userId && !filteredUsers.some(user => user.id === userId)) setUserId("");
+  }, [filteredUsers, userId]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -681,6 +693,27 @@ function OperationsSection({
       </div>
       <form className="admin-gate-form" onSubmit={submit}>
         <label>
+          Buscar usuario
+          <span className="admin-operation-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              value={userQuery}
+              onChange={event => setUserQuery(event.target.value)}
+              placeholder="Correo o nombre de usuario"
+              autoComplete="off"
+            />
+            {userQuery && (
+              <button type="button" onClick={() => setUserQuery("")} aria-label="Limpiar búsqueda">
+                <X size={15} />
+              </button>
+            )}
+          </span>
+          <small className="admin-operation-results">
+            {filteredUsers.length} usuario{filteredUsers.length === 1 ? "" : "s"} encontrado{filteredUsers.length === 1 ? "" : "s"}
+          </small>
+        </label>
+        <label>
           Usuario
           <select
             value={userId}
@@ -688,11 +721,12 @@ function OperationsSection({
             required
           >
             <option value="">Selecciona un usuario</option>
-            {users.map(user => (
+            {filteredUsers.map(user => (
               <option value={user.id} key={user.id}>
-                {user.email || user.username || user.id}
+                {user.email || "Sin correo"}{user.username ? ` · @${user.username}` : ""}
               </option>
             ))}
+            {filteredUsers.length === 0 && <option value="" disabled>Sin coincidencias</option>}
           </select>
         </label>
         <label>
