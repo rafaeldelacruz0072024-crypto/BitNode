@@ -879,9 +879,17 @@ function LiveFarm({ liveNodes }: { liveNodes: number }) {
         <h3>
           <i /> Granja en vivo
         </h3>
-        <span>
-          UPTIME <strong>99.77%</strong>
-        </span>
+        <div className="farm-live-status">
+          <span className="farm-signal" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>
+            UPTIME <strong>99.77%</strong>
+          </span>
+        </div>
       </div>
       <div className="farm-summary">
         <strong>{liveNodes.toLocaleString("en-US")}</strong>
