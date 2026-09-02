@@ -94,6 +94,7 @@ function DailyTasksPanel({
   const [deadline, setDeadline] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState("24:00:00");
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
+  const [lastAction, setLastAction] = useState<string | null>(null);
   const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
   );
@@ -149,6 +150,7 @@ function DailyTasksPanel({
 
   async function complete(taskKey: string) {
     setBusy(taskKey);
+    setLastAction(taskKey);
     setMessage("");
     try {
       const result = await completeDailyTask(taskKey);
@@ -213,10 +215,16 @@ function DailyTasksPanel({
         ciclo.
       </p>
       <div className="dash-card" style={{ marginBottom: 18 }}>
-        <span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span>
-        <strong style={{ fontFamily: "'IBM Plex Mono'", fontSize: 28 }}>
-          {timeLeft}
-        </strong>
+        <div className="task-cycle-head">
+          <span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span>
+          <span className="task-cycle-count" aria-live="polite">
+            {completed.length}/4 TAREAS
+          </span>
+        </div>
+        <strong className="task-clock">{timeLeft}</strong>
+        <div className="task-progress" aria-label={`${completed.length} de 4 tareas completadas`}>
+          <span style={{ width: `${completed.length * 25}%` }} />
+        </div>
         <p>
           Si llega a cero sin completar las cuatro tareas, el progreso y los
           días vuelven a cero. Tu capital permanece intacto.
@@ -225,24 +233,28 @@ function DailyTasksPanel({
       <div className="local-plan-grid">
         {DAILY_TASKS.map(([key, name, description]) => {
           const done = completed.includes(key);
+          const processing = busy === key;
           return (
-            <article className="dash-card local-plan" key={key}>
-              <span className="dash-eyebrow">
+            <article
+              className={`dash-card local-plan task-card${done ? " is-complete" : ""}${lastAction === key ? " is-active" : ""}`}
+              key={key}
+            >
+              <span className="dash-eyebrow task-state">
                 {done ? "COMPLETADA" : "PENDIENTE"}
               </span>
               <h3>{name}</h3>
               <p>{description}</p>
               <button
-                className="dash-primary"
+                className={`dash-primary task-button${processing ? " is-processing" : ""}`}
                 disabled={done || busy !== null}
                 onClick={() => complete(key)}
               >
-                {busy === key
+                {processing
                   ? "Procesando…"
                   : done
                     ? "Completada"
                     : "Realizar tarea"}{" "}
-                {done ? <CheckCircle2 size={15} /> : <RefreshCw size={15} />}
+                {done ? <CheckCircle2 size={15} /> : <RefreshCw className={processing ? "spin" : undefined} size={15} />}
               </button>
             </article>
           );
