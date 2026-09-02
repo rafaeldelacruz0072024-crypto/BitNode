@@ -2157,6 +2157,14 @@ function BinaryTree({
     childrenByParent.set(node.parent_id, children);
   }
 
+  const initials = (name?: string) =>
+    (name || "?")
+      .split(/\s+/)
+      .map(part => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+
   const renderChildren = (parentId: string, depth = 1): ReactNode => {
     const children = childrenByParent.get(parentId) || [];
     const child = (leg: "left" | "right") =>
@@ -2174,7 +2182,10 @@ function BinaryTree({
               <div className={`tree-leg ${leg} ${node ? "filled" : "empty"}`}>
                 <i className="tree-status-dot" />
                 <span>PIERNA {leg === "left" ? "IZQUIERDA" : "DERECHA"}</span>
-                <b>{node?.username || "Disponible"}</b>
+                <div className="tree-avatar" aria-hidden="true">
+                  {node ? initials(node.username) : "+"}
+                </div>
+                <b title={node?.username}>{node?.username || "Disponible"}</b>
                 <small>{node ? `NIVEL ${depth}` : "ESPERANDO REFERIDO"}</small>
               </div>
               {node ? renderChildren(node.user_id, depth + 1) : null}
@@ -2197,6 +2208,9 @@ function BinaryTree({
         <div className="tree-node root filled">
           <i className="tree-status-dot" />
           <span>DUEÑO DE LA CUENTA</span>
+          <div className="tree-avatar" aria-hidden="true">
+            {initials(root?.username || ownerName)}
+          </div>
           <b>{root?.username || ownerName}</b>
           <small>NODO PRINCIPAL</small>
         </div>
