@@ -14,7 +14,9 @@ export default function AuthPage() {
     return {
       code: decodeURIComponent(match[1]),
       side: match[2].toLowerCase() as "izquierda" | "derecha",
-      leg: match[2].toLowerCase() === "izquierda" ? "left" : "right",
+      leg: (match[2].toLowerCase() === "izquierda" ? "left" : "right") as
+        | "left"
+        | "right",
     };
   }, []);
   const [mode, setMode] = useState<"login" | "signup">(
@@ -28,13 +30,17 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const referralApplied = useRef(false);
 
-  const applyReferral = async (userId: string, profileName: string) => {
-    if (!supabase || !referral || referralApplied.current) return;
+  const applyReferral = async (
+    userId: string,
+    profileName: string,
+    pendingReferral: { code: string; leg: "left" | "right" }
+  ) => {
+    if (!supabase || referralApplied.current) return;
     referralApplied.current = true;
     const { error: profileError } = await supabase.rpc("create_profile", {
       p_username: profileName.trim() || "usuario",
       p_referral_code: null,
-      p_sponsor_referral_code: referral.code,
+      p_sponsor_referral_code: pendingReferral.code,
     });
     if (profileError) {
       referralApplied.current = false;
@@ -43,7 +49,7 @@ export default function AuthPage() {
     const { error: placementError } = await supabase.rpc("place_network_node", {
       p_user_id: userId,
       p_sponsor_id: null,
-      p_preferred_leg: referral.leg,
+      p_preferred_leg: pendingReferral.leg,
     });
     if (placementError) {
       referralApplied.current = false;
@@ -56,10 +62,20 @@ export default function AuthPage() {
     supabase.auth.getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session) return;
+      const metadataSponsor = String(
+        session.user.user_metadata?.sponsor_referral_code || ""
+      ).trim();
+      const metadataLeg = session.user.user_metadata?.preferred_leg;
+      const pendingReferral = referral ||
+        (metadataSponsor && (metadataLeg === "left" || metadataLeg === "right")
+          ? { code: metadataSponsor, leg: metadataLeg }
+          : null);
+      if (!pendingReferral) return;
       try {
         await applyReferral(
           session.user.id,
-          String(session.user.user_metadata?.username || username)
+          String(session.user.user_metadata?.username || username),
+          pendingReferral
         );
         navigate("/dashboard/network");
       } catch (cause) {
@@ -111,7 +127,7 @@ export default function AuthPage() {
     }
     if (referral && result.data.user) {
       try {
-        await applyReferral(result.data.user.id, username);
+        await applyReferral(result.data.user.id, username, referral);
       } catch (cause) {
         return setError(
           cause instanceof Error

@@ -1293,7 +1293,10 @@ function SectionPanel({
               ["derecha", "PIERNA DERECHA", "→"],
             ] as const
           ).map(([side, label, arrow]) => {
-            const link = binaryReferralUrl(user.referralCode, side);
+            const link = binaryReferralUrl(
+              commissionSummary?.referralCode || user.referralCode,
+              side
+            );
             return (
               <div
                 className={`commission-detail-card ${side === "izquierda" ? "direct" : "binary"}`}

@@ -55,6 +55,7 @@ export type CommissionSummary = {
   direct: number;
   binary: number;
   total: number;
+  referralCode?: string | null;
   binaryVolume?: {
     left: number;
     right: number;
