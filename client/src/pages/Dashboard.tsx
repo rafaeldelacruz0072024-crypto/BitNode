@@ -684,7 +684,7 @@ export default function Dashboard() {
       ? rewards.map(node => ({
           id: node.transaction_id || newId("YIELD"),
           type: "yield" as const,
-          label: `Pasivo ${node.plan_name} · ROI ${Number(node.rate_percent).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}%`,
+          label: `Pasivo ${node.plan_name}`,
           amount: Number(node.reward),
           status: "completed" as const,
           date: now,
@@ -1264,7 +1264,7 @@ function SectionPanel({
                 id: m.id,
                 label:
                   m.type === "yield"
-                    ? `ROI de nodo · ${m.label}`
+                    ? `Rendimiento de nodo · ${m.label.replace(/\s*·\s*ROI\s*[0-9.,]+%?/i, "")}`
                     : m.label,
                 detail:
                   m.type === "yield"
