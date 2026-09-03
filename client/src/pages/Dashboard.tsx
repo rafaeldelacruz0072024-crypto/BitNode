@@ -757,7 +757,7 @@ export default function Dashboard() {
         <div className="dash-brand">
           <BrandMark className="brand-mark" />
         </div>
-        <div className="dash-nav">
+        <div className="dash-nav" id="dashboard-navigation">
           {nav.map(([label, href, Icon]) => (
             <Link
               key={href}
@@ -786,6 +786,10 @@ export default function Dashboard() {
         <header className="dash-topbar">
           <button
             className="dash-mobile-toggle"
+            type="button"
+            aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={mobileOpen}
+            aria-controls="dashboard-navigation"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
             {mobileOpen ? <X /> : <Menu />}

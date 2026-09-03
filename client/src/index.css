@@ -149,6 +149,7 @@ h1 em,h2 span { color:var(--indigo); font-style:normal; }
 .tree-leg.left.filled{border-color:rgba(109,124,255,.62);background:linear-gradient(145deg,rgba(109,124,255,.12),#101427 60%)}
 .tree-leg.empty .tree-avatar{border-style:dashed;color:#69738f;background:rgba(60,70,100,.08)}
 @media(max-width:700px){.binary-tree-card{margin-inline:-4px}.binary-tree-visual{justify-content:flex-start;padding:24px 18px 16px}.tree-level[data-depth="1"]{gap:42px}.tree-node,.tree-leg{min-height:108px}.binary-tree-note{padding:0 18px;line-height:1.6}}
+@media(max-width:700px){.dash-mobile-toggle{width:40px;height:40px;margin-left:-8px;border-radius:9px}.dash-mobile-toggle:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}.dash-topbar{gap:7px}}
 .tree-connector{position:relative;width:50%;height:32px;margin:auto;background:none}
 .tree-connector:before{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:linear-gradient(var(--indigo),#2ce2a7);animation:tree-flow 2.4s linear infinite}
 .tree-connector i{position:absolute;right:0;bottom:0;left:0;height:1px;background:linear-gradient(90deg,#2ce2a7,var(--indigo),#2ce2a7)}
