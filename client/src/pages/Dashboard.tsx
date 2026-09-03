@@ -58,6 +58,7 @@ import {
   completeDailyTask,
   fetchDailyTaskProgress,
   fetchCommissionSummary,
+  withdrawDailyNodeCapital,
   type CommissionSummary,
   type DailyNodeReward,
 } from "@/lib/commissionsClient";
@@ -94,7 +95,7 @@ function DailyTasksPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [deadline, setDeadline] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState("24:00:00");
+  const [timeLeft, setTimeLeft] = useState("Listo para iniciar");
   const [nodeRewards, setNodeRewards] = useState<DailyNodeReward[]>([]);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [cycleCelebration, setCycleCelebration] = useState(false);
@@ -112,14 +113,27 @@ function DailyTasksPanel({
       return;
     }
     fetchDailyTaskProgress()
-      .then(progress => {
+      .then(async progress => {
         if (!progress) return;
+        const authUser = (await supabase?.auth.getUser())?.data.user;
+        const registeredAt = progress.registered_at || authUser?.created_at || null;
+        const fallbackAvailableAt = registeredAt
+          ? new Date(new Date(registeredAt).getTime() + 24 * 60 * 60 * 1000)
+          : null;
+        const availableAt = progress.tasks_available_at
+          ? new Date(progress.tasks_available_at)
+          : fallbackAvailableAt;
+        const available = progress.tasks_available === false
+          ? false
+          : availableAt
+            ? Date.now() >= availableAt.getTime()
+            : true;
         setCompleted(progress.completed_tasks || []);
         setCycleDay(progress.cycle_day || 0);
-        setTasksAvailable(progress.tasks_available !== false);
+        setTasksAvailable(available);
         setTasksAvailableAt(
-          progress.tasks_available_at
-            ? new Date(progress.tasks_available_at).getTime()
+          availableAt && !available
+            ? availableAt.getTime()
             : null
         );
         setDeadline(
@@ -139,7 +153,7 @@ function DailyTasksPanel({
   useEffect(() => {
     const tick = () => {
       const target = !tasksAvailable && tasksAvailableAt ? tasksAvailableAt : deadline;
-      if (!target) return setTimeLeft("24:00:00");
+      if (!target) return setTimeLeft("Listo para iniciar");
       const remaining = Math.max(0, target - Date.now());
       if (remaining === 0) {
         if (!tasksAvailable && tasksAvailableAt) {
@@ -172,6 +186,10 @@ function DailyTasksPanel({
   }, [cycleCelebration]);
 
   async function complete(taskKey: string) {
+    if (!tasksAvailable) {
+      setMessage("Las tareas se habilitan 24 horas después del registro de la cuenta.");
+      return;
+    }
     setBusy(taskKey);
     setLastAction(taskKey);
     setMessage("");
@@ -339,12 +357,7 @@ function DailyTasksPanel({
                   +{money(Number(node.reward))}
                 </strong>
                 <span>
-                  {node.status === "pending" ? "PROVISIONAL · " : "ACREDITADO · "}ROI{" "}
-                  {Number(node.rate_percent)
-                    .toFixed(4)
-                    .replace(/0+$/, "")
-                    .replace(/\.$/, "")}
-                  %
+                  {node.status === "pending" ? "PROVISIONAL" : "ACREDITADO"} · Rendimiento del nodo
                 </span>
               </div>
             </div>
@@ -425,23 +438,8 @@ const catalog = [
 ];
 const WITHDRAW_DAILY_LIMIT = 1000;
 const WITHDRAW_FEE_RATE = 0.015;
-const NETWORKS = [
-  "Ethereum",
-  "Solana",
-  "BNB Chain",
-  "Polygon",
-  "Arbitrum",
-  "Bitcoin",
-];
+const NETWORKS = ["BNB Chain"];
 const WALLET_RULES: Record<string, { placeholder: string; test: RegExp }> = {
-  Ethereum: {
-    placeholder: "0x + 40 caracteres hexadecimales",
-    test: /^0x[a-fA-F0-9]{40}$/,
-  },
-  BNB: {
-    placeholder: "0x + 40 caracteres hexadecimales",
-    test: /^0x[a-fA-F0-9]{40}$/,
-  },
   "BNB Chain": {
     placeholder: "0x + 40 caracteres hexadecimales",
     test: /^0x[a-fA-F0-9]{40}$/,
@@ -898,7 +896,7 @@ function HomePanel({
                     <span>{contract.id} · ACTIVO</span>
                     <h4>{contract.name}</h4>
                     <small>
-                      {contract.rate} diario · {contract.duration}
+                      Rendimiento variable · {contract.duration}
                     </small>
                   </div>
                   <strong>{money(contract.amount)}</strong>
@@ -1099,10 +1097,11 @@ function SectionPanel({
     id: `commission-${entry.id}`,
     label:
       entry.commission_type === "binary"
-        ? "Bono binario"
+        ? `Comisión binaria · ${entry.leg === "left" ? "Pierna izquierda" : entry.leg === "right" ? "Pierna derecha" : "Volumen emparejado"}`
         : entry.commission_type === "direct"
-          ? "Bono directo"
+          ? `Comisión directa · ${entry.source_username || "Usuario referido"}`
           : "Ajuste de comisión",
+    detail: `${entry.node_name || "Nodo no identificado"}${entry.commission_type === "binary" ? ` · origen: ${entry.source_username || "Usuario referido"}` : ""}`,
     date: new Date(entry.created_at).toLocaleString("es-MX"),
     amount: Number(entry.amount || 0),
     status: entry.status,
@@ -1125,7 +1124,7 @@ function SectionPanel({
               <article className="dash-card local-plan" key={item.name}>
                 <span className="dash-eyebrow">{item.duration}</span>
                 <h3>{item.name}</h3>
-                <strong>{item.rate}</strong>
+                <strong className="rate-private">Rendimiento variable</strong>
                 <p>
                   Generación de lunes a viernes. Mínimo local: {money(item.min)}
                   .
@@ -1179,11 +1178,31 @@ function SectionPanel({
       />
     );
   if (section === "nodes")
-    return (
+    return (() => {
+      const activeContracts = user.contracts.filter(c => c.status === "active");
+      const flexibleCapital = activeContracts
+        .filter(c => c.name === "Nodo Diario")
+        .reduce((sum, c) => sum + c.amount, 0);
+      const lockedCapital = activeContracts
+        .filter(c => c.name !== "Nodo Diario")
+        .reduce((sum, c) => sum + c.amount, 0);
+      return (
       <div className="generic-panel">
         <span className="dash-eyebrow">{eyebrow}</span>
         <h2>{title}</h2>
         <p>{copy}</p>
+        <div className="node-capital-summary" aria-label="Resumen de capital por disponibilidad">
+          <div className="node-capital-summary-item is-available">
+            <span>CAPITAL RETIRABLE</span>
+            <strong>{money(flexibleCapital)}</strong>
+            <small>Nodos diarios · sujeto a tareas validadas</small>
+          </div>
+          <div className="node-capital-summary-item is-locked">
+            <span>CAPITAL BLOQUEADO</span>
+            <strong>{money(lockedCapital)}</strong>
+            <small>Nodos 7, 14 y 21 días · hasta cerrar ciclo</small>
+          </div>
+        </div>
         <div className="dash-card local-ledger">
           {user.contracts.length ? (
             user.contracts.map(c => (
@@ -1194,10 +1213,35 @@ function SectionPanel({
                   </span>
                   <h4>{c.name}</h4>
                   <small>
-                    {c.rate} diario · activado {c.createdAt}
+                    Rendimiento variable · activado {c.createdAt}
                   </small>
+                  <span className={`node-availability ${c.name === "Nodo Diario" ? "is-available" : "is-locked"}`}>
+                    {c.name === "Nodo Diario"
+                      ? "CAPITAL RETIRABLE · completa las 4 tareas"
+                      : `CAPITAL BLOQUEADO · ${c.duration}`}
+                  </span>
                 </div>
-                <strong>{money(c.amount)}</strong>
+                <div className="node-capital-actions">
+                  <strong>{money(c.amount)}</strong>
+                  {c.name === "Nodo Diario" && c.status === "active" && (
+                    <button
+                      className="node-capital-withdraw"
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm("¿Retirar el capital y cerrar este Nodo Diario? Debes tener las 4 tareas validadas.")) return;
+                        try {
+                          const result = await withdrawDailyNodeCapital(c.id);
+                          showNotice(`Capital retirado: ${money(Number(result.capital_returned))}. El Nodo Diario fue cerrado.`);
+                          window.location.reload();
+                        } catch (error) {
+                          showNotice(error instanceof Error ? error.message : "No se pudo retirar el capital.");
+                        }
+                      }}
+                    >
+                      Retirar capital
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           ) : (
@@ -1205,7 +1249,8 @@ function SectionPanel({
           )}
         </div>
       </div>
-    );
+      );
+    })();
   if (section === "history")
     return (
       <div className="generic-panel">
@@ -1217,7 +1262,16 @@ function SectionPanel({
             [
               ...user.movements.map(m => ({
                 id: m.id,
-                label: m.label,
+                label:
+                  m.type === "yield"
+                    ? `ROI de nodo · ${m.label}`
+                    : m.label,
+                detail:
+                  m.type === "yield"
+                    ? "Rendimiento generado por un nodo propio"
+                    : m.type === "contract"
+                      ? "Activación de nodo · capital invertido"
+                      : undefined,
                 date: m.date,
                 amount: m.amount,
                 status: m.status,
@@ -1227,6 +1281,7 @@ function SectionPanel({
               <div className="movement-row" key={m.id}>
                 <div>
                   <b>{m.label}</b>
+                  {"detail" in m && m.detail && <span className={`history-origin ${m.label.startsWith("ROI") ? "history-roi" : ""}`}>{m.detail}</span>}
                   <span>
                     {m.date} ·{" "}
                     {m.status === "pending"
@@ -1544,11 +1599,8 @@ function ProfilePanel({
     event.preventDefault();
     setError("");
     const bep20 = details.wallet_bep20.trim();
-    const trc20 = details.wallet_trc20.trim();
     if (bep20 && !/^0x[0-9a-fA-F]{40}$/.test(bep20))
       return setError("La wallet BEP20 no tiene un formato válido.");
-    if (trc20 && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trc20))
-      return setError("La wallet TRC20 no tiene un formato válido.");
     setSaving(true);
     try {
       await savePrivateUserDetails(details);
@@ -1619,10 +1671,9 @@ function ProfilePanel({
           </div>
         </section>
         <section className="dash-card profile-section">
-          <span className="dash-eyebrow">WALLETS DE RETIRO · USDT</span>
+          <span className="dash-eyebrow">WALLET DE RETIRO · USDT BEP20</span>
           <p>
-            Guarda tus direcciones preferidas. Verifica siempre la red antes de
-            solicitar un retiro.
+            Guarda tu wallet de retiro. Solo se procesan pagos en la red BEP20.
           </p>
           <div className="profile-wallets">
             <label>
@@ -1632,16 +1683,6 @@ function ProfilePanel({
                 maxLength={42}
                 onChange={event => update("wallet_bep20", event.target.value)}
                 placeholder="0x…"
-                spellCheck={false}
-              />
-            </label>
-            <label>
-              <span>USDT TRC20</span>
-              <input
-                value={details.wallet_trc20}
-                maxLength={34}
-                onChange={event => update("wallet_trc20", event.target.value)}
-                placeholder="T…"
                 spellCheck={false}
               />
             </label>
@@ -1831,7 +1872,7 @@ function WithdrawalForm({
   ) => void;
 }) {
   const [amount, setAmount] = useState(10);
-  const [network, setNetwork] = useState("Ethereum");
+  const [network, setNetwork] = useState("BNB Chain");
   const [wallet, setWallet] = useState("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -1894,7 +1935,7 @@ function WithdrawalForm({
               }}
             >
               {NETWORKS.map(item => (
-                <option key={item}>{item}</option>
+                <option key={item} value={item}>{item === "BNB Chain" ? "USDT BEP20" : item}</option>
               ))}
             </select>
           </label>
@@ -1916,6 +1957,7 @@ function WithdrawalForm({
           Disponible: {money(user.balance)} · Límite diario:{" "}
           {money(WITHDRAW_DAILY_LIMIT)} · Usado hoy: {money(usedToday)}
         </small>
+        <p className="withdrawal-processing-note">Método único: USDT BEP20. Los retiros se procesan manualmente en un plazo de hasta 48 horas.</p>
         <div className="fee-summary">
           <span>
             Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(2)}%){" "}
@@ -1949,7 +1991,7 @@ function WithdrawalForm({
             <span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span>
             <h3 id="withdraw-confirm-title">¿Confirmar retiro?</h3>
             <p>
-              Red: <strong>{network}</strong>
+              Red: <strong>{network === "BNB Chain" ? "USDT BEP20" : network}</strong>
               <br />
               Wallet: <strong className="wallet-preview">{wallet}</strong>
               <br />
@@ -2123,8 +2165,7 @@ function CommissionEntryDetails({
                 {matchedVolume ? ` · Emparejado ${money(matchedVolume)}` : ""}
               </span>
               <span>
-                {new Date(entry.created_at).toLocaleString("es-MX")} · Tasa{" "}
-                {(Number(entry.rate || 0) * 100).toFixed(2)}%
+                {new Date(entry.created_at).toLocaleString("es-MX")} · Comisión registrada
                 {entry.leg ? ` · Pierna ${entry.leg}` : ""}
               </span>
             </div>

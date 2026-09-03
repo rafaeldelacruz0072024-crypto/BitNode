@@ -1138,8 +1138,43 @@ function ConfigurationSection({
   apiState: ApiState;
   data: AdminData | null;
 }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [monthlyRates, setMonthlyRates] = useState({ daily: "25", seven: "18", fourteen: "35", twentyOne: "55" });
+  const businessDays = 22;
+  const plans = [
+    ["Nodo Diario", "daily", monthlyRates.daily],
+    ["Nodo 7 Días", "seven", monthlyRates.seven],
+    ["Nodo 14 Días", "fourteen", monthlyRates.fourteen],
+    ["Nodo 21 Días", "twentyOne", monthlyRates.twentyOne],
+  ] as const;
   return (
-    <div className="admin-columns">
+    <div>
+      <article className="admin-card admin-card-full admin-monthly-roi">
+        <div className="card-heading">
+          <div>
+            <p className="admin-kicker">MONTHLY ROI CONTROL</p>
+            <h2>Configuración manual de pagos</h2>
+          </div>
+          <span className="card-status"><CheckCircle2 size={15} /> Editable por mes</span>
+        </div>
+        <p className="config-note">Define el ROI total objetivo de cada nodo para el mes seleccionado. El motor lo distribuirá de lunes a viernes conservando un porcentaje variable por nodo.</p>
+        <label className="admin-month-selector">Mes de aplicación<input type="month" value={month} onChange={event => setMonth(event.target.value)} /></label>
+        <div className="admin-roi-grid">
+          {plans.map(([name, key, value]) => (
+            <label key={key}>
+              {name} · % mensual
+              <div className="admin-roi-input"><input type="number" min="0" max="1000" step="0.01" value={value} onChange={event => setMonthlyRates(current => ({ ...current, [key]: event.target.value }))} /><span>%</span></div>
+              <small>Promedio diario: {(Number(value || 0) / businessDays).toFixed(4)}% · {businessDays} días laborables</small>
+            </label>
+          ))}
+        </div>
+        <div className="admin-monthly-preview">
+          <span>PROYECCIÓN DEL MES · {month}</span>
+          <strong>La meta se aplica a nodos activos y nuevos</strong>
+          <small>El capital permanece separado del ROI. Los nodos con ciclo mantienen su rendimiento como provisional hasta su cierre.</small>
+        </div>
+      </article>
+      <div className="admin-columns">
       <article className="admin-card admin-card-large">
         <div className="card-heading">
           <div>
@@ -1207,6 +1242,7 @@ function ConfigurationSection({
         </div>
         <code>Cache-Control: no-store</code>
       </article>
+      </div>
     </div>
   );
 }

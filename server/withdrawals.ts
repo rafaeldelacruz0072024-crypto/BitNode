@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 
-const NETWORKS = new Set(["Ethereum", "Solana", "BNB Chain", "Polygon", "Arbitrum", "Bitcoin"]);
+const NETWORKS = new Set(["BNB Chain"]);
 const LIMIT = 1000;
 const FEE_RATE = 0.015;
 
@@ -18,9 +18,7 @@ function token(req: Request) {
 }
 
 export function validWallet(network: string, wallet: string) {
-  if (["Ethereum", "BNB Chain", "Polygon", "Arbitrum"].includes(network)) return /^0x[a-fA-F0-9]{40}$/.test(wallet);
-  if (network === "Solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet);
-  return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(wallet);
+  return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
 
 export function validateWithdrawalInput(amount: number, network: string, wallet: string, usedToday: number) {
@@ -70,6 +68,6 @@ export function registerWithdrawalRoutes(app: Express) {
       provider_status: "manual_review",
     });
     if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada para revisión manual." });
+    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." });
   });
 }
