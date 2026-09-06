@@ -1,0 +1,118 @@
+/* Presentation only. Scoped to the user dashboard; no shared/admin overrides. */
+.dashboard-future {
+  background:
+    radial-gradient(ellipse at 75% 0%, #6374ff14, transparent 48%),
+    radial-gradient(ellipse at 100% 65%, #9a64ff09, transparent 42%),
+    #050711;
+}
+
+.dashboard-future .dashboard-sidebar {
+  background: linear-gradient(175deg, #0d1122, #070a15 65%);
+  border-right-color: #8799ff26;
+}
+
+.dashboard-future .dash-topbar {
+  background: linear-gradient(100deg, #10162b99, #080c1899);
+  border-bottom-color: #8799ff26;
+}
+
+.dashboard-future .dash-nav a.active {
+  background: linear-gradient(100deg, #667cff26, #667cff08);
+  border-left-color: #93a5ff;
+  box-shadow: inset 0 0 24px #667cff08, 0 4px 18px #0002;
+}
+
+.dashboard-future .dash-nav a.active svg {
+  color: #a9b8ff;
+  filter: drop-shadow(0 0 6px #7c92ff66);
+}
+
+.dashboard-future :is(.dash-metric, .dash-lower-grid > .dash-card, .empty-contracts) {
+  background: linear-gradient(135deg, #12182bd9, #0a0e1bf5 75%);
+  border-color: #94a6ff26;
+  box-shadow: inset 0 1px 0 #c5d0ff08, 0 10px 32px #0002;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.dashboard-future .dash-metric {
+  position: relative;
+}
+
+.dashboard-future .dash-metric::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 22px;
+  right: 22px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #8197ff99, transparent);
+  pointer-events: none;
+}
+
+.dashboard-future .dash-metric.green::before {
+  background: linear-gradient(90deg, transparent, #27eba999, transparent);
+}
+
+.dashboard-future .dash-metric.violet::before {
+  background: linear-gradient(90deg, transparent, #be9cff99, transparent);
+}
+
+.dashboard-future .dash-metric strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-future .dash-metric.green strong { text-shadow: 0 0 24px #27eba924; }
+.dashboard-future .dash-metric.blue strong { text-shadow: 0 0 24px #6d8fff30; }
+.dashboard-future .dash-metric.violet strong { text-shadow: 0 0 24px #be9cff24; }
+
+.dashboard-future .dash-primary {
+  background: linear-gradient(120deg, #6577ed, #7963dc);
+  box-shadow: inset 0 1px 0 #ffffff26, 0 5px 20px #667cff26;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.dashboard-future :is(button, a):focus-visible {
+  outline: 2px solid #a9b8ff;
+  outline-offset: 4px;
+}
+
+@media (hover: hover) {
+  .dashboard-future :is(.dash-metric, .dash-lower-grid > .dash-card, .empty-contracts):hover {
+    border-color: #94a6ff55;
+    box-shadow: inset 0 1px 0 #c5d0ff12, 0 12px 32px #3345ae14;
+  }
+
+  .dashboard-future .dash-primary:not(:disabled):hover {
+    box-shadow: inset 0 1px 0 #ffffff30, 0 8px 26px #667cff40;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-future .dash-intro,
+  .dashboard-future .dash-metrics-grid,
+  .dashboard-future .dash-mini-grid,
+  .dashboard-future .dash-columns,
+  .dashboard-future .dash-lower-grid {
+    animation: dashboard-arrive 650ms cubic-bezier(.22, 1, .36, 1) both;
+  }
+  .dashboard-future .dash-metrics-grid { animation-delay: 60ms; }
+  .dashboard-future .dash-mini-grid { animation-delay: 120ms; }
+  .dashboard-future .dash-columns { animation-delay: 180ms; }
+  .dashboard-future .dash-lower-grid { animation-delay: 240ms; }
+}
+
+@keyframes dashboard-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-future *,
+  .dashboard-future *::before,
+  .dashboard-future *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .dashboard-future .dash-primary:hover { transform: none; }
+}

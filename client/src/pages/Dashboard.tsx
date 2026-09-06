@@ -47,6 +47,7 @@ import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
+import "@/dashboard-visual.css";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -745,7 +746,7 @@ export default function Dashboard() {
     />
   );
   return (
-    <div className="dashboard-shell">
+    <div className="dashboard-shell dashboard-future">
       {notice && (
         <div className="notice dash-notice" role="status">
           {notice}
