@@ -2,7 +2,7 @@
  * BitNode dashboard local: misma consola nocturna de la referencia, con estado
  * persistente en localStorage y adaptadores listos para backend posterior.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { Link, useLocation } from "wouter";
 import {
@@ -493,6 +493,7 @@ export default function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [liveNodes, setLiveNodes] = useState(15014);
+  const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
   const hydratedUserId = useRef<string | null>(null);
   const [commissionSummary, setCommissionSummary] =
@@ -500,6 +501,10 @@ export default function Dashboard() {
   const [commissionLoading, setCommissionLoading] = useState(false);
   const [commissionError, setCommissionError] = useState<string | null>(null);
   const section = useMemo(() => location.split("/")[2] || "home", [location]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const authUserId = authUser?.id;
   useEffect(() => {
     if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
@@ -735,6 +740,7 @@ export default function Dashboard() {
     <SectionPanel
       section={section}
       user={user}
+      now={now}
       currentUserId={authUserId}
       commissionSummary={commissionSummary}
       commissionLoading={commissionLoading}
@@ -1020,6 +1026,7 @@ function LiveFarm({ liveNodes }: { liveNodes: number }) {
 function SectionPanel({
   section,
   user,
+  now,
   currentUserId,
   commissionSummary,
   commissionLoading,
@@ -1031,6 +1038,7 @@ function SectionPanel({
 }: {
   section: string;
   user: LocalUserState;
+  now: number;
   currentUserId?: string;
   commissionSummary: CommissionSummary | null;
   commissionLoading: boolean;
@@ -1207,7 +1215,14 @@ function SectionPanel({
         <div className="dash-card local-ledger">
           {user.contracts.length ? (
             user.contracts.map(c => (
-              <div className="local-contract" key={c.id}>
+              (() => {
+                const durationDays = c.name === "Nodo Diario" ? null : Number(c.duration?.match(/\d+/)?.[0] || 0);
+                const createdAt = new Date(c.createdAt).getTime();
+                const elapsedDays = Number.isFinite(createdAt) && createdAt > 0 ? Math.max(0, Math.floor((now - createdAt) / 86_400_000)) : 0;
+                const currentDay = durationDays ? Math.min(durationDays, elapsedDays + 1) : null;
+                const remainingDays = durationDays ? Math.max(0, durationDays - elapsedDays) : null;
+                const progress = durationDays ? Math.min(100, Math.round((elapsedDays / durationDays) * 100)) : 100;
+                return <div className="local-contract" key={c.id}>
                 <div>
                   <span>
                     {c.id} · {c.status.toUpperCase()}
@@ -1216,6 +1231,14 @@ function SectionPanel({
                   <small>
                     Rendimiento variable · activado {c.createdAt}
                   </small>
+                  <div className="node-day-counter" aria-label={`Progreso de ${c.name}`}>
+                    <div className="node-day-counter-head">
+                      <span>{durationDays ? `Día ${currentDay} de ${durationDays}` : "Ciclo diario activo"}</span>
+                      <b>{durationDays ? `${progress}%` : "∞"}</b>
+                    </div>
+                    <div className="node-day-track"><i style={{ width: `${progress}%` }} /></div>
+                    <small>{durationDays ? (remainingDays ? `${remainingDays} días restantes · capital bloqueado` : "Ciclo completado · liquidación pendiente") : "Rendimiento y capital disponibles según tareas validadas"}</small>
+                  </div>
                   <span className={`node-availability ${c.name === "Nodo Diario" ? "is-available" : "is-locked"}`}>
                     {c.name === "Nodo Diario"
                       ? "CAPITAL RETIRABLE · completa las 4 tareas"
@@ -1243,7 +1266,8 @@ function SectionPanel({
                     </button>
                   )}
                 </div>
-              </div>
+                </div>;
+              })()
             ))
           ) : (
             <EmptyState text="Aún no hay nodos activos." />
@@ -1260,7 +1284,8 @@ function SectionPanel({
         <p>{copy}</p>
         <div className="dash-card local-ledger">
           {user.movements.length || commissionMovements.length ? (
-            [
+            (() => {
+              const entries = [
               ...user.movements.map(m => ({
                 id: m.id,
                 label:
@@ -1278,8 +1303,16 @@ function SectionPanel({
                 status: m.status,
               })),
               ...commissionMovements,
-            ].map(m => (
-              <div className="movement-row" key={m.id}>
+              ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              const dayLabel = (date: string) => new Date(date).toLocaleDateString("es-419", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+              return entries.map((m, index) => {
+                const day = new Date(m.date).toISOString().slice(0, 10);
+                const previousDay = index ? new Date(entries[index - 1].date).toISOString().slice(0, 10) : "";
+                const lowerLabel = m.label.toLowerCase();
+                const tone = lowerLabel.includes("retiro") || m.status === "reversed" ? "movement-withdraw" : lowerLabel.includes("comisión") || lowerLabel.includes("bono") ? "movement-commission" : lowerLabel.includes("rendimiento") || lowerLabel.includes("pasivo") ? "movement-yield" : lowerLabel.includes("activación") ? "movement-contract" : "";
+                return <Fragment key={m.id}>
+                {day !== previousDay && <div className="history-day-heading"><span>{dayLabel(m.date)}</span><i /></div>}
+              <div className={`movement-row ${tone}`}>
                 <div>
                   <b>{m.label}</b>
                   {"detail" in m && m.detail && <span className={`history-origin ${m.label.startsWith("ROI") ? "history-roi" : ""}`}>{m.detail}</span>}
@@ -1297,7 +1330,9 @@ function SectionPanel({
                   {money(Math.abs(m.amount))}
                 </strong>
               </div>
-            ))
+              </Fragment>;
+              })
+            })()
           ) : (
             <EmptyState text="Aún no hay movimientos." />
           )}

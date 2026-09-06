@@ -15,7 +15,7 @@ function token(req: Request) {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
-async function authenticatedAdmin(req: Request) {
+export async function authenticatedAdmin(req: Request) {
   const client = serviceClient();
   const accessToken = token(req);
   if (!accessToken) return { client, error: "Sesión requerida.", status: 401 } as const;
@@ -28,9 +28,43 @@ async function authenticatedAdmin(req: Request) {
   return { client } as const;
 }
 
+async function withdrawalWindow(client: ReturnType<typeof serviceClient>) {
+  const { data } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+  return data?.value && typeof data.value === "object" && (data.value as { enabled?: boolean }).enabled === true;
+}
+
 const cleanReference = (value: unknown) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 
 export function registerAdminWithdrawalRoutes(app: Express) {
+  app.get("/api/admin/withdrawal-window", async (req, res) => {
+    try {
+      const admin = await authenticatedAdmin(req);
+      if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+      return res.status(200).json({ enabled: await withdrawalWindow(admin.client) });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "No se pudo consultar la ventana de retiros." });
+    }
+  });
+
+  app.patch("/api/admin/withdrawal-window", async (req: Request, res: Response) => {
+    try {
+      const admin = await authenticatedAdmin(req);
+      if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+      const enabled = req.body?.enabled === true;
+      const { error } = await admin.client.from("platform_settings").upsert({
+        key: "withdrawal_window",
+        value: { enabled, mode: "manual_test", updated_by: (await admin.client.auth.getUser(token(req))).data.user?.id || null },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
+      if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
+      return res.status(200).json({ enabled });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "La configuración de retiros no está disponible." });
+    }
+  });
+
   app.get("/api/admin/withdrawals", async (req, res) => {
     try {
       const admin = await authenticatedAdmin(req);

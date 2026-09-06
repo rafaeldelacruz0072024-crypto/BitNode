@@ -36,6 +36,10 @@ export function registerWithdrawalRoutes(app: Express) {
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
 
+    const { data: windowSetting } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+    const windowOpen = windowSetting?.value && typeof windowSetting.value === "object" && (windowSetting.value as { enabled?: boolean }).enabled === true;
+    if (!windowOpen) return res.status(423).json({ error: "La ventana de retiros está cerrada temporalmente. Intenta nuevamente cuando el administrador la habilite." });
+
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
