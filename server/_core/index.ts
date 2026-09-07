@@ -15,6 +15,7 @@ import { registerWithdrawalRoutes } from "../withdrawals";
 import { registerCommissionRoutes } from "../commissions";
 import { registerDepositRoutes } from "../deposits";
 import { registerAdminWithdrawalRoutes } from "../adminWithdrawals";
+import { registerAdminMonthlyRoiRoutes } from "../adminMonthlyRoi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -54,6 +55,7 @@ async function startServer() {
   registerCommissionRoutes(app);
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);
+  registerAdminMonthlyRoiRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

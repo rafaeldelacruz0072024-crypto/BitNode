@@ -25,7 +25,7 @@ export async function authenticatedAdmin(req: Request) {
   if (profileError || profile?.role !== "admin" || data.user.email?.toLowerCase() !== ADMIN_EMAIL) {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 } as const;
   }
-  return { client } as const;
+  return { client, userId: data.user.id } as const;
 }
 
 async function withdrawalWindow(client: ReturnType<typeof serviceClient>) {
