@@ -669,9 +669,18 @@ function registerNowPaymentsRoutes(app2) {
 // server/withdrawals.ts
 import crypto2 from "node:crypto";
 import { createClient as createClient2 } from "@supabase/supabase-js";
+
+// shared/withdrawalFee.ts
+var WITHDRAW_FEE_RATE = 0.05;
+var WITHDRAW_MIN_FEE = 1;
+function withdrawalFee(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return Math.round(Math.max(WITHDRAW_MIN_FEE, amount * WITHDRAW_FEE_RATE) * 100) / 100;
+}
+
+// server/withdrawals.ts
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
-var FEE_RATE = 0.015;
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -703,7 +712,7 @@ function registerWithdrawalRoutes(app2) {
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
-    const fee = Math.max(1, amount * FEE_RATE);
+    const fee = withdrawalFee(amount);
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
     const start = /* @__PURE__ */ new Date();

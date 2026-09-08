@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { withdrawalFee } from "../shared/withdrawalFee.js";
 
 const NETWORKS = new Set(["BNB Chain"]);
 const LIMIT = 1000;
-const FEE_RATE = 0.015;
 
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -43,7 +43,7 @@ export function registerWithdrawalRoutes(app: Express) {
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
-    const fee = Math.max(1, amount * FEE_RATE);
+    const fee = withdrawalFee(amount);
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
 

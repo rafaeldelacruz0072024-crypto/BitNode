@@ -19,9 +19,11 @@ try {
     language plpgsql security definer as $$
     declare v_contract record; v_rate numeric(8,6);
     begin
-      select 7 as duration_days, 0.01::numeric as rate_min, 0.01::numeric as rate_max into v_contract;
+      for v_contract in select 7 as duration_days, 0.01::numeric as rate_min, 0.01::numeric as rate_max loop
       v_rate := round((v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric, 6);
       return jsonb_build_object('rate', v_rate);
+      end loop;
+      return jsonb_build_object('paused', true);
     end; $$;
   `);
   await db.exec(await readFile(new URL("../supabase/migrations/20260906214156_monthly_node_roi_controls.sql", import.meta.url), "utf8"));
@@ -61,5 +63,10 @@ try {
   await db.exec("reset role");
   const definition = (await db.query("select pg_get_functiondef('public.complete_daily_tasks(text)'::regprocedure) as body")).rows[0].body;
   assert.match(definition, /monthly_daily_rate/);
+  const currentMonth = (await db.query("select to_char(current_date,'YYYY-MM-01') as month_key")).rows[0].month_key;
+  const currentVersion = (await db.query("select version from monthly_node_roi where month=$1", [currentMonth])).rows[0]?.version || 0;
+  await save(currentMonth, { ...rates, seven: 0 }, currentVersion);
+  assert.deepEqual((await db.query("select complete_daily_tasks('test') result")).rows[0].result, { paused: true });
   console.log("SQL verified: migration, four plan rates, actual weekdays, zero rate, fallback, validation, audit history, stale writes, admin identity and role permissions.");
 } finally { await db.close(); }
+

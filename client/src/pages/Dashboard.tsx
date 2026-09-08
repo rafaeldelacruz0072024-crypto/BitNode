@@ -4,11 +4,11 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
+import { useCycleNotifications } from "@/components/CycleNotifications";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
   ArrowRight,
-  Bell,
   Box,
   CheckCircle2,
   ChevronDown,
@@ -48,6 +48,7 @@ import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
 import { requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
+import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -438,7 +439,6 @@ const catalog = [
   },
 ];
 const WITHDRAW_DAILY_LIMIT = 1000;
-const WITHDRAW_FEE_RATE = 0.015;
 const NETWORKS = ["BNB Chain"];
 const WALLET_RULES: Record<string, { placeholder: string; test: RegExp }> = {
   "BNB Chain": {
@@ -506,6 +506,7 @@ export default function Dashboard() {
     return () => window.clearInterval(timer);
   }, []);
   const authUserId = authUser?.id;
+  const cycleNotifications = useCycleNotifications(authUserId);
   useEffect(() => {
     if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
   }, [authLoading, authConfigured, authUser, navigate]);
@@ -807,12 +808,7 @@ export default function Dashboard() {
             >
               ES <ChevronDown size={14} />
             </button>
-            <button
-              onClick={() => showNotice("No tienes notificaciones nuevas.")}
-              aria-label="Notificaciones"
-            >
-              <Bell size={19} />
-            </button>
+            {cycleNotifications.bell}
             <button
               className="dash-balance"
               onClick={() => navigate("/dashboard/deposit")}
@@ -822,7 +818,7 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main className="dash-content">{content}</main>
+        <main className="dash-content">{cycleNotifications.panel}{content}</main>
       </div>
     </div>
   );
@@ -1919,7 +1915,7 @@ function WithdrawalForm({
         movement.type === "withdraw" && movement.date.slice(0, 10) === todayKey
     )
     .reduce((sum, movement) => sum + Math.abs(movement.amount), 0);
-  const fee = Math.max(1, amount * WITHDRAW_FEE_RATE);
+  const fee = withdrawalFee(amount);
   const net = Math.max(0, amount - fee);
   const validate = () => {
     if (!Number.isFinite(amount) || amount < 10)
@@ -1996,7 +1992,7 @@ function WithdrawalForm({
         <p className="withdrawal-processing-note">Método único: USDT BEP20. Los retiros se procesan manualmente en un plazo de hasta 48 horas.</p>
         <div className="fee-summary">
           <span>
-            Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(2)}%){" "}
+            Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(0)}% · mínimo 1 USDT){" "}
             <strong>{money(fee)}</strong>
           </span>
           <span>

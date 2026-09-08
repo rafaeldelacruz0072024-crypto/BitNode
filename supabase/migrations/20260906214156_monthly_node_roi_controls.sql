@@ -85,7 +85,7 @@ do $$
 declare
   v_definition text;
   v_old text := 'v_rate := round((v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric, 6);';
-  v_new text := 'v_rate := round(coalesce(bitnode_private.monthly_daily_rate(v_contract.duration_days, current_date), (v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric), 6);';
+  v_new text := 'v_rate := round(coalesce(bitnode_private.monthly_daily_rate(v_contract.duration_days, current_date), (v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric), 6); if v_rate <= 0 then continue; end if;';
 begin
   select pg_get_functiondef('public.complete_daily_tasks(text)'::regprocedure) into v_definition;
   if position(v_old in v_definition) = 0 then
