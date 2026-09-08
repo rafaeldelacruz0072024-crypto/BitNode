@@ -35,6 +35,21 @@ export async function completeDailyTask(taskKey: string) {
   return data as DailyTaskResult;
 }
 
+export async function withdrawDailyNodeCapital(contractId: string) {
+  if (!supabase) throw new Error("El servicio no está configurado.");
+  const { data, error } = await supabase.rpc("withdraw_daily_node_capital", {
+    p_contract_id: contractId,
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    status: "capital_withdrawn";
+    contract_id: string;
+    plan_name: string;
+    capital_returned: number;
+    transaction_id: string;
+  };
+}
+
 export async function fetchDailyTaskProgress() {
   if (!supabase) throw new Error("El servicio no está configurado.");
   const { data, error } = await supabase.rpc("get_daily_task_cycle");

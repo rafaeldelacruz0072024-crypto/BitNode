@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
+import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
 import "@/admin-operations.css";
 import {
   ArrowLeft,
@@ -1138,8 +1139,45 @@ function ConfigurationSection({
   apiState: ApiState;
   data: AdminData | null;
 }) {
+  const [withdrawalWindow, setWithdrawalWindow] = useState(false);
+  const [windowBusy, setWindowBusy] = useState(false);
+  const [windowMessage, setWindowMessage] = useState("");
+  useEffect(() => {
+    void (async () => {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) return;
+      const response = await fetch("/api/admin/withdrawal-window", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const body = await response.json().catch(() => ({})) as { enabled?: boolean };
+      if (response.ok) setWithdrawalWindow(body.enabled === true);
+    })();
+  }, []);
+  async function toggleWithdrawalWindow() {
+    setWindowBusy(true); setWindowMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const enabled = !withdrawalWindow;
+      const response = await fetch("/api/admin/withdrawal-window", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ enabled }) });
+      const body = await response.json().catch(() => ({})) as { enabled?: boolean; error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo actualizar la ventana.");
+      setWithdrawalWindow(body.enabled === true);
+      setWindowMessage(body.enabled ? "Ventana abierta: los usuarios pueden solicitar retiros." : "Ventana cerrada: las nuevas solicitudes están bloqueadas.");
+    } catch (error) { setWindowMessage(error instanceof Error ? error.message : "No se pudo actualizar la ventana."); }
+    finally { setWindowBusy(false); }
+  }
   return (
-    <div className="admin-columns">
+    <div>
+      <MonthlyRoiControl />
+      <article className="admin-card admin-card-full admin-withdrawal-window">
+        <div className="card-heading">
+          <div><p className="admin-kicker">WITHDRAWAL TEST WINDOW</p><h2>Ventana de retiros</h2></div>
+          <span className={`card-status ${withdrawalWindow ? "is-open" : ""}`}><i className={`runtime-dot ${withdrawalWindow ? "ready" : "idle"}`} /> {withdrawalWindow ? "ABIERTA" : "CERRADA"}</span>
+        </div>
+        <p className="config-note">Controla cuándo se aceptan nuevas solicitudes de retiro USDT BEP20 para realizar pruebas. El pago continúa siendo manual y se procesa hasta en 48 horas.</p>
+        <button className="admin-user-save" type="button" onClick={() => void toggleWithdrawalWindow()} disabled={windowBusy}>{windowBusy ? "Actualizando…" : withdrawalWindow ? "Cerrar ventana de retiros" : "Abrir ventana de retiros"}</button>
+        {windowMessage && <p className="config-note" role="status">{windowMessage}</p>}
+      </article>
+      <div className="admin-columns">
       <article className="admin-card admin-card-large">
         <div className="card-heading">
           <div>
@@ -1207,6 +1245,7 @@ function ConfigurationSection({
         </div>
         <code>Cache-Control: no-store</code>
       </article>
+      </div>
     </div>
   );
 }

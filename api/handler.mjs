@@ -669,9 +669,18 @@ function registerNowPaymentsRoutes(app2) {
 // server/withdrawals.ts
 import crypto2 from "node:crypto";
 import { createClient as createClient2 } from "@supabase/supabase-js";
-var NETWORKS = /* @__PURE__ */ new Set(["Ethereum", "Solana", "BNB Chain", "Polygon", "Arbitrum", "Bitcoin"]);
+
+// shared/withdrawalFee.ts
+var WITHDRAW_FEE_RATE = 0.05;
+var WITHDRAW_MIN_FEE = 1;
+function withdrawalFee(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return Math.round(Math.max(WITHDRAW_MIN_FEE, amount * WITHDRAW_FEE_RATE) * 100) / 100;
+}
+
+// server/withdrawals.ts
+var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
-var FEE_RATE = 0.015;
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -682,9 +691,7 @@ function token(req) {
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
 function validWallet(network, wallet) {
-  if (["Ethereum", "BNB Chain", "Polygon", "Arbitrum"].includes(network)) return /^0x[a-fA-F0-9]{40}$/.test(wallet);
-  if (network === "Solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet);
-  return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(wallet);
+  return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
 function validateWithdrawalInput(amount, network, wallet, usedToday) {
   if (!Number.isFinite(amount) || amount < 10 || amount > LIMIT) return "El retiro debe estar entre $10 y $1,000 USDT.";
@@ -699,10 +706,13 @@ function registerWithdrawalRoutes(app2) {
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    const { data: windowSetting } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+    const windowOpen = windowSetting?.value && typeof windowSetting.value === "object" && windowSetting.value.enabled === true;
+    if (!windowOpen) return res.status(423).json({ error: "La ventana de retiros est\xE1 cerrada temporalmente. Intenta nuevamente cuando el administrador la habilite." });
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
-    const fee = Math.max(1, amount * FEE_RATE);
+    const fee = withdrawalFee(amount);
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
     const start = /* @__PURE__ */ new Date();
@@ -729,7 +739,7 @@ function registerWithdrawalRoutes(app2) {
       provider_status: "manual_review"
     });
     if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada para revisi\xF3n manual." });
+    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." });
   });
 }
 
@@ -1096,10 +1106,41 @@ async function authenticatedAdmin(req) {
   if (profileError || profile?.role !== "admin" || data.user.email?.toLowerCase() !== ADMIN_EMAIL) {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
   }
-  return { client };
+  return { client, userId: data.user.id };
+}
+async function withdrawalWindow(client) {
+  const { data } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+  return data?.value && typeof data.value === "object" && data.value.enabled === true;
 }
 var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/admin/withdrawal-window", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      return res.status(200).json({ enabled: await withdrawalWindow(admin3.client) });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "No se pudo consultar la ventana de retiros." });
+    }
+  });
+  app2.patch("/api/admin/withdrawal-window", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const enabled = req.body?.enabled === true;
+      const { error } = await admin3.client.from("platform_settings").upsert({
+        key: "withdrawal_window",
+        value: { enabled, mode: "manual_test", updated_by: (await admin3.client.auth.getUser(token3(req))).data.user?.id || null },
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }, { onConflict: "key" });
+      if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
+      return res.status(200).json({ enabled });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "La configuraci\xF3n de retiros no est\xE1 disponible." });
+    }
+  });
   app2.get("/api/admin/withdrawals", async (req, res) => {
     try {
       const admin3 = await authenticatedAdmin(req);
@@ -1140,6 +1181,63 @@ function registerAdminWithdrawalRoutes(app2) {
   });
 }
 
+// shared/monthlyRoi.ts
+import { z as z2 } from "zod";
+var roiMonthSchema = z2.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/);
+var percentage = z2.number().finite().min(0).max(1e3).refine(
+  (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8,
+  "Usa hasta dos decimales."
+);
+var monthlyRatesSchema = z2.object({
+  daily: percentage,
+  seven: percentage,
+  fourteen: percentage,
+  twentyOne: percentage
+}).strict();
+var monthlyRoiInput = z2.object({
+  month: roiMonthSchema,
+  rates: monthlyRatesSchema,
+  version: z2.number().int().nonnegative()
+}).strict();
+
+// server/adminMonthlyRoi.ts
+function registerAdminMonthlyRoiRoutes(app2) {
+  app2.get("/api/admin/monthly-roi", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const month = roiMonthSchema.safeParse(req.query.month);
+      if (!month.success) return res.status(400).json({ error: "Selecciona un mes v\xE1lido." });
+      const { data, error } = await admin3.client.from("monthly_node_roi").select("rates, version, updated_at").eq("month", `${month.data}-01`).maybeSingle();
+      if (error) return res.status(503).json({ error: "La configuraci\xF3n mensual no est\xE1 disponible. Verifica la migraci\xF3n de ROI." });
+      return res.json({ month: month.data, rates: data?.rates ?? null, version: data?.version ?? 0, updatedAt: data?.updated_at ?? null });
+    } catch {
+      return res.status(503).json({ error: "No se pudo cargar la configuraci\xF3n mensual." });
+    }
+  });
+  app2.put("/api/admin/monthly-roi", async (req, res) => {
+    try {
+      const admin3 = await authenticatedAdmin(req);
+      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const input = monthlyRoiInput.safeParse(req.body);
+      if (!input.success) return res.status(400).json({ error: "Completa los cuatro porcentajes entre 0 y 1000, con hasta dos decimales, y un mes v\xE1lido." });
+      const { month, rates, version } = input.data;
+      const { data, error } = await admin3.client.rpc("save_monthly_node_roi", {
+        p_month: `${month}-01`,
+        p_rates: rates,
+        p_expected_version: version,
+        p_actor: admin3.userId
+      });
+      if (error) return res.status(error.code === "40001" ? 409 : 503).json({
+        error: error.code === "40001" ? "Otro administrador cambi\xF3 este mes. Recarga el mes antes de guardar." : "No se guardaron los porcentajes. Verifica la migraci\xF3n y vuelve a intentarlo."
+      });
+      return res.json({ month, rates: data.rates, version: data.version, updatedAt: data.updated_at });
+    } catch {
+      return res.status(503).json({ error: "No se pudieron guardar los porcentajes." });
+    }
+  });
+}
+
 // server/security.ts
 import rateLimit from "express-rate-limit";
 var message = { error: "Demasiadas solicitudes; intenta m\xE1s tarde." };
@@ -1171,6 +1269,7 @@ function createApp() {
   registerSecureCommissionRoutes(app2);
   registerDepositRoutes(app2);
   registerAdminWithdrawalRoutes(app2);
+  registerAdminMonthlyRoiRoutes(app2);
   app2.use(
     "/api/trpc",
     createExpressMiddleware({

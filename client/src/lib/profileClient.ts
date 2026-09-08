@@ -6,7 +6,6 @@ export type PrivateUserDetails = {
   country: string;
   city: string;
   wallet_bep20: string;
-  wallet_trc20: string;
 };
 
 export const emptyPrivateUserDetails: PrivateUserDetails = {
@@ -15,7 +14,6 @@ export const emptyPrivateUserDetails: PrivateUserDetails = {
   country: "",
   city: "",
   wallet_bep20: "",
-  wallet_trc20: "",
 };
 
 function requireClient() {

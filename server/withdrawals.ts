@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { withdrawalFee } from "../shared/withdrawalFee.js";
 
-const NETWORKS = new Set(["Ethereum", "Solana", "BNB Chain", "Polygon", "Arbitrum", "Bitcoin"]);
+const NETWORKS = new Set(["BNB Chain"]);
 const LIMIT = 1000;
-const FEE_RATE = 0.015;
 
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -18,9 +18,7 @@ function token(req: Request) {
 }
 
 export function validWallet(network: string, wallet: string) {
-  if (["Ethereum", "BNB Chain", "Polygon", "Arbitrum"].includes(network)) return /^0x[a-fA-F0-9]{40}$/.test(wallet);
-  if (network === "Solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet);
-  return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(wallet);
+  return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
 
 export function validateWithdrawalInput(amount: number, network: string, wallet: string, usedToday: number) {
@@ -38,10 +36,14 @@ export function registerWithdrawalRoutes(app: Express) {
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
 
+    const { data: windowSetting } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+    const windowOpen = windowSetting?.value && typeof windowSetting.value === "object" && (windowSetting.value as { enabled?: boolean }).enabled === true;
+    if (!windowOpen) return res.status(423).json({ error: "La ventana de retiros está cerrada temporalmente. Intenta nuevamente cuando el administrador la habilite." });
+
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
-    const fee = Math.max(1, amount * FEE_RATE);
+    const fee = withdrawalFee(amount);
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
 
@@ -70,6 +72,6 @@ export function registerWithdrawalRoutes(app: Express) {
       provider_status: "manual_review",
     });
     if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada para revisión manual." });
+    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." });
   });
 }

@@ -11,6 +11,7 @@ import { registerCommissionRoutes } from "./commissions.js";
 import { registerSecureCommissionRoutes } from "./secureCommissionEndpoint.js";
 import { registerDepositRoutes } from "./deposits.js";
 import { registerAdminWithdrawalRoutes } from "./adminWithdrawals.js";
+import { registerAdminMonthlyRoiRoutes } from "./adminMonthlyRoi.js";
 import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js";
 
 export function createApp(): Express {
@@ -34,6 +35,7 @@ export function createApp(): Express {
   registerSecureCommissionRoutes(app);
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);
+  registerAdminMonthlyRoiRoutes(app);
 
   app.use(
     "/api/trpc",
