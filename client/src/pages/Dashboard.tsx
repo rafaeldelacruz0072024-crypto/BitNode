@@ -4,6 +4,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
+import { NodeCycleProvider, NodeCycleProgress } from "@/components/NodeCycleProgress";
 import { useCycleNotifications } from "@/components/CycleNotifications";
 import { Link, useLocation } from "wouter";
 import {
@@ -818,7 +819,7 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main className="dash-content">{cycleNotifications.panel}{content}</main>
+        <main className="dash-content"><NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider></main>
       </div>
     </div>
   );
@@ -893,7 +894,7 @@ function HomePanel({
         <section className="empty-contracts">
           {user.contracts.length ? (
             <div className="contract-list">
-              {user.contracts.slice(0, 3).map(contract => (
+              {user.contracts.filter(c => c.status === "active").slice(0, 3).map(contract => (
                 <div className="local-contract" key={contract.id}>
                   <div>
                     <span>{contract.id} · ACTIVO</span>
@@ -901,6 +902,7 @@ function HomePanel({
                     <small>
                       Rendimiento variable · {contract.duration}
                     </small>
+                    <NodeCycleProgress id={contract.id} name={contract.name} duration={contract.duration} />
                   </div>
                   <strong>{money(contract.amount)}</strong>
                 </div>
@@ -1212,12 +1214,6 @@ function SectionPanel({
           {user.contracts.length ? (
             user.contracts.map(c => (
               (() => {
-                const durationDays = c.name === "Nodo Diario" ? null : Number(c.duration?.match(/\d+/)?.[0] || 0);
-                const createdAt = new Date(c.createdAt).getTime();
-                const elapsedDays = Number.isFinite(createdAt) && createdAt > 0 ? Math.max(0, Math.floor((now - createdAt) / 86_400_000)) : 0;
-                const currentDay = durationDays ? Math.min(durationDays, elapsedDays + 1) : null;
-                const remainingDays = durationDays ? Math.max(0, durationDays - elapsedDays) : null;
-                const progress = durationDays ? Math.min(100, Math.round((elapsedDays / durationDays) * 100)) : 100;
                 return <div className="local-contract" key={c.id}>
                 <div>
                   <span>
@@ -1227,14 +1223,7 @@ function SectionPanel({
                   <small>
                     Rendimiento variable · activado {c.createdAt}
                   </small>
-                  <div className="node-day-counter" aria-label={`Progreso de ${c.name}`}>
-                    <div className="node-day-counter-head">
-                      <span>{durationDays ? `Día ${currentDay} de ${durationDays}` : "Ciclo diario activo"}</span>
-                      <b>{durationDays ? `${progress}%` : "∞"}</b>
-                    </div>
-                    <div className="node-day-track"><i style={{ width: `${progress}%` }} /></div>
-                    <small>{durationDays ? (remainingDays ? `${remainingDays} días restantes · capital bloqueado` : "Ciclo completado · liquidación pendiente") : "Rendimiento y capital disponibles según tareas validadas"}</small>
-                  </div>
+                  {c.status === "active" && <NodeCycleProgress id={c.id} name={c.name} duration={c.duration} />}
                   <span className={`node-availability ${c.name === "Nodo Diario" ? "is-available" : "is-locked"}`}>
                     {c.name === "Nodo Diario"
                       ? "CAPITAL RETIRABLE · completa las 4 tareas"
