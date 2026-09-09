@@ -1187,6 +1187,9 @@ function SectionPanel({
   if (section === "nodes")
     return (() => {
       const activeContracts = user.contracts.filter(c => c.status === "active");
+      const pendingContracts = user.contracts.filter(c => c.status === "pending");
+      const archivedContracts = user.contracts.filter(c => c.status !== "active" && c.status !== "pending");
+      const orderedContracts = [...activeContracts, ...pendingContracts, ...archivedContracts];
       const flexibleCapital = activeContracts
         .filter(c => c.name === "Nodo Diario")
         .reduce((sum, c) => sum + c.amount, 0);
@@ -1212,25 +1215,31 @@ function SectionPanel({
         </div>
         <div className="dash-card local-ledger">
           {user.contracts.length ? (
-            user.contracts.map(c => (
+            orderedContracts.map((c, index) => (
               (() => {
-                return <div className="local-contract" key={c.id}>
+                const archived = c.status !== "active" && c.status !== "pending";
+                const statusLabel = c.status === "completed" ? (c.name === "Nodo Diario" ? "CAPITAL RETIRADO" : "CICLO FINALIZADO") : ({ active: "ACTIVO", pending: "PENDIENTE", cancelled: "CANCELADO", expired: "VENCIDO", reversed: "ANULADO" }[c.status] || c.status);
+                return <Fragment key={c.id}>
+                {index === 0 && !archived && <h3 className="node-history-heading">{activeContracts.length ? "Nodos activos" : "Nodos pendientes"}</h3>}
+                {archived && index === activeContracts.length + pendingContracts.length && <div className="node-history-heading"><h3>Historial de nodos</h3><p>Nodos finalizados o cerrados · {archivedContracts.length} registros</p></div>}
+                <div className={`local-contract${archived ? " node-archived" : ""}`}>
                 <div>
                   <span>
-                    {c.id} · {c.status.toUpperCase()}
+                    {c.id} · {statusLabel}
                   </span>
                   <h4>{c.name}</h4>
                   <small>
                     Rendimiento variable · activado {c.createdAt}
                   </small>
                   {c.status === "active" && <NodeCycleProgress id={c.id} name={c.name} duration={c.duration} />}
-                  <span className={`node-availability ${c.name === "Nodo Diario" ? "is-available" : "is-locked"}`}>
+                  {archived ? <span className="node-archive-badge">{statusLabel} · CONSERVADO EN HISTORIAL</span> : c.status === "pending" ? <span className="node-archive-badge">PENDIENTE DE ACTIVACIÓN</span> : <span className={`node-availability ${c.name === "Nodo Diario" ? "is-available" : "is-locked"}`}>
                     {c.name === "Nodo Diario"
                       ? "CAPITAL RETIRABLE · completa las 4 tareas"
                       : `CAPITAL BLOQUEADO · ${c.duration}`}
-                  </span>
+                  </span>}
                 </div>
                 <div className="node-capital-actions">
+                  {archived && <small>Capital del nodo</small>}
                   <strong>{money(c.amount)}</strong>
                   {c.name === "Nodo Diario" && c.status === "active" && (
                     <button
@@ -1251,7 +1260,7 @@ function SectionPanel({
                     </button>
                   )}
                 </div>
-                </div>;
+                </div></Fragment>;
               })()
             ))
           ) : (
