@@ -1291,12 +1291,13 @@ function SectionPanel({
               ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
               const dayLabel = (date: string) => new Date(date).toLocaleDateString("es-419", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
               return entries.map((m, index) => {
-                const day = new Date(m.date).toISOString().slice(0, 10);
-                const previousDay = index ? new Date(entries[index - 1].date).toISOString().slice(0, 10) : "";
+                const dateKey = (value: string) => Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString().slice(0, 10) : "Sin fecha";
+                const day = dateKey(m.date);
+                const previousDay = index ? dateKey(entries[index - 1].date) : "";
                 const lowerLabel = m.label.toLowerCase();
                 const tone = lowerLabel.includes("retiro") || m.status === "reversed" ? "movement-withdraw" : lowerLabel.includes("comisión") || lowerLabel.includes("bono") ? "movement-commission" : lowerLabel.includes("rendimiento") || lowerLabel.includes("pasivo") ? "movement-yield" : lowerLabel.includes("activación") ? "movement-contract" : "";
                 return <Fragment key={m.id}>
-                {day !== previousDay && <div className="history-day-heading"><span>{dayLabel(m.date)}</span><i /></div>}
+                {day !== previousDay && <div className="history-day-heading"><span>{day === "Sin fecha" ? day : dayLabel(m.date)}</span><i /></div>}
               <div className={`movement-row ${tone}`}>
                 <div>
                   <b>{m.label}</b>
