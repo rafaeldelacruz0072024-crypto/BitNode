@@ -1,80 +1,127 @@
-/**
- * Estilo BitNode: infraestructura nocturna editorial; azul índigo eléctrico,
- * datos monoespaciados, numeración de secciones y movimiento orbital contenido.
- */
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useEffect, useState } from "react";
-import { Link as WouterLink } from "wouter";
-import { ArrowRight, ChevronDown, Menu, X, Zap, Activity, ShieldCheck, Cpu, CircleDollarSign } from "lucide-react";
-import { BrandMark } from "@/components/BrandMark";
+import { useState } from "react";
+import { Link } from "wouter";
+import {
+  ArrowRight, BadgePercent, BarChart3, Bot, BrainCircuit, CalendarDays, Check,
+  ChevronDown, Clock3, GitBranch, Globe2, LineChart, Menu, Megaphone,
+  RefreshCcw, ShieldCheck, Sparkles, TrendingUp, UsersRound, WalletCards, X,
+} from "lucide-react";
 
-const networks = ["Bitcoin", "Ethereum", "BNB Chain", "Solana", "Polygon", "Avalanche", "Arbitrum", "Tron", "Optimism", "Base"];
-
-const plans = [
-  { tag: "SIN PLAZO FIJO", name: "Nodo Diario", rate: "1% – 1.5%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable acreditado cada día hábil, disponible de inmediato.", min: "$10 USDT", duration: "Indefinida", action: "Activar nodo diario" },
-  { tag: "PLAZO DE 7 DÍAS", name: "Nodo 7 Días", rate: "2% – 3%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 7 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "7 días + capital de vuelta", action: "Activar nodo 7 días", featured: true },
-  { tag: "PLAZO DE 14 DÍAS", name: "Nodo 14 Días", rate: "3% – 4%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 14 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "14 días + capital de vuelta", action: "Activar nodo 14 días" },
-  { tag: "PLAZO DE 21 DÍAS", name: "Nodo 21 Días", rate: "4% – 5%", cadence: "diario, lunes a viernes", copy: "Rendimiento variable durante 21 días. La ganancia acumulada y el capital se liberan al vencer.", min: "$10 USDT", duration: "21 días + capital de vuelta", action: "Activar nodo 21 días" },
+const pillars = [
+  { icon: BrainCircuit, label: "Inteligencia artificial" },
+  { icon: TrendingUp, label: "Trading de divisas" },
+  { icon: Megaphone, label: "Marketing digital" },
+  { icon: BarChart3, label: "Mercados de predicción" },
 ];
 
-const rows = [
-  ["BN-ZU3JZL", "Ethereum · 0x4529dc4b…415b6e", "3,092 ops", "+$3.3430"],
-  ["BN-8DX8W6", "Solana · 0x38b74349…f7c427", "3,264 ops", "+$0.2208"],
-  ["BN-4SDMIE", "Arbitrum · 0x1564b219…79abfc", "3,232 ops", "+$1.6028"],
-  ["BN-5WHG14", "Bitcoin · 0x68d6ccff…391f63", "4,165 ops", "+$1.0476"],
-  ["BN-VAMVDK", "Bitcoin · 0x050f49a8…6480a3", "2,164 ops", "+$0.8668"],
-  ["BN-RCYYRY", "Avalanche · 0xcb9b88a4…e39b55", "1,465 ops", "+$1.3221"],
-  ["BN-V9R3GD", "Arbitrum · 0xbd75aa11…daf0f7", "4,393 ops", "+$1.0278"],
-  ["BN-AMG0HW", "BNB Chain · 0xfc94bbff…11f573", "1,812 ops", "+$0.2556"],
+const plans = [
+  { name: "Nodo diario", duration: "Flexible", rate: "1% – 1.5%", accent: "cyan", note: "Participación por tiempo indefinido" },
+  { name: "Nodo 7 días", duration: "7 días", rate: "2% – 3%", accent: "blue", note: "Capital devuelto al finalizar" },
+  { name: "Nodo 14 días", duration: "14 días", rate: "3% – 4%", accent: "violet", note: "Capital devuelto al finalizar" },
+  { name: "Nodo 21 días", duration: "21 días", rate: "4% – 5%", accent: "lime", note: "Capital devuelto al finalizar" },
+];
+
+const benefits = [
+  { icon: WalletCards, kicker: "Rendimiento pasivo", value: "Según tu nodo", text: "Completa cuatro tareas dentro de cada periodo de 24 horas para mantener el avance del ciclo." },
+  { icon: UsersRound, kicker: "Bono directo", value: "10%", text: "Recibe el diez por ciento cuando una persona referida directamente activa un nodo." },
+  { icon: GitBranch, kicker: "Bono binario", value: "8%", text: "Se calcula sobre el nuevo volumen emparejado entre las ramas izquierda y derecha." },
+];
+
+const rules = [
+  { icon: WalletCards, title: "Desde $10", text: "Monto mínimo para activar un nodo." },
+  { icon: CalendarDays, title: "Lunes a viernes", text: "Los rendimientos se generan en días laborables." },
+  { icon: Clock3, title: "4 tareas cada 24 h", text: "La continuidad mantiene el progreso del ciclo." },
+  { icon: RefreshCcw, title: "Reinicio por inactividad", text: "Si faltan tareas, avance y días vuelven a cero; el capital del nodo se conserva." },
+  { icon: BadgePercent, title: "Retiro con 5%", text: "Ventana: miércoles de 8:00 AM a 2:00 PM, hora de México (GMT-6)." },
+  { icon: ShieldCheck, title: "Registro verificable", text: "Cada bono guarda nodo, usuario origen, rama, tasa y monto." },
 ];
 
 const faqs = [
-  ["¿Qué es exactamente un nodo de validación?", "Es un equipo que participa en la verificación y ordenamiento de operaciones dentro de una red blockchain. BitNode concentra la operación técnica para que el usuario pueda participar sin administrar hardware."],
-  ["¿Por qué los rendimientos se generan solo de lunes a viernes?", "Los contratos siguen el calendario operativo de liquidación de la granja. La actividad y la acreditación se contabilizan en días hábiles."],
-  ["¿Cómo deposito y cómo retiro?", "El sitio de referencia indica que el fondeo se realiza en USDT y que los retiros dependen de la frecuencia de cada contrato. En esta réplica las acciones son demostrativas."],
-  ["¿Necesito conocimientos técnicos?", "No. La propuesta está pensada para que la operación de nodos, servidores y mantenimiento quede a cargo de la granja."],
-  ["¿Cómo funcionan los bonos de red?", "El programa contempla un bono de inicio rápido, un bono binario y recompensas por rango, mostrados de forma ilustrativa en la sección correspondiente."],
+  ["¿Cómo se elige el rendimiento?", "El porcentaje se selecciona dentro del rango del nodo cuando concluye cada ciclo."],
+  ["¿Qué pasa si no completo las tareas?", "El avance y los días procesados reinician a cero. El capital colocado en el nodo se mantiene."],
+  ["¿Cuándo puedo solicitar un retiro?", "Los miércoles, de 8:00 AM a 2:00 PM, hora de México (GMT-6). El retiro aplica un fee de 5%."],
 ];
 
-function Action({ children, secondary = false, onClick }: { children: React.ReactNode; secondary?: boolean; onClick?: () => void }) {
-  return <button onClick={onClick} className={`action ${secondary ? "action-secondary" : "action-primary"}`}>{children}<ArrowRight size={15} /></button>;
+function BrandMark() {
+  return <span className="bn-brand"><img src="/bitnode-logo.png" alt="BitNode" /></span>;
 }
 
 export default function Home() {
-  const { user, loading, error, isAuthenticated, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [live, setLive] = useState(15017);
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => { const timer = window.setInterval(() => setLive((value) => value + Math.floor(Math.random() * 3)), 5000); return () => window.clearInterval(timer); }, []);
-  const showNotice = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(null), 3200); };
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const closeMenu = () => setMenuOpen(false);
+
   return (
-    <div className="site-shell">
-      {notice && <div className="notice" role="status">{notice}</div>}
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="BitNode inicio"><BrandMark className="brand-mark" /></a>
-        <nav className={menuOpen ? "nav-links open" : "nav-links"}>
-          <a href="#contratos" onClick={() => setMenuOpen(false)}>Contratos</a>
-          <a href="#red" onClick={() => setMenuOpen(false)}>Programa de red</a>
-          <a href="#actividad" onClick={() => setMenuOpen(false)}>Actividad</a>
-          <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
-          <button className="locale" onClick={() => showNotice("Selector de idioma: Español")}>ES <ChevronDown size={14} /></button>
-          <WouterLink className="panel-link" href="/auth">Mi panel</WouterLink>
-        </nav>
-        <button className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
+    <main className="bn-site">
+      <header className="bn-header">
+        <div className="bn-container bn-nav">
+          <a href="#inicio" onClick={closeMenu}><BrandMark /></a>
+          <nav className={menuOpen ? "bn-navlinks is-open" : "bn-navlinks"} aria-label="Navegación principal">
+            <a href="#ecosistema" onClick={closeMenu}>Ecosistema</a><a href="#nodos" onClick={closeMenu}>Nodos</a>
+            <a href="#beneficios" onClick={closeMenu}>Beneficios</a><a href="#reglas" onClick={closeMenu}>Reglas</a>
+            <Link href="/auth" className="bn-login" onClick={closeMenu}>Ingresar <ArrowRight size={16} /></Link>
+          </nav>
+          <button className="bn-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}>{menuOpen ? <X /> : <Menu />}</button>
+        </div>
       </header>
-      <main id="top">
-        <section className="hero"><div className="hero-art" aria-hidden="true" /><div className="hero-inner"><div className="status-pill"><span className="live-dot" /> LIVE <strong>{live.toLocaleString("en-US")}</strong> nodos validando ahora</div><p className="eyebrow">INFRAESTRUCTURA DE VALIDACIÓN · 2026</p><h1>La infraestructura<br />trabaja. <em>Tú cobras.</em></h1><p className="hero-copy">BitNode opera una granja de nodos de validación en las principales redes blockchain. Adquiere un contrato de nodo y recibe tu parte de las comisiones que la granja cobra por validar operaciones, cada día hábil.</p><div className="hero-actions"><WouterLink className="action action-primary" href="/auth">Activar un nodo <ArrowRight size={15} /></WouterLink><Action secondary onClick={() => document.querySelector("#contratos")?.scrollIntoView({ behavior: "smooth" })}>Comparar contratos</Action></div></div><div className="hero-grid" aria-hidden="true"><span>01 / NODES</span><span>VALIDATION LAYER</span><span>UPTIME 99.81%</span></div></section>
-        <section className="stats-bar container"><div><strong>15,017</strong><span>NODOS ACTIVOS</span></div><div><strong>2.8M</strong><span>OPERACIONES VALIDADAS</span></div><div><strong>$1.37M</strong><span>COMISIONES COBRADAS</span></div><div><strong>99.81%</strong><span>UPTIME DE RED</span></div></section>
-        <div className="network-strip">{[...networks, ...networks].map((network, i) => <span key={`${network}-${i}`}><i />{network}</span>)}</div>
-        <section className="section process container" id="como-funciona"><div className="section-head"><div className="section-index">01 — CÓMO FUNCIONA</div><div className="section-rule" /></div><div className="split-heading"><h2>Un nodo,<br /><span>tres pasos.</span></h2><p>No necesitas hardware, ni configurar servidores, ni saber de blockchain. La granja se encarga de la operación; tú eliges el contrato.</p></div><div className="steps">{[["01", "Crea tu cuenta y deposita", "Regístrate en un minuto y fondea tu cuenta con USDT. El equipo verifica y acredita tu depósito."], ["02", "Elige tu contrato de nodo", "Diario, semanal o mensual. Cada contrato asigna capacidad de validación de la granja a tu cuenta."], ["03", "Cobra los rendimientos", "De lunes a viernes tu nodo genera comisiones por operaciones validadas. Las retiras según la frecuencia de tu contrato."]].map(([number, title, copy]) => <article className="step-card" key={number}><span className="step-number">{number}</span><Cpu size={20} /><h3>{title}</h3><p>{copy}</p></article>)}</div></section>
-        <section className="section contracts container" id="contratos"><div className="section-head"><div className="section-index">02 — CONTRATOS DE NODO</div><div className="section-rule" /></div><div className="split-heading"><h2>Cuatro ciclos,<br /><span>tú decides el ritmo.</span></h2><p>Todos los contratos generan de lunes a viernes, los días en que la granja liquida comisiones. El rendimiento diario es variable y se calcula internamente.</p></div><div className="plan-grid">{plans.map((plan) => <article className={`plan-card ${plan.featured ? "featured" : ""}`} key={plan.name}>{plan.featured && <div className="featured-label">MÁS ELEGIDO</div>}<div className="plan-tag">{plan.tag}</div><h3>{plan.name}</h3><div className="rate">Rendimiento variable</div><div className="cadence">{plan.cadence}</div><p>{plan.copy}</p><dl><div><dt>Inversión mínima</dt><dd>{plan.min}</dd></div><div><dt>Generación</dt><dd>Lunes a viernes</dd></div><div><dt>Duración</dt><dd>{plan.duration}</dd></div></dl><button className="plan-action" onClick={() => showNotice("Acción demostrativa: el registro estará disponible al conectar una cuenta.")}>{plan.action}<ArrowRight size={15} /></button></article>)}</div><div className="contract-note"><Zap size={16} /> Bonos de red disponibles <span>·</span> Sistema de rangos con recompensas</div></section>
-        <section className="section network-section" id="red"><div className="network-art" aria-hidden="true" /><div className="container"><div className="section-head"><div className="section-index">03 — PROGRAMA DE RED</div><div className="section-rule" /></div><div className="split-heading"><h2>Tu red<br /><span>también genera.</span></h2><p>Construye una organización que se mueve con la infraestructura. El volumen se reconoce con reglas visibles y recompensas definidas.</p></div><div className="bonus-layout"><div className="bonus-column"><article className="bonus-card"><div><span>BONO INICIO RÁPIDO</span><strong>10%</strong><small>INSTANTÁNEO</small></div><p>Por cada contrato que active un referido directo tuyo, recibes el 10% del monto en tu balance, al momento.</p><code>referido activa contrato $1,000<br /><b>→ tu bono +$100.00</b> // acreditado al instante</code></article><article className="bonus-card"><div><span>BONO BINARIO</span><strong>8%</strong><small>DIARIO</small></div><p>Tu organización se construye en dos equipos. Cada día, el sistema empareja el volumen de ambas piernas.</p><code>pierna A $5,000 · pierna B $3,000<br /><b>→ emparejado $3,000</b> · tu bono +$240.00</code></article></div><div className="ranks-card"><div className="plan-tag">SISTEMA DE RANGOS</div><p>Recompensas únicas al crecer tu inversión y el volumen de tu equipo.</p><button className="text-action" onClick={() => showNotice("Empieza con un contrato para desbloquear tu red.")}>Empezar a construir <ArrowRight size={15} /></button><div className="ranks">{[["01", "Bronce", "$50"], ["02", "Plata", "$250"], ["03", "Oro", "$1,000"], ["04", "Validador", "$2,500"], ["05", "Master Node", "$10,000"]].map(([n, name, value]) => <div key={n}><span>RANGO {n}</span><strong>{name}</strong><b>{value}</b></div>)}</div></div></div></div></section>
-        <section className="section activity container" id="actividad"><div className="section-head"><div className="section-index">04 — ACTIVIDAD DE LA GRANJA</div><div className="section-rule" /></div><div className="activity-heading"><div><h2>Operaciones validadas,<br /><span>en directo.</span></h2><p className="live-refresh"><i /> actualiza cada 30s</p></div><div className="activity-total"><span>total acumulado</span><strong>$1,378,422.73 <small>USDT</small></strong></div></div><div className="activity-table"><div className="table-row table-head"><span>NODO</span><span>RED / TX</span><span>OPS</span><span>COMISIÓN</span></div>{rows.map((row) => <div className="table-row" key={row[0]}><span className="node-id"><i />{row[0]}</span><span>{row[1]}</span><span>{row[2]}</span><span className="commission">{row[3]}</span></div>)}</div></section>
-        <section className="section faq-section container" id="faq"><div className="section-head"><div className="section-index">05 — FAQ</div><div className="section-rule" /></div><div className="split-heading"><h2>Preguntas<br /><span>frecuentes.</span></h2><p>¿Algo más? Escríbenos desde tu panel una vez registrado.</p></div><div className="faq-list">{faqs.map(([question, answer], index) => <div className={`faq-item ${openFaq === index ? "is-open" : ""}`} key={question}><button onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><ChevronDown size={18} /></button>{openFaq === index && <p>{answer}</p>}</div>)}</div></section>
-        <section className="closing"><div className="closing-orbit" aria-hidden="true" /><div className="container closing-inner"><div className="status-pill"><span className="live-dot" /> REGISTRO GRATUITO</div><h2>Pon un nodo a trabajar<br /><em>para ti hoy.</em></h2><p>Registro gratuito. Contratos desde $10 USDT. Rendimientos de lunes a viernes.</p><div className="hero-actions"><WouterLink className="action action-primary" href="/auth">Crear cuenta gratis <ArrowRight size={15} /></WouterLink><WouterLink className="action action-secondary" href="/auth">Ya tengo cuenta <ArrowRight size={15} /></WouterLink></div></div></section>
-      </main>
-      <footer className="footer container"><a className="brand" href="#top" aria-label="BitNode inicio"><BrandMark className="brand-mark" /></a><span>Infraestructura que trabaja.</span><span>© 2026 BitNode</span></footer>
-    </div>
+
+      <section className="bn-hero" id="inicio">
+        <div className="bn-hero-grid" aria-hidden="true" />
+        <div className="bn-container bn-hero-inner">
+          <div className="bn-hero-copy">
+            <span className="bn-eyebrow"><Sparkles size={15} /> Tecnología para una nueva economía digital</span>
+            <h1>Inteligencia que<br /><em>genera oportunidades.</em></h1>
+            <p>BitNode conecta inteligencia artificial, mercados financieros, marketing digital y predicción en un ecosistema diseñado para participar, aprender y crecer.</p>
+            <div className="bn-actions"><a href="#ecosistema" className="bn-button bn-button-primary">Conocer el ecosistema <ArrowRight size={18} /></a><Link href="/auth?mode=register" className="bn-button bn-button-ghost">Crear cuenta</Link></div>
+            <div className="bn-trust"><ShieldCheck size={18} /><span>Reglas claras, ciclos visibles y movimientos registrados.</span></div>
+          </div>
+          <div className="bn-hero-art"><div className="bn-orbit bn-orbit-one" /><div className="bn-orbit bn-orbit-two" /><img src="/bitnode-hero-robot.webp" alt="Robot futurista de BitNode" /><div className="bn-signal"><span /> Infraestructura conectada</div></div>
+        </div>
+        <div className="bn-container bn-pillar-rail">{pillars.map(({ icon: Icon, label }) => <div key={label}><Icon /><span>{label}</span></div>)}</div>
+      </section>
+
+      <section className="bn-section bn-intro" id="ecosistema">
+        <div className="bn-container bn-split-heading">
+          <div><span className="bn-section-index">01 / Ecosistema</span><h2>Un grupo de soluciones impulsadas por datos e IA.</h2></div>
+          <div className="bn-intro-copy"><p>BitNode reúne compañías innovadoras que usan el lenguaje de la inteligencia artificial para operar en sectores tecnológicos de alto crecimiento.</p><div className="bn-mini-grid"><span><Bot /> Automatización</span><span><Globe2 /> Alcance global</span><span><LineChart /> Análisis de mercado</span><span><BrainCircuit /> Inteligencia aplicada</span></div></div>
+        </div>
+      </section>
+
+      <section className="bn-section bn-nodes" id="nodos">
+        <div className="bn-container">
+          <div className="bn-section-head"><div><span className="bn-section-index">02 / Nodos</span><h2>Elige el ciclo que se adapta a ti.</h2></div><p>Activa desde $10. El rendimiento se acredita de lunes a viernes y el porcentaje se elige dentro del rango al completar cada ciclo.</p></div>
+          <div className="bn-plan-grid">{plans.map((plan, index) => <article className={`bn-plan bn-plan-${plan.accent}`} key={plan.name}><div className="bn-plan-top"><span>0{index + 1}</span><span>{plan.duration}</span></div><h3>{plan.name}</h3><strong>{plan.rate}</strong><small>rango de rendimiento</small><div className="bn-plan-rule" /><p><Check /> {plan.note}</p><p><Check /> Generación de lunes a viernes</p></article>)}</div>
+          <p className="bn-disclaimer">Los porcentajes se aplican según las reglas y la configuración vigente de cada ciclo. Revisa los términos dentro de tu cuenta antes de activar.</p>
+        </div>
+      </section>
+
+      <section className="bn-section bn-benefits" id="beneficios">
+        <div className="bn-container">
+          <div className="bn-section-head"><div><span className="bn-section-index">03 / Plan de compensación</span><h2>Tres formas de generar.</h2></div><p>Participación personal, crecimiento por recomendación y desarrollo de una estructura binaria.</p></div>
+          <div className="bn-benefit-grid">{benefits.map(({ icon: Icon, kicker, value, text }) => <article key={kicker} className="bn-benefit-card"><Icon /><span>{kicker}</span><strong>{value}</strong><p>{text}</p></article>)}</div>
+          <div className="bn-binary-note"><GitBranch /><div><strong>Balance binario cada 60 días</strong><span>Los puntos acumulados en la pierna de mayor volumen se reinician al completar cada periodo de 60 días.</span></div></div>
+        </div>
+      </section>
+
+      <section className="bn-products" id="productos">
+        <div className="bn-container">
+          <div className="bn-section-head bn-section-head-dark"><div><span className="bn-section-index">04 / Productos</span><h2>Tecnología aplicada a mercados reales.</h2></div><p>Dos líneas de producto para analizar, interpretar y actuar frente a mercados globales.</p></div>
+          <div className="bn-product-grid">
+            <article className="bn-product-card bn-product-fx"><div className="bn-product-number">01</div><TrendingUp /><span>BitnodeFX</span><h3>Algoritmos para mercados financieros.</h3><p>Software especializado para Forex, CFDs, futuros, índices y criptomonedas, con sistemas automatizados de alta frecuencia y arbitraje.</p><div className="bn-tag-row"><span>Forex</span><span>CFDs</span><span>Futuros</span><span>Cripto</span></div></article>
+            <article className="bn-product-card bn-product-predict"><div className="bn-product-number">02</div><Globe2 /><span>Bitnode Predicción</span><h3>Probabilidades en tiempo real.</h3><p>Plataforma para interpretar eventos globales, visualizar escenarios y operar contratos con inteligencia de mercado.</p><div className="bn-tag-row"><span>Eventos</span><span>Probabilidades</span><span>Contratos</span></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section className="bn-section bn-rules" id="reglas">
+        <div className="bn-container"><div className="bn-section-head"><div><span className="bn-section-index">05 / Reglas importantes</span><h2>Control claro en cada etapa.</h2></div><p>Conoce las condiciones de participación, continuidad y retiro antes de comenzar.</p></div><div className="bn-rule-grid">{rules.map(({ icon: Icon, title, text }, index) => <article key={title}><span>0{index + 1}</span><Icon /><h3>{title}</h3><p>{text}</p></article>)}</div></div>
+      </section>
+
+      <section className="bn-section bn-faq">
+        <div className="bn-container bn-faq-layout"><div><span className="bn-section-index">06 / Preguntas frecuentes</span><h2>Lo esencial, antes de activar.</h2><p>Consulta los detalles operativos desde tu panel y mantén el seguimiento de cada nodo.</p></div><div className="bn-faq-list">{faqs.map(([question, answer], index) => <button key={question} className={openFaq === index ? "is-open" : ""} onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><ChevronDown />{openFaq === index && <p>{answer}</p>}</button>)}</div></div>
+      </section>
+
+      <section className="bn-cta"><div className="bn-container bn-cta-inner"><div><span className="bn-eyebrow"><Sparkles size={15} /> Tu próxima decisión empieza aquí</span><h2>Conecta con el futuro de los mercados digitales.</h2></div><Link href="/auth?mode=register" className="bn-button bn-button-light">Crear mi cuenta <ArrowRight /></Link></div></section>
+      <footer className="bn-footer"><div className="bn-container"><BrandMark /><p>Inteligencia artificial · Mercados financieros · Predicción</p><span>© {new Date().getFullYear()} BitNode</span></div></footer>
+    </main>
   );
 }
