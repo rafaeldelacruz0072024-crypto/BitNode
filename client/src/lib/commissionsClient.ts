@@ -32,6 +32,7 @@ export async function completeDailyTask(taskKey: string) {
     p_task_key: taskKey,
   });
   if (error) throw new Error(error.message);
+  window.dispatchEvent(new Event("bitnode:tasks-updated"));
   return data as DailyTaskResult;
 }
 
