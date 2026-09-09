@@ -30,6 +30,8 @@ export function validateWithdrawalInput(amount: number, network: string, wallet:
 
 export function registerWithdrawalRoutes(app: Express) {
   app.post("/api/withdrawals/request", async (req: Request, res: Response) => {
+    return res.status(409).json({ error: "Este retiro requiere confirmación con el código enviado a tu correo." });
+    /* legacy route retained below for audit history
     const client = admin();
     const accessToken = token(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
@@ -72,6 +74,6 @@ export function registerWithdrawalRoutes(app: Express) {
       provider_status: "manual_review",
     });
     if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." });
+    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." }); */
   });
 }
