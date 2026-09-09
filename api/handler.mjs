@@ -177,8 +177,8 @@ var OAuthService = class {
     });
     return data;
   }
-  async getUserInfoByToken(token4) {
-    const { data } = await this.client.post(GET_USER_INFO_PATH, { accessToken: token4.accessToken });
+  async getUserInfoByToken(token3) {
+    const { data } = await this.client.post(GET_USER_INFO_PATH, { accessToken: token3.accessToken });
     return data;
   }
 };
@@ -582,8 +582,8 @@ function sortObject(value) {
 function validIpnSignature(body, signature) {
   const secret = process.env.NOWPAYMENTS_IPN_SECRET;
   if (!secret || !signature) return false;
-  const digest = crypto.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
-  const expected = Buffer.from(digest, "utf8");
+  const digest2 = crypto.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
+  const expected = Buffer.from(digest2, "utf8");
   const received = Buffer.from(signature, "utf8");
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
@@ -596,9 +596,9 @@ function registerNowPaymentsRoutes(app2) {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
       const admin3 = adminClient();
-      const token4 = bearer(req);
-      if (!apiKey || !admin3 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
-      const { data: authData, error: authError } = await admin3.auth.getUser(token4);
+      const token3 = bearer(req);
+      if (!apiKey || !admin3 || !token3) return res.status(401).json({ error: "Supabase Auth requerida." });
+      const { data: authData, error: authError } = await admin3.auth.getUser(token3);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
       const amount = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
@@ -667,29 +667,9 @@ function registerNowPaymentsRoutes(app2) {
 }
 
 // server/withdrawals.ts
-import crypto2 from "node:crypto";
 import { createClient as createClient2 } from "@supabase/supabase-js";
-
-// shared/withdrawalFee.ts
-var WITHDRAW_FEE_RATE = 0.05;
-var WITHDRAW_MIN_FEE = 1;
-function withdrawalFee(amount) {
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-  return Math.round(Math.max(WITHDRAW_MIN_FEE, amount * WITHDRAW_FEE_RATE) * 100) / 100;
-}
-
-// server/withdrawals.ts
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
-function admin() {
-  const url = process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient2(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
-}
-function token(req) {
-  const value = req.header("authorization") || "";
-  return value.startsWith("Bearer ") ? value.slice(7) : null;
-}
 function validWallet(network, wallet) {
   return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
@@ -701,45 +681,7 @@ function validateWithdrawalInput(amount, network, wallet, usedToday) {
 }
 function registerWithdrawalRoutes(app2) {
   app2.post("/api/withdrawals/request", async (req, res) => {
-    const client = admin();
-    const accessToken = token(req);
-    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
-    const { data, error: authError } = await client.auth.getUser(accessToken);
-    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
-    const { data: windowSetting } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
-    const windowOpen = windowSetting?.value && typeof windowSetting.value === "object" && windowSetting.value.enabled === true;
-    if (!windowOpen) return res.status(423).json({ error: "La ventana de retiros est\xE1 cerrada temporalmente. Intenta nuevamente cuando el administrador la habilite." });
-    const amount = Number(req.body?.amount);
-    const network = String(req.body?.network || "");
-    const wallet = String(req.body?.wallet || "").trim();
-    const fee = withdrawalFee(amount);
-    const basicError = validateWithdrawalInput(amount, network, wallet, 0);
-    if (basicError) return res.status(400).json({ error: basicError });
-    const start = /* @__PURE__ */ new Date();
-    start.setUTCHours(0, 0, 0, 0);
-    const { data: today, error: historyError } = await client.from("transactions").select("amount,type").eq("user_id", data.user.id).eq("type", "withdraw").gte("created_at", start.toISOString());
-    if (historyError) return res.status(500).json({ error: "No se pudo verificar el l\xEDmite diario." });
-    const used = (today || []).reduce((sum, row) => sum + Math.abs(Number(row.amount) || 0), 0);
-    const limitError = validateWithdrawalInput(amount, network, wallet, used);
-    if (limitError) return res.status(400).json({ error: limitError });
-    const id = `WDR-${crypto2.randomUUID()}`;
-    const { error: insertError } = await client.from("transactions").insert({
-      id,
-      user_id: data.user.id,
-      username: data.user.user_metadata?.username || data.user.email?.split("@")[0] || null,
-      type: "withdraw",
-      label: `Solicitud de retiro \xB7 ${network}`,
-      amount: -amount,
-      status: "pending",
-      network,
-      wallet,
-      fee,
-      net_amount: amount - fee,
-      created_at: (/* @__PURE__ */ new Date()).toISOString(),
-      provider_status: "manual_review"
-    });
-    if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." });
+    return res.status(409).json({ error: "Este retiro requiere confirmaci\xF3n con el c\xF3digo enviado a tu correo." });
   });
 }
 
@@ -1041,14 +983,14 @@ function registerSecureCommissionRoutes(app2) {
 }
 
 // server/deposits.ts
-import crypto3 from "node:crypto";
+import crypto2 from "node:crypto";
 import { createClient as createClient5 } from "@supabase/supabase-js";
-function admin2() {
+function admin() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return url && key ? createClient5(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function token2(req) {
+function token(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -1058,15 +1000,15 @@ function validateManualDeposit(amount) {
 }
 function registerDepositRoutes(app2) {
   app2.post("/api/deposits/request", async (req, res) => {
-    const client = admin2();
-    const accessToken = token2(req);
+    const client = admin();
+    const accessToken = token(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const amount = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount);
     if (validationError) return res.status(400).json({ error: validationError });
-    const id = `DEP-${crypto3.randomUUID()}`;
+    const id = `DEP-${crypto2.randomUUID()}`;
     const { error } = await client.from("transactions").insert({
       id,
       user_id: data.user.id,
@@ -1092,13 +1034,13 @@ function serviceClient() {
   if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
   return createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-function token3(req) {
+function token2(req) {
   const header = req.header("authorization") || "";
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 async function authenticatedAdmin(req) {
   const client = serviceClient();
-  const accessToken = token3(req);
+  const accessToken = token2(req);
   if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
@@ -1131,7 +1073,7 @@ function registerAdminWithdrawalRoutes(app2) {
       const enabled = req.body?.enabled === true;
       const { error } = await admin3.client.from("platform_settings").upsert({
         key: "withdrawal_window",
-        value: { enabled, mode: "manual_test", updated_by: (await admin3.client.auth.getUser(token3(req))).data.user?.id || null },
+        value: { enabled, mode: "manual_test", updated_by: (await admin3.client.auth.getUser(token2(req))).data.user?.id || null },
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
@@ -1248,6 +1190,154 @@ function createFinancialRateLimiter(overrides = {}) {
   return rateLimit({ windowMs: 60 * 1e3, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "L\xEDmite de operaciones excedido; intenta m\xE1s tarde." }, ...overrides });
 }
 
+// server/emailSecurity.ts
+import crypto3 from "node:crypto";
+import { createClient as createClient7 } from "@supabase/supabase-js";
+
+// shared/withdrawalFee.ts
+var WITHDRAW_FEE_RATE = 0.05;
+var WITHDRAW_MIN_FEE = 1;
+function withdrawalFee(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return Math.round(Math.max(WITHDRAW_MIN_FEE, amount * WITHDRAW_FEE_RATE) * 100) / 100;
+}
+
+// server/emailSecurity.ts
+var CODE_TTL_MS = 10 * 60 * 1e3;
+function admin2() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key ? createClient7(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+}
+function bearer4(req) {
+  const value = req.header("authorization") || "";
+  return value.startsWith("Bearer ") ? value.slice(7) : "";
+}
+function digest(challengeId, code) {
+  const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
+  return crypto3.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
+}
+function safeEqual(a, b) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && crypto3.timingSafeEqual(left, right);
+}
+function escapeHtml(value) {
+  return value.replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c] || c);
+}
+async function sendEmail(to, subject, html, idempotencyKey) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY no est\xE1 configurada.");
+  const from = process.env.RESEND_FROM_EMAIL || "BitNode <onboarding@resend.dev>";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ from, to: [to], subject, html })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message || `Resend respondi\xF3 ${response.status}.`);
+  return body.id || null;
+}
+async function authenticated(req) {
+  const client = admin2();
+  const token3 = bearer4(req);
+  if (!client || !token3) return null;
+  const { data, error } = await client.auth.getUser(token3);
+  return error || !data.user?.email ? null : { client, user: data.user };
+}
+function normalizedPayload(purpose, input) {
+  const payload = input && typeof input === "object" ? input : {};
+  if (purpose === "wallet_change") {
+    const wallet2 = String(payload.wallet || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet2)) throw new Error("La wallet BEP20 no es v\xE1lida.");
+    return { wallet: wallet2 };
+  }
+  const amount = Number(payload.amount);
+  const network = String(payload.network || "");
+  const wallet = String(payload.wallet || "").trim();
+  const error = validateWithdrawalInput(amount, network, wallet, 0);
+  if (error) throw new Error(error);
+  return { amount, network, wallet };
+}
+function registerEmailSecurityRoutes(app2) {
+  app2.post("/api/security/email-code/request", async (req, res) => {
+    const auth = await authenticated(req);
+    if (!auth) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    const purpose = String(req.body?.purpose || "");
+    if (purpose !== "withdrawal" && purpose !== "wallet_change") return res.status(400).json({ error: "Operaci\xF3n no v\xE1lida." });
+    try {
+      const payload = normalizedPayload(purpose, req.body?.payload);
+      const recentSince = new Date(Date.now() - 6e4).toISOString();
+      const { count } = await auth.client.from("email_security_challenges").select("id", { count: "exact", head: true }).eq("user_id", auth.user.id).gte("created_at", recentSince);
+      if ((count || 0) > 0) return res.status(429).json({ error: "Espera un minuto antes de solicitar otro c\xF3digo." });
+      const id = crypto3.randomUUID();
+      const code = crypto3.randomInt(1e5, 1e6).toString();
+      const { error } = await auth.client.from("email_security_challenges").insert({ id, user_id: auth.user.id, purpose, code_hash: digest(id, code), payload, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() });
+      if (error) throw error;
+      const action = purpose === "withdrawal" ? "confirmar tu retiro" : "confirmar tu wallet de retiro";
+      try {
+        await sendEmail(auth.user.email, `C\xF3digo BitNode: ${code}`, `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;background:#0b1020;color:#eef2ff;border-radius:14px"><h1 style="color:#9badff">BitNode</h1><p>Usa este c\xF3digo para ${action}:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700">${code}</p><p>Caduca en 10 minutos. Si no solicitaste esta acci\xF3n, ignora este mensaje.</p></div>`, `otp-${id}`);
+      } catch (error2) {
+        await auth.client.from("email_security_challenges").delete().eq("id", id);
+        throw error2;
+      }
+      return res.json({ challengeId: id, expiresInSeconds: 600, maskedEmail: auth.user.email.replace(/^(.{2}).*(@.*)$/, "$1***$2") });
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo enviar el c\xF3digo." });
+    }
+  });
+  app2.post("/api/security/email-code/verify", async (req, res) => {
+    const auth = await authenticated(req);
+    if (!auth) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    const challengeId = String(req.body?.challengeId || "");
+    const code = String(req.body?.code || "").trim();
+    const { data: challenge } = await auth.client.from("email_security_challenges").select("*").eq("id", challengeId).eq("user_id", auth.user.id).maybeSingle();
+    if (!challenge || challenge.consumed_at || new Date(challenge.expires_at).getTime() < Date.now()) return res.status(400).json({ error: "El c\xF3digo expir\xF3 o ya fue utilizado." });
+    if (challenge.attempts >= 5) return res.status(429).json({ error: "Se agotaron los intentos. Solicita otro c\xF3digo." });
+    if (!/^\d{6}$/.test(code) || !safeEqual(challenge.code_hash, digest(challengeId, code))) {
+      await auth.client.from("email_security_challenges").update({ attempts: challenge.attempts + 1 }).eq("id", challengeId);
+      return res.status(400).json({ error: "C\xF3digo incorrecto." });
+    }
+    const { data: consumed } = await auth.client.from("email_security_challenges").update({ consumed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", challengeId).is("consumed_at", null).select("id").maybeSingle();
+    if (!consumed) return res.status(409).json({ error: "Este c\xF3digo ya fue utilizado." });
+    const payload = challenge.payload;
+    if (challenge.purpose === "wallet_change") {
+      const { error: error2 } = await auth.client.auth.admin.updateUserById(auth.user.id, { user_metadata: { ...auth.user.user_metadata, wallet_bep20: String(payload.wallet) } });
+      if (error2) return res.status(500).json({ error: "No se pudo guardar la wallet." });
+      return res.json({ status: "verified", message: "Wallet confirmada y guardada." });
+    }
+    const amount = Number(payload.amount);
+    const network = String(payload.network);
+    const wallet = String(payload.wallet);
+    const fee = withdrawalFee(amount);
+    const start = /* @__PURE__ */ new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    const { data: today } = await auth.client.from("transactions").select("amount").eq("user_id", auth.user.id).eq("type", "withdraw").gte("created_at", start.toISOString());
+    const used = (today || []).reduce((sum, row) => sum + Math.abs(Number(row.amount) || 0), 0);
+    const validation = validateWithdrawalInput(amount, network, wallet, used);
+    if (validation) return res.status(400).json({ error: validation });
+    const id = `WDR-${crypto3.randomUUID()}`;
+    const { error } = await auth.client.from("transactions").insert({ id, user_id: auth.user.id, username: auth.user.user_metadata?.username || auth.user.email?.split("@")[0], type: "withdraw", label: `Solicitud de retiro \xB7 ${network}`, amount: -amount, status: "pending", network, wallet, fee, net_amount: amount - fee, provider_status: "email_verified", created_at: (/* @__PURE__ */ new Date()).toISOString() });
+    if (error) return res.status(500).json({ error: "No se pudo registrar el retiro." });
+    await sendEmail(auth.user.email, "Retiro confirmado en BitNode", `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px"><h1>Retiro confirmado</h1><p>Solicitud: <b>${escapeHtml(id)}</b></p><p>Monto: <b>${amount.toFixed(2)} USDT</b></p><p>Comisi\xF3n: ${fee.toFixed(2)} USDT \xB7 Neto: ${(amount - fee).toFixed(2)} USDT</p><p>Wallet: ${escapeHtml(wallet)}</p></div>`, `withdrawal-confirmed-${id}`).catch(() => void 0);
+    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Correo verificado. Solicitud registrada." });
+  });
+  app2.post("/api/email/welcome", async (req, res) => {
+    const auth = await authenticated(req);
+    if (!auth) return res.status(401).json({ error: "Sesi\xF3n requerida." });
+    const { data: existing } = await auth.client.from("transactional_email_events").select("id").eq("user_id", auth.user.id).eq("kind", "welcome").maybeSingle();
+    if (existing) return res.json({ status: "already_sent" });
+    try {
+      const name = escapeHtml(String(auth.user.user_metadata?.username || auth.user.email.split("@")[0]));
+      const providerId = await sendEmail(auth.user.email, "Bienvenido a BitNode", `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;background:#0b1020;color:#eef2ff;border-radius:14px"><h1 style="color:#9badff">Bienvenido a BitNode, ${name}</h1><p>Tu correo fue confirmado y tu cuenta ya est\xE1 lista.</p><p>Desde tu dashboard puedes activar nodos, completar tareas y administrar tus retiros con verificaci\xF3n por correo.</p></div>`, `welcome-${auth.user.id}`);
+      await auth.client.from("transactional_email_events").insert({ user_id: auth.user.id, kind: "welcome", provider_id: providerId });
+      return res.json({ status: "sent" });
+    } catch {
+      return res.status(503).json({ error: "No se pudo enviar el correo de bienvenida." });
+    }
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -1270,6 +1360,7 @@ function createApp() {
   registerDepositRoutes(app2);
   registerAdminWithdrawalRoutes(app2);
   registerAdminMonthlyRoiRoutes(app2);
+  registerEmailSecurityRoutes(app2);
   app2.use(
     "/api/trpc",
     createExpressMiddleware({

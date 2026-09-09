@@ -46,7 +46,7 @@ import {
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
-import { requestWithdrawal } from "@/lib/withdrawalClient";
+import { confirmWithdrawal, requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
 import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
@@ -54,6 +54,8 @@ import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
   savePrivateUserDetails,
+  requestWalletVerification,
+  confirmWalletVerification,
   type PrivateUserDetails,
 } from "@/lib/profileClient";
 import {
@@ -548,6 +550,13 @@ export default function Dashboard() {
       active = false;
     };
   }, [authUserId]);
+  useEffect(() => {
+    if (!authUserId || !supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session?.access_token) return;
+      fetch("/api/email/welcome", { method: "POST", headers: { Authorization: `Bearer ${data.session.access_token}` } }).catch(() => undefined);
+    });
+  }, [authUserId]);
   const isHome = section === "home";
   useEffect(() => {
     if (!authUserId) return;
@@ -599,10 +608,10 @@ export default function Dashboard() {
     amount: number,
     network: string,
     wallet: string,
-    fee: number
+    fee: number,
+    result: { id: string; fee: number; netAmount: number }
   ) => {
     try {
-      const result = await requestWithdrawal(amount, network, wallet);
       const movement = {
         id: result.id,
         type: "withdraw" as const,
@@ -1046,7 +1055,8 @@ function SectionPanel({
     amount: number,
     network: string,
     wallet: string,
-    fee: number
+    fee: number,
+    result: { id: string; fee: number; netAmount: number }
   ) => void;
   activate: (item: (typeof catalog)[number], amount: number) => void;
   reward: (
@@ -1600,12 +1610,15 @@ function ProfilePanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [originalWallet, setOriginalWallet] = useState("");
+  const [walletChallenge, setWalletChallenge] = useState<{ id: string; email: string } | null>(null);
+  const [walletCode, setWalletCode] = useState("");
 
   useEffect(() => {
     let active = true;
     fetchPrivateUserDetails()
       .then(value => {
-        if (active) setDetails(value);
+        if (active) { setDetails(value); setOriginalWallet(value.wallet_bep20); }
       })
       .catch(cause => {
         if (active)
@@ -1635,7 +1648,11 @@ function ProfilePanel({
     setSaving(true);
     try {
       await savePrivateUserDetails(details);
-      showNotice("Perfil y wallets guardados correctamente.");
+      if (bep20 !== originalWallet) {
+        const challenge = await requestWalletVerification(bep20);
+        setWalletChallenge({ id: challenge.challengeId, email: challenge.maskedEmail });
+        showNotice("Enviamos un código para confirmar la wallet.");
+      } else showNotice("Perfil guardado correctamente.");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "No se pudo guardar el perfil."
@@ -1736,6 +1753,7 @@ function ProfilePanel({
           {saving ? "Guardando…" : "Guardar cambios"} <Zap size={15} />
         </button>
       </form>
+      {walletChallenge && <div className="confirm-backdrop"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="wallet-code-title"><span className="dash-eyebrow">2FA POR CORREO</span><h3 id="wallet-code-title">Confirma tu wallet</h3><p>Introduce el código de 6 dígitos enviado a <strong>{walletChallenge.email}</strong>.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={walletCode} onChange={e => setWalletCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />{error && <div className="form-error" role="alert">{error}</div>}<div className="confirm-actions"><button className="confirm-cancel" onClick={() => setWalletChallenge(null)}>Cancelar</button><button className="dash-primary" disabled={walletCode.length !== 6 || saving} onClick={async()=>{setSaving(true);setError("");try{await confirmWalletVerification(walletChallenge.id,walletCode);setOriginalWallet(details.wallet_bep20.trim());setWalletChallenge(null);setWalletCode("");showNotice("Wallet confirmada y guardada.");}catch(cause){setError(cause instanceof Error?cause.message:"Código inválido.");}finally{setSaving(false);}}}>Confirmar wallet</button></div></section></div>}
     </div>
   );
 }
@@ -1899,7 +1917,8 @@ function WithdrawalForm({
     amount: number,
     network: string,
     wallet: string,
-    fee: number
+    fee: number,
+    result: { id: string; fee: number; netAmount: number }
   ) => void;
 }) {
   const [amount, setAmount] = useState(10);
@@ -1907,6 +1926,9 @@ function WithdrawalForm({
   const [wallet, setWallet] = useState("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [challenge, setChallenge] = useState<{ id: string; email: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const todayKey = new Date().toISOString().slice(0, 10);
   const usedToday = user.movements
     .filter(
@@ -2020,7 +2042,7 @@ function WithdrawalForm({
             aria-labelledby="withdraw-confirm-title"
           >
             <span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span>
-            <h3 id="withdraw-confirm-title">¿Confirmar retiro?</h3>
+            <h3 id="withdraw-confirm-title">{challenge ? "Código de confirmación" : "¿Confirmar retiro?"}</h3>
             <p>
               Red: <strong>{network === "BNB Chain" ? "USDT BEP20" : network}</strong>
               <br />
@@ -2032,21 +2054,20 @@ function WithdrawalForm({
               <br />
               Recibirás: <strong>{money(net)} USDT</strong>
             </p>
+            {challenge && <><p>Enviado a <strong>{challenge.email}</strong>. Caduca en 10 minutos.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,""));setError("");}} placeholder="000000" />{error && <div className="form-error" role="alert">{error}</div>}</>}
             <div className="confirm-actions">
               <button
                 className="confirm-cancel"
-                onClick={() => setConfirming(false)}
+                onClick={() => { setConfirming(false); setChallenge(null); setCode(""); }}
               >
                 Cancelar
               </button>
               <button
                 className="dash-primary"
-                onClick={() => {
-                  setConfirming(false);
-                  onSubmit(amount, network, wallet.trim(), fee);
-                }}
+                disabled={verifying || Boolean(challenge && code.length !== 6)}
+                onClick={async () => { setVerifying(true); setError(""); try { if (!challenge) { const sent=await requestWithdrawal(amount,network,wallet.trim()); setChallenge({id:sent.challengeId,email:sent.maskedEmail}); return; } const result=await confirmWithdrawal(challenge.id,code); setConfirming(false); setChallenge(null); setCode(""); onSubmit(amount, network, wallet.trim(), fee, result); } catch(cause) { setError(cause instanceof Error?cause.message:"No se pudo confirmar el retiro."); } finally { setVerifying(false); } }}
               >
-                Confirmar retiro <Zap size={15} />
+                {verifying ? "Procesando…" : challenge ? "Validar y retirar" : "Enviar código"} <Zap size={15} />
               </button>
             </div>
           </section>

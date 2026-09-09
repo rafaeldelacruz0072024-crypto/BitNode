@@ -13,6 +13,7 @@ import { registerDepositRoutes } from "./deposits.js";
 import { registerAdminWithdrawalRoutes } from "./adminWithdrawals.js";
 import { registerAdminMonthlyRoiRoutes } from "./adminMonthlyRoi.js";
 import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js";
+import { registerEmailSecurityRoutes } from "./emailSecurity.js";
 
 export function createApp(): Express {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp(): Express {
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);
   registerAdminMonthlyRoiRoutes(app);
+  registerEmailSecurityRoutes(app);
 
   app.use(
     "/api/trpc",
