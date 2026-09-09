@@ -116,3 +116,15 @@
   }
   .dashboard-future .dash-primary:hover { transform: none; }
 }
+/* History categories: keep titles, amounts and left markers consistent. */
+.local-ledger .movement-row.movement-direct { --history-color: #7dd3fc; }
+.local-ledger .movement-row.movement-binary { --history-color: #d8b4fe; }
+.local-ledger .movement-row.movement-yield { --history-color: #6ee7b7; }
+.local-ledger .movement-row:is(.movement-direct, .movement-binary, .movement-yield) {
+  border-left: 3px solid var(--history-color);
+  padding-left: 14px;
+}
+.local-ledger .movement-row:is(.movement-direct, .movement-binary, .movement-yield) b,
+.local-ledger .movement-row:is(.movement-direct, .movement-binary, .movement-yield) > strong.positive {
+  color: var(--history-color);
+}

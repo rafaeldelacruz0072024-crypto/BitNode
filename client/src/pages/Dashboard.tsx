@@ -1293,11 +1293,11 @@ function SectionPanel({
               ...user.movements.map(m => ({
                 id: m.id,
                 label:
-                  m.type === "yield"
+                  m.type === "yield" && !/comisi[oó]n|bono/i.test(m.label)
                     ? `Rendimiento de nodo · ${m.label.replace(/\s*·\s*ROI\s*[0-9.,]+%?/i, "")}`
                     : m.label,
                 detail:
-                  m.type === "yield"
+                  m.type === "yield" && !/comisi[oó]n|bono/i.test(m.label)
                     ? "Rendimiento generado por un nodo propio"
                     : m.type === "contract"
                       ? "Activación de nodo · capital invertido"
@@ -1313,8 +1313,18 @@ function SectionPanel({
                 const dateKey = (value: string) => Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString().slice(0, 10) : "Sin fecha";
                 const day = dateKey(m.date);
                 const previousDay = index ? dateKey(entries[index - 1].date) : "";
-                const lowerLabel = m.label.toLowerCase();
-                const tone = lowerLabel.includes("retiro") || m.status === "reversed" ? "movement-withdraw" : lowerLabel.includes("comisión") || lowerLabel.includes("bono") ? "movement-commission" : lowerLabel.includes("rendimiento") || lowerLabel.includes("pasivo") ? "movement-yield" : lowerLabel.includes("activación") ? "movement-contract" : "";
+                const lowerLabel = m.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const tone = lowerLabel.includes("retiro") || m.status === "reversed"
+                  ? "movement-withdraw"
+                  : /(?:comision|bono).*direct/.test(lowerLabel)
+                    ? "movement-direct"
+                    : /(?:comision|bono).*binari/.test(lowerLabel)
+                      ? "movement-binary"
+                      : /comision|bono/.test(lowerLabel)
+                        ? "movement-commission"
+                        : /rendimiento|pasivo|roi/.test(lowerLabel)
+                          ? "movement-yield"
+                          : lowerLabel.includes("activacion") ? "movement-contract" : "";
                 return <Fragment key={m.id}>
                 {day !== previousDay && <div className="history-day-heading"><span>{day === "Sin fecha" ? day : dayLabel(m.date)}</span><i /></div>}
               <div className={`movement-row ${tone}`}>
