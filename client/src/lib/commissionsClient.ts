@@ -134,13 +134,33 @@ export async function fetchCommissionSummary(): Promise<CommissionSummary | null
 }
 
 export async function fetchNetworkSummary(): Promise<NetworkSummary | null> {
-  const token = await accessToken();
-  if (!token) return null;
-  const response = await fetch("/api/commissions/network", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error("No se pudo cargar la red binaria.");
-  return response.json() as Promise<NetworkSummary>;
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) return null;
+
+  const [treeResult, ownerResult] = await Promise.all([
+    supabase.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
+    supabase.from("profiles").select("username, referral_code").eq("id", userId).maybeSingle(),
+  ]);
+  if (treeResult.error) throw new Error(`No se pudo cargar la red binaria: ${treeResult.error.message}`);
+  if (ownerResult.error) throw new Error(`No se pudo cargar el perfil de red: ${ownerResult.error.message}`);
+
+  const networkNodes = (treeResult.data || []) as NonNullable<NetworkSummary["networkNodes"]>;
+  const directReferrals = networkNodes
+    .filter(node => node.sponsor_id === userId)
+    .map(node => ({
+      user_id: node.user_id,
+      username: node.username || "Usuario",
+      leg: node.parent_id === userId ? node.leg : null,
+      active_nodes: 0,
+    }));
+  return {
+    ownerUsername: ownerResult.data?.username || null,
+    referralCode: ownerResult.data?.referral_code || null,
+    networkNodes,
+    directReferrals,
+  };
 }
 
 export async function activateContractAndCommissions(input: {
