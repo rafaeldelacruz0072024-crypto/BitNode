@@ -14,6 +14,16 @@ export function referralFromMetadata(
   return code && (leg === "left" || leg === "right") ? { code, leg } : null;
 }
 
+export function referralForSubmit(
+  mode: "login" | "signup",
+  routeReferral: PendingReferral | null,
+  metadata: Record<string, unknown> | undefined
+) {
+  return mode === "signup"
+    ? routeReferral || referralFromMetadata(metadata)
+    : null;
+}
+
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const referral = useMemo(() => {
@@ -72,9 +82,13 @@ export default function AuthPage() {
     supabase.auth.getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session) return;
-      const pendingReferral =
-        referral || referralFromMetadata(session.user.user_metadata);
-      if (!pendingReferral) return;
+      // A stored referral belongs to account creation. Replaying it on every
+      // visit can conflict with a binary position that already exists.
+      const pendingReferral = referral;
+      if (!pendingReferral) {
+        navigate("/dashboard");
+        return;
+      }
       try {
         await applyReferral(
           session.user.id,
@@ -129,8 +143,11 @@ export default function AuthPage() {
       );
       return;
     }
-    const pendingReferral =
-      referral || referralFromMetadata(result.data.user?.user_metadata);
+    const pendingReferral = referralForSubmit(
+      mode,
+      referral,
+      result.data.user?.user_metadata
+    );
     if (pendingReferral && result.data.user) {
       try {
         await applyReferral(
