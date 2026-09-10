@@ -107,7 +107,7 @@ export async function getCommissionSummary(userId: string) {
   const rows = data || [];
   const [ownerResult, treeResult, volumeResult] = await Promise.all([
     client.from("profiles").select("username, referral_code").eq("id", userId).maybeSingle(),
-    client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 12 }),
+    client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
     client.from("network_volume").select("leg, volume, matched_volume, updated_at").eq("user_id", userId),
   ]);
   const { data: ownerProfile, error: ownerProfileError } = ownerResult;
