@@ -10,9 +10,11 @@
 .binary-member-avatar { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid rgba(44,226,167,.48); border-radius: 10px; color: #baffea; background: rgba(44,226,167,.08); font: 600 10px 'IBM Plex Mono'; }
 .binary-member-status { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: #2ce2a7; box-shadow: 0 0 8px rgba(44,226,167,.7); }
 .is-empty .binary-member-status { background: #56617e; box-shadow: none; }
-.binary-pair { --binary-gap: 34px; display: flex; align-items: flex-start; justify-content: center; gap: var(--binary-gap); width: max-content; min-width: 414px; position: relative; margin-top: 42px; }
+.binary-pair { --binary-gap: 34px; display: grid; grid-template-columns: repeat(2, minmax(max-content, 1fr)); align-items: start; gap: var(--binary-gap); width: max-content; min-width: 414px; position: relative; margin-top: 42px; }
 .binary-branch { min-width: 190px; display: flex; flex-direction: column; align-items: center; position: relative; }
-.binary-pair::before { content: ""; position: absolute; top: -22px; left: 50%; width: calc(50% + var(--binary-gap) / 2 - 95px); min-width: 112px; height: 1px; transform: translateX(-50%); background: linear-gradient(90deg,#7181d5,#5f70b9,#2ce2a7); }
+.binary-branch::after { content: ""; position: absolute; top: -22px; width: calc(50% + var(--binary-gap) / 2); height: 1px; background: #7181d5; }
+.binary-branch:first-child::after { left: 50%; }
+.binary-branch:last-child::after { right: 50%; }
 .binary-pair::after { content: ""; position: absolute; top: -42px; left: 50%; width: 1px; height: 20px; background: #7181d5; }
 .binary-branch::before { content: ""; position: absolute; top: -22px; left: 50%; width: 1px; height: 22px; background: #7181d5; }
 .binary-center-button { border: 1px solid #7180b5; border-radius: 8px; padding: 8px 12px; color: #dce3ff; background: #151c33; cursor: pointer; }

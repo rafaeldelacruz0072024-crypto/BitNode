@@ -28,7 +28,15 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
     const viewport = viewportRef.current;
     if (viewport) viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
   };
-  useLayoutEffect(centerRoot, [root?.user_id, nodes.length]);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(centerRoot);
+    observer.observe(viewport);
+    if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
+    centerRoot();
+    return () => observer.disconnect();
+  }, [root?.user_id, nodes.length]);
 
   const initials = (name?: string) => (name || "?").split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
