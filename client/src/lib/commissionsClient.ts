@@ -110,6 +110,11 @@ export type CommissionSummary = {
   }>;
 };
 
+export type NetworkSummary = Pick<
+  CommissionSummary,
+  "ownerUsername" | "referralCode" | "networkNodes" | "directReferrals"
+>;
+
 async function accessToken() {
   return (
     (await supabase?.auth.getSession())?.data.session?.access_token || null
@@ -126,6 +131,16 @@ export async function fetchCommissionSummary(): Promise<CommissionSummary | null
   if (!response.ok)
     throw new Error("No se pudo cargar el resumen de comisiones.");
   return response.json() as Promise<CommissionSummary>;
+}
+
+export async function fetchNetworkSummary(): Promise<NetworkSummary | null> {
+  const token = await accessToken();
+  if (!token) return null;
+  const response = await fetch("/api/commissions/network", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("No se pudo cargar la red binaria.");
+  return response.json() as Promise<NetworkSummary>;
 }
 
 export async function activateContractAndCommissions(input: {

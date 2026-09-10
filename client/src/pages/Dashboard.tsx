@@ -64,9 +64,11 @@ import {
   completeDailyTask,
   fetchDailyTaskProgress,
   fetchCommissionSummary,
+  fetchNetworkSummary,
   withdrawDailyNodeCapital,
   type CommissionSummary,
   type DailyNodeReward,
+  type NetworkSummary,
 } from "@/lib/commissionsClient";
 
 const DAILY_TASKS = [
@@ -504,6 +506,9 @@ export default function Dashboard() {
     useState<CommissionSummary | null>(null);
   const [commissionLoading, setCommissionLoading] = useState(false);
   const [commissionError, setCommissionError] = useState<string | null>(null);
+  const [networkSummary, setNetworkSummary] = useState<NetworkSummary | null>(null);
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [networkError, setNetworkError] = useState<string | null>(null);
   const section = useMemo(() => location.split("/")[2] || "home", [location]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -550,6 +555,19 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
+  }, [authUserId]);
+  useEffect(() => {
+    let active = true;
+    if (!authUserId) return () => { active = false; };
+    setNetworkLoading(true);
+    setNetworkError(null);
+    fetchNetworkSummary()
+      .then(summary => { if (active) setNetworkSummary(summary); })
+      .catch(error => {
+        if (active) setNetworkError(error instanceof Error ? error.message : "No se pudo cargar la red binaria.");
+      })
+      .finally(() => { if (active) setNetworkLoading(false); });
+    return () => { active = false; };
   }, [authUserId]);
   useEffect(() => {
     if (!authUserId || !supabase) return;
@@ -755,6 +773,9 @@ export default function Dashboard() {
       now={now}
       currentUserId={authUserId}
       commissionSummary={commissionSummary}
+      networkSummary={networkSummary}
+      networkLoading={networkLoading}
+      networkError={networkError}
       commissionLoading={commissionLoading}
       commissionError={commissionError}
       showNotice={showNotice}
@@ -1037,6 +1058,9 @@ function SectionPanel({
   now,
   currentUserId,
   commissionSummary,
+  networkSummary,
+  networkLoading,
+  networkError,
   commissionLoading,
   commissionError,
   showNotice,
@@ -1049,6 +1073,9 @@ function SectionPanel({
   now: number;
   currentUserId?: string;
   commissionSummary: CommissionSummary | null;
+  networkSummary: NetworkSummary | null;
+  networkLoading: boolean;
+  networkError: string | null;
   commissionLoading: boolean;
   commissionError: string | null;
   showNotice: (message: string) => void;
@@ -1404,7 +1431,7 @@ function SectionPanel({
               ["derecha", "PIERNA DERECHA", "→"],
             ] as const
           ).map(([side, label, arrow]) => {
-            const referralCode = commissionSummary?.referralCode?.trim();
+            const referralCode = networkSummary?.referralCode?.trim();
             const link = referralCode
               ? binaryReferralUrl(referralCode, side)
               : "";
@@ -1435,9 +1462,9 @@ function SectionPanel({
           })}
         </div>
         <BinaryTree
-          nodes={commissionSummary?.networkNodes || []}
+          nodes={networkSummary?.networkNodes || []}
           currentUserId={currentUserId}
-          ownerName={commissionSummary?.ownerUsername || user.username}
+          ownerName={networkSummary?.ownerUsername || user.username}
         />
         <section className="direct-referrals-card dash-card">
           <div className="dash-card-head">
@@ -1446,15 +1473,15 @@ function SectionPanel({
               <h3>Mis directos</h3>
             </div>
             <span className="ledger-status">
-              {commissionSummary ? `${commissionSummary.directReferrals?.length || 0} TOTAL` : "CARGANDO"}
+              {networkSummary ? `${networkSummary.directReferrals?.length || 0} TOTAL` : networkLoading ? "CARGANDO" : "SIN DATOS"}
             </span>
           </div>
           <p className="direct-referrals-copy">
             Personas registradas directamente con tu enlace. Solo tú puedes ver esta información.
           </p>
-          {commissionSummary?.directReferrals?.length ? (
+          {networkSummary?.directReferrals?.length ? (
             <div className="direct-referral-list">
-              {commissionSummary.directReferrals.map(referral => (
+              {networkSummary.directReferrals.map(referral => (
                 <div className="direct-referral-row" key={referral.user_id}>
                   <div className="direct-referral-avatar" aria-hidden="true">
                     {referral.username.slice(0, 1).toUpperCase()}
@@ -1475,8 +1502,10 @@ function SectionPanel({
                 </div>
               ))}
             </div>
-          ) : commissionSummary ? (
+          ) : networkSummary ? (
             <EmptyState text="Aún no tienes usuarios directos. Comparte uno de tus enlaces binarios para comenzar." />
+          ) : networkError ? (
+            <div className="commission-state error" role="alert">{networkError}</div>
           ) : (
             <div className="commission-state" role="status">Consultando tus indicaciones directas…</div>
           )}

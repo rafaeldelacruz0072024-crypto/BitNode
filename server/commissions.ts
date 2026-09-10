@@ -33,6 +33,44 @@ type NetworkTreeRow = {
   depth?: number;
 };
 
+export async function getNetworkSummaryWithClient(client: SupabaseClient, userId: string) {
+  const [ownerResult, treeResult] = await Promise.all([
+    client.from("profiles").select("username, referral_code").eq("id", userId).maybeSingle(),
+    client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
+  ]);
+  if (ownerResult.error) throw new Error(`Owner profile query failed: ${ownerResult.error.message}`);
+  if (treeResult.error) throw new Error(`Network tree query failed: ${treeResult.error.message}`);
+
+  const networkNodes = (treeResult.data || []) as NetworkTreeRow[];
+  const userIds = Array.from(new Set(networkNodes.map(node => node.user_id)));
+  const profilesResult = userIds.length
+    ? await client.from("profiles").select("id, username").in("id", userIds)
+    : { data: [], error: null };
+  if (profilesResult.error) throw new Error(`Network profiles query failed: ${profilesResult.error.message}`);
+  const names = new Map((profilesResult.data || []).map(profile => [profile.id, profile.username]));
+  const directNodes = networkNodes.filter(node => node.sponsor_id === userId);
+  const directIds = directNodes.map(node => node.user_id);
+  const contractsResult = directIds.length
+    ? await client.from("contracts").select("user_id, status").in("user_id", directIds)
+    : { data: [], error: null };
+  if (contractsResult.error) throw new Error(`Direct contracts query failed: ${contractsResult.error.message}`);
+  const activeByUser = new Map<string, number>();
+  for (const contract of contractsResult.data || []) {
+    if (contract.status === "active") activeByUser.set(contract.user_id, (activeByUser.get(contract.user_id) || 0) + 1);
+  }
+  return {
+    ownerUsername: ownerResult.data?.username || null,
+    referralCode: ownerResult.data?.referral_code || null,
+    networkNodes: networkNodes.map(node => ({ ...node, username: names.get(node.user_id) || node.username || "Usuario" })),
+    directReferrals: directNodes.map(node => ({
+      user_id: node.user_id,
+      username: names.get(node.user_id) || node.username || "Usuario",
+      leg: node.parent_id === userId ? node.leg : null,
+      active_nodes: activeByUser.get(node.user_id) || 0,
+    })),
+  };
+}
+
 export async function processContractCommissionsWithClient(
   client: Pick<SupabaseClient, "rpc">,
   input: CommissionEventInput
@@ -276,6 +314,20 @@ export async function processConfirmedContractCommissions(
 }
 
 export function registerCommissionRoutes(app: Express) {
+  app.get("/api/commissions/network", async (req: Request, res: Response) => {
+    const client = adminClient();
+    const accessToken = bearer(req);
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
+    const { data, error } = await client.auth.getUser(accessToken);
+    if (error || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
+    try {
+      return res.json(await getNetworkSummaryWithClient(client, data.user.id));
+    } catch (error) {
+      console.error("[Commissions] network error", error);
+      return res.status(500).json({ error: "No se pudo leer la red binaria." });
+    }
+  });
+
   app.get("/api/commissions/summary", async (req: Request, res: Response) => {
     const client = adminClient();
     const accessToken = bearer(req);
