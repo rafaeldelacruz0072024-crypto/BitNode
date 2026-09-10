@@ -1774,6 +1774,23 @@ function ProfilePanel({
                 spellCheck={false}
               />
             </label>
+            <button
+              type="submit"
+              className="dash-primary wallet-save"
+              disabled={
+                loading ||
+                saving ||
+                !/^0x[0-9a-fA-F]{40}$/.test(details.wallet_bep20.trim()) ||
+                details.wallet_bep20.trim() === originalWallet
+              }
+            >
+              {saving
+                ? "Guardando…"
+                : details.wallet_bep20.trim() === originalWallet && originalWallet
+                  ? "Wallet guardada"
+                  : "Guardar wallet"}{" "}
+              <Wallet size={15} />
+            </button>
           </div>
         </section>
         {loading && (
