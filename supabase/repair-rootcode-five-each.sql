@@ -10,8 +10,21 @@ create table if not exists binary_repair_private.rootcode_five_each_backup (
   saved_at timestamptz not null default now()
 );
 revoke all on binary_repair_private.rootcode_five_each_backup from public, anon, authenticated;
-create temporary table selected_binary_moves on commit drop as
-select n.*, row_number() over (order by u.created_at, n.created_at, n.user_id) as sequence
+create table if not exists binary_repair_private.rootcode_selected_moves (
+  user_id uuid primary key,
+  sponsor_id uuid,
+  parent_id uuid,
+  leg text,
+  created_at timestamptz,
+  sequence integer not null
+);
+revoke all on binary_repair_private.rootcode_selected_moves from public, anon, authenticated;
+delete from binary_repair_private.rootcode_selected_moves;
+insert into binary_repair_private.rootcode_selected_moves (
+  user_id, sponsor_id, parent_id, leg, created_at, sequence
+)
+select n.user_id, n.sponsor_id, n.parent_id, n.leg, n.created_at,
+       row_number() over (order by u.created_at, n.created_at, n.user_id)::integer
 from public.network_nodes n
 join auth.users u on u.id = n.user_id
 where n.user_id in (
@@ -34,7 +47,7 @@ begin
   if not exists (select 1 from public.profiles where id=root_id and username='rootcode')
     or not exists (select 1 from public.network_nodes where user_id=root_id and parent_id is null)
     then raise exception 'Expected BitNode rootcode root not found'; end if;
-  if (select count(*) from selected_binary_moves) <> 10
+  if (select count(*) from binary_repair_private.rootcode_selected_moves) <> 10
     then raise exception 'Expected exactly ten users'; end if;
   if exists (select 1 from binary_repair_private.rootcode_five_each_backup)
     then raise exception 'Repair already executed: inspect saved backup before any rerun'; end if;
@@ -44,8 +57,8 @@ begin
 
   -- Detach only the selected users. Unselected children keep their parent.
   update public.network_nodes set parent_id=null, leg=null
-    where user_id in (select user_id from selected_binary_moves);
-  for member in select * from selected_binary_moves order by sequence loop
+    where user_id in (select user_id from binary_repair_private.rootcode_selected_moves);
+  for member in select * from binary_repair_private.rootcode_selected_moves order by sequence loop
     side := case when member.sequence <= 5 then 'left' else 'right' end;
     destination := null;
     destination_leg := null;
@@ -80,14 +93,14 @@ begin
     select n.user_id,t.branch,t.path || n.user_id from tree t
       join public.network_nodes n on n.parent_id=t.user_id where not n.user_id=any(t.path)
   )
-  select count(*) into matched from tree t join selected_binary_moves m using(user_id)
+  select count(*) into matched from tree t join binary_repair_private.rootcode_selected_moves m using(user_id)
     where t.branch=case when m.sequence<=5 then 'left' else 'right' end;
   if matched<>10 then raise exception 'Five-per-branch verification failed'; end if;
   if exists (
     select 1 from public.network_nodes n
     join binary_repair_private.rootcode_five_each_backup b using(user_id)
     where n.sponsor_id is distinct from b.sponsor_id
-       or (not exists(select 1 from selected_binary_moves m where m.user_id=n.user_id)
+       or (not exists(select 1 from binary_repair_private.rootcode_selected_moves m where m.user_id=n.user_id)
            and (n.parent_id is distinct from b.parent_id or n.leg is distinct from b.leg))
   ) then raise exception 'Sponsor or unselected position changed'; end if;
 end;
@@ -96,7 +109,6 @@ select m.sequence,p.username,
   case when m.sequence<=5 then 'left' else 'right' end as rootcode_branch,
   m.parent_id as previous_parent_id,n.parent_id as new_parent_id,n.leg,
   n.sponsor_id as unchanged_sponsor_id
-from selected_binary_moves m join public.network_nodes n using(user_id)
+from binary_repair_private.rootcode_selected_moves m join public.network_nodes n using(user_id)
 left join public.profiles p on p.id=n.user_id order by m.sequence;
 commit;
-
