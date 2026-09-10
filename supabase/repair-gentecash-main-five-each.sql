@@ -1,18 +1,21 @@
--- Authorized exception: move these ten users under rootcode, five per branch.
--- Sponsors remain unchanged; this intentionally does NOT restore sponsor ancestry.
+-- Authorized exception: move these ten users under gentecash@gmail.com, five per branch.
+-- Their sponsor is changed to the principal account in both authoritative tables.
 -- Execute the whole script in BitNode SQL Editor. Any failed check rolls back.
 begin;
 lock table public.network_nodes in access exclusive mode;
 create schema if not exists binary_repair_private;
 revoke all on schema binary_repair_private from public, anon, authenticated;
-create table if not exists binary_repair_private.rootcode_five_each_backup (
-  user_id uuid primary key, sponsor_id uuid, parent_id uuid, leg text,
+create table if not exists binary_repair_private.gentecash_main_five_each_backup (
+  user_id uuid primary key, sponsor_id uuid, profile_sponsor_id uuid,
+  parent_id uuid, leg text,
   saved_at timestamptz not null default now()
 );
-revoke all on binary_repair_private.rootcode_five_each_backup from public, anon, authenticated;
+alter table binary_repair_private.gentecash_main_five_each_backup
+  add column if not exists profile_sponsor_id uuid;
+revoke all on binary_repair_private.gentecash_main_five_each_backup from public, anon, authenticated;
 do $$
 declare
-  root_id uuid := 'a2b4c624-0e6e-4be9-9bb0-58a719c7e34d';
+  root_id uuid := '1d49e94b-381e-41a3-92b8-7441d0f6508e';
   target_ids uuid[] := array[
     '99331595-c002-4a2b-9087-01fd22bf292a'::uuid,'1254e24c-227c-4f73-a390-26238ccd4ec8'::uuid,
     'efbe30e4-46cf-44df-bf47-ea27d80f4094'::uuid,'8e32a176-6f59-4f2a-ad8e-51d388153b76'::uuid,
@@ -27,16 +30,23 @@ declare
   destination_leg text;
   matched integer;
 begin
-  if not exists (select 1 from public.profiles where id=root_id and username='rootcode')
+  if not exists (select 1 from auth.users where id=root_id and lower(email)=lower('gentecash@gmail.com'))
     or not exists (select 1 from public.network_nodes where user_id=root_id and parent_id is null)
-    then raise exception 'Expected BitNode rootcode root not found'; end if;
+    then raise exception 'Expected gentecash@gmail.com root node not found'; end if;
   if (select count(*) from public.network_nodes where user_id = any(target_ids)) <> 10
     then raise exception 'Expected exactly ten users'; end if;
-  if exists (select 1 from binary_repair_private.rootcode_five_each_backup)
+  if exists (select 1 from binary_repair_private.gentecash_main_five_each_backup)
     then raise exception 'Repair already executed: inspect saved backup before any rerun'; end if;
 
-  insert into binary_repair_private.rootcode_five_each_backup(user_id,sponsor_id,parent_id,leg)
-    select user_id,sponsor_id,parent_id,leg from public.network_nodes;
+  insert into binary_repair_private.gentecash_main_five_each_backup(
+    user_id,sponsor_id,profile_sponsor_id,parent_id,leg
+  )
+    select n.user_id,n.sponsor_id,p.sponsor_id,n.parent_id,n.leg
+    from public.network_nodes n
+    left join public.profiles p on p.id=n.user_id;
+
+  update public.profiles set sponsor_id=root_id where id=any(target_ids);
+  update public.network_nodes set sponsor_id=root_id where user_id=any(target_ids);
 
   -- Detach only the selected users. Unselected children keep their parent.
   update public.network_nodes set parent_id=null, leg=null
@@ -90,11 +100,16 @@ begin
   if matched<>10 then raise exception 'Five-per-branch verification failed'; end if;
   if exists (
     select 1 from public.network_nodes n
-    join binary_repair_private.rootcode_five_each_backup b using(user_id)
-    where n.sponsor_id is distinct from b.sponsor_id
+    join binary_repair_private.gentecash_main_five_each_backup b using(user_id)
+    left join public.profiles p on p.id=n.user_id
+    where (n.user_id=any(target_ids)
+           and (n.sponsor_id is distinct from root_id or p.sponsor_id is distinct from root_id))
        or (not n.user_id=any(target_ids)
-           and (n.parent_id is distinct from b.parent_id or n.leg is distinct from b.leg))
-  ) then raise exception 'Sponsor or unselected position changed'; end if;
+           and (n.sponsor_id is distinct from b.sponsor_id
+             or p.sponsor_id is distinct from b.profile_sponsor_id
+             or n.parent_id is distinct from b.parent_id
+             or n.leg is distinct from b.leg))
+  ) then raise exception 'Sponsor or unselected data verification failed'; end if;
 end;
 $$;
 with selected as (
@@ -109,10 +124,10 @@ with selected as (
   )
 )
 select m.sequence,p.username,
-  case when m.sequence<=5 then 'left' else 'right' end as rootcode_branch,
+  case when m.sequence<=5 then 'left' else 'right' end as gentecash_main_branch,
   b.parent_id as previous_parent_id,n.parent_id as new_parent_id,n.leg,
-  n.sponsor_id as unchanged_sponsor_id
+  b.sponsor_id as previous_sponsor_id,n.sponsor_id as new_sponsor_id
 from selected m join public.network_nodes n using(user_id)
-join binary_repair_private.rootcode_five_each_backup b using(user_id)
+join binary_repair_private.gentecash_main_five_each_backup b using(user_id)
 left join public.profiles p on p.id=n.user_id order by m.sequence;
 commit;
