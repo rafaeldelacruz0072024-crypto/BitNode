@@ -27,9 +27,19 @@
 .binary-center-button { border: 1px solid #7180b5; border-radius: 8px; padding: 8px 12px; color: #dce3ff; background: #151c33; cursor: pointer; }
 .binary-center-button:focus-visible,.binary-viewport:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
 @media(max-width:700px) {
-  .binary-viewport { padding: 24px 14px 18px; }
-  .binary-root,.binary-member { width: 170px; }
-  .binary-root { width: 190px; }
-  .binary-branch { min-width: 170px; }
-  .binary-pair { --binary-gap: 24px; min-width: 364px; }
+  .binary-tree-card.dash-card { padding: 12px 0; }
+  .binary-tree-card .dash-card-head { padding-inline: 12px; gap: 8px; }
+  .binary-center-button { min-height: 44px; padding: 8px; font-size: 12px; }
+  .binary-toolbar { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px 40px 44px; gap: 4px; padding: 10px 8px; }
+  .binary-toolbar button { min-width: 0; padding: 8px 4px; font-size: 12px; }
+  .binary-toolbar output { text-align: center; font-size: 12px; }
+  .binary-viewport { padding: 16px 8px; max-height: 62dvh; scrollbar-width: thin; }
+  .binary-root,.binary-member { width: 148px; padding: 8px 4px; gap: 5px; }
+  .binary-root { width: 160px; }
+  .binary-root b,.binary-member b { max-width: 136px; font-size: 14px; }
+  .binary-root span,.binary-member span,.binary-root small,.binary-member small { font-size: 10px; letter-spacing: .02em; }
+  .binary-explore { min-height: 60px; width: 100%; margin-bottom: 0; padding: 8px 4px; font-size: 14px; }
+  .binary-branch { min-width: 148px; }
+  .binary-pair { --binary-gap: 16px; min-width: 312px; }
+  .binary-tree-card .binary-tree-note { padding: 8px 12px; margin: 0; font-size: 12px; }
 }
