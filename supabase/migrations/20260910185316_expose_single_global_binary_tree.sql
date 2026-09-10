@@ -139,3 +139,24 @@ begin
   end if;
 end;
 $$;
+
+with recursive global_tree as (
+  select n.user_id,array[n.user_id] as path
+  from public.network_nodes n
+  where n.user_id='1d49e94b-381e-41a3-92b8-7441d0f6508e'
+  union all
+  select child.user_id,global_tree.path || child.user_id
+  from global_tree
+  join public.network_nodes child on child.parent_id=global_tree.user_id
+  where not child.user_id=any(global_tree.path)
+)
+select
+  (select count(*) from public.network_nodes) as total_nodes,
+  (select count(*) from global_tree) as connected_nodes,
+  (select count(*) from public.network_nodes where parent_id is null) as roots,
+  case
+    when (select count(*) from public.network_nodes)=(select count(*) from global_tree)
+     and (select count(*) from public.network_nodes where parent_id is null)=1
+    then 'GLOBAL_NETWORK_OK'
+    else 'REVIEW_REQUIRED'
+  end as verification;
