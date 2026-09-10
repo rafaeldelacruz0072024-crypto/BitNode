@@ -74,7 +74,7 @@ export default function Home() {
             <div className="bn-actions"><a href="#ecosistema" className="bn-button bn-button-primary">Conocer el ecosistema <ArrowRight size={18} /></a><Link href="/auth?mode=register" className="bn-button bn-button-ghost">Crear cuenta</Link></div>
             <div className="bn-trust"><ShieldCheck size={18} /><span>Reglas claras, ciclos visibles y movimientos registrados.</span></div>
           </div>
-          <div className="bn-hero-art"><div className="bn-orbit bn-orbit-one" /><div className="bn-orbit bn-orbit-two" /><img src="/bitnode-hero-robot.webp" alt="Robot futurista de BitNode" /><div className="bn-signal"><span /> Infraestructura conectada</div></div>
+          <div className="bn-hero-art"><div className="bn-orbit bn-orbit-one" /><div className="bn-orbit bn-orbit-two" /><img src="/bitnode-hero-robot-hq.webp" alt="Robot futurista de BitNode" width={1217} height={1293} fetchPriority="high" decoding="async" /><div className="bn-signal"><span /> Infraestructura conectada</div></div>
         </div>
         <div className="bn-container bn-pillar-rail">{pillars.map(({ icon: Icon, label }) => <div key={label}><Icon /><span>{label}</span></div>)}</div>
       </section>
