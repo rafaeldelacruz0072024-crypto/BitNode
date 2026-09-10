@@ -12,6 +12,13 @@ declare
          and cardinality(v_cycle.completed_tasks) < 4
          and v_cycle.window_started_at <= now() - interval '24 hours') then
 $old$;
+  v_old_condition_multiline text := $old$
+  if (v_cycle.last_completed_at is not null
+      and v_cycle.last_completed_at <= now() - interval '24 hours')
+     or (v_cycle.window_started_at is not null
+         and cardinality(v_cycle.completed_tasks) < 4
+         and v_cycle.window_started_at <= now() - interval '24 hours') then
+$old$;
   v_new_condition text := $new$
   if v_cycle.window_started_at is not null
      and cardinality(v_cycle.completed_tasks) < 4
@@ -22,12 +29,16 @@ begin
   loop
     v_source := pg_get_functiondef(('public.' || v_function_name)::regprocedure);
 
-    if position(v_old_condition in v_source) = 0 then
+    if position(v_new_condition in v_source) > 0 then
+      continue;
+    elsif position(v_old_condition in v_source) > 0 then
+      execute replace(v_source, v_old_condition, v_new_condition);
+    elsif position(v_old_condition_multiline in v_source) > 0 then
+      execute replace(v_source, v_old_condition_multiline, v_new_condition);
+    else
       raise exception 'Unexpected definition for public.%; review before applying incomplete-cycle reset patch',
         v_function_name;
     end if;
-
-    execute replace(v_source, v_old_condition, v_new_condition);
   end loop;
 end;
 $migration$;
