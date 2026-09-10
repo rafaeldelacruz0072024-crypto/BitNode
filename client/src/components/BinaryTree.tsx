@@ -16,7 +16,12 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [trail, setTrail] = useState<string[]>([]);
   const [zoom, setZoom] = useState(0.75);
-  const accountRoot = nodes.find(node => !node.parent_id) || nodes.find(node => node.user_id === currentUserId);
+  // Defense in depth: the signed-in member is always the visual root. Even if
+  // an upstream response accidentally contains a broader tree, ancestors and
+  // sibling branches are never rendered for this account.
+  const accountRoot = currentUserId
+    ? nodes.find(node => node.user_id === currentUserId)
+    : nodes.find(node => !node.parent_id);
   const root = nodes.find(node => node.user_id === trail.at(-1)) || accountRoot;
   const childrenByParent = new Map<string, Partial<Record<"left" | "right", NetworkNode>>>();
 
