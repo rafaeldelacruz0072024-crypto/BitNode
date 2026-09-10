@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import React, { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import "./binary-tree.css";
 
 type NetworkNode = {
