@@ -51,7 +51,10 @@ export default function AuthPage() {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("gentecash");
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -125,6 +128,15 @@ export default function AuthPage() {
       return setError("Introduce un correo válido.");
     if (password.length < 8)
       return setError("La contraseña debe tener al menos 8 caracteres.");
+    if (mode === "signup" && !/^[a-zA-Z0-9_-]{3,48}$/.test(username.trim()))
+      return setError("El usuario debe tener entre 3 y 48 caracteres: letras, números, guion o guion bajo.");
+    if (mode === "signup" && fullName.trim().length < 3)
+      return setError("Introduce el nombre completo del usuario.");
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (mode === "signup" && (phoneDigits.length < 7 || phoneDigits.length > 15))
+      return setError("Introduce un número de teléfono válido, incluyendo el código de país.");
+    if (mode === "signup" && country.trim().length < 2)
+      return setError("Introduce el país del usuario.");
     setLoading(true);
     const result =
       mode === "login"
@@ -137,7 +149,10 @@ export default function AuthPage() {
             password,
             options: {
               data: {
-                username: username.trim() || "usuario",
+                username: username.trim(),
+                full_name: fullName.trim(),
+                phone: phone.trim(),
+                country: country.trim(),
                 sponsor_referral_code: referral?.code,
                 preferred_leg: referral?.leg,
               },
@@ -194,14 +209,47 @@ export default function AuthPage() {
         </p>
         <form onSubmit={submit} noValidate>
           {mode === "signup" && (
-            <label>
-              Usuario
-              <input
-                value={username}
-                onChange={event => setUsername(event.target.value)}
-                autoComplete="username"
-              />
-            </label>
+            <>
+              <label>
+                Nombre completo
+                <input
+                  value={fullName}
+                  onChange={event => setFullName(event.target.value)}
+                  autoComplete="name"
+                  maxLength={120}
+                />
+              </label>
+              <label>
+                Usuario
+                <input
+                  value={username}
+                  onChange={event => setUsername(event.target.value)}
+                  autoComplete="username"
+                  maxLength={48}
+                />
+              </label>
+              <label>
+                Número de teléfono
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={event => setPhone(event.target.value)}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength={24}
+                  placeholder="+1 809 000 0000"
+                />
+              </label>
+              <label>
+                País
+                <input
+                  value={country}
+                  onChange={event => setCountry(event.target.value)}
+                  autoComplete="country-name"
+                  maxLength={80}
+                />
+              </label>
+            </>
           )}
           <label>
             Correo electrónico
