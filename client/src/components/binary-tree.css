@@ -1,0 +1,82 @@
+/* Each branch reserves the full width of its descendants, not just its card. */
+.binary-tree-card .binary-tree-visual {
+  overflow: auto;
+  padding: 28px 20px 20px;
+}
+.binary-tree-content {
+  width: max-content;
+  min-width: 100%;
+}
+.binary-tree-card .tree-level,
+.binary-tree-card .tree-branch > .tree-level {
+  --branch-gap: 28px;
+  display: grid;
+  grid-template-columns: max-content max-content;
+  width: max-content;
+  min-width: 0;
+  gap: var(--branch-gap);
+  margin: 40px auto 0;
+  position: relative;
+}
+.binary-tree-card .tree-level > .tree-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 210px;
+  position: relative;
+}
+.binary-tree-card .tree-branch > .tree-leg {
+  box-sizing: border-box;
+  width: 210px;
+  min-width: 210px;
+  min-height: 118px;
+  padding: 16px 18px;
+  flex-shrink: 0;
+}
+/* Parent stem, sibling connection, and a vertical stem above each child. */
+.binary-tree-card .tree-level::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  right: auto;
+  top: -40px;
+  width: 1px;
+  height: 20px;
+  background: #8996cf;
+}
+.binary-tree-card .tree-level > .tree-branch::before {
+  content: "";
+  position: absolute;
+  top: -20px;
+  width: calc(50% + var(--branch-gap) / 2);
+  height: 1px;
+  margin: 0;
+  background: #8996cf;
+}
+.binary-tree-card .tree-level > .tree-branch:first-child::before { left: 50%; }
+.binary-tree-card .tree-level > .tree-branch:last-child::before { right: 50%; }
+.binary-tree-card .tree-level > .tree-branch::after {
+  content: "";
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  width: 1px;
+  height: 20px;
+  background: #8996cf;
+}
+.binary-tree-card .tree-node.root { animation: none; }
+.binary-tree-card .tree-node:hover,
+.binary-tree-card .tree-leg:hover { transform: none; }
+.binary-tree-card .binary-tree-visual:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: -2px;
+}
+.tree-center-button {
+  border: 1px solid #7180b5;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #dce3ff;
+  background: #151c33;
+  cursor: pointer;
+}
+.tree-center-button:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 3px; }
