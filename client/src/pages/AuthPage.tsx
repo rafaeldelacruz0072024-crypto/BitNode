@@ -24,6 +24,13 @@ export function referralForSubmit(
     : null;
 }
 
+export function registrationRequiresReferral(
+  mode: "login" | "signup",
+  referral: PendingReferral | null
+) {
+  return mode === "signup" && !referral;
+}
+
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const referral = useMemo(() => {
@@ -112,6 +119,8 @@ export default function AuthPage() {
     setMessage("");
     if (!supabase)
       return setError("El servicio de acceso no está disponible en este entorno.");
+    if (registrationRequiresReferral(mode, referral))
+      return setError("Para crear una cuenta necesitas un enlace de referido izquierdo o derecho.");
     if (!email.trim() || !email.includes("@"))
       return setError("Introduce un correo válido.");
     if (password.length < 8)
@@ -240,13 +249,19 @@ export default function AuthPage() {
         <button
           className="auth-switch"
           onClick={() => {
+            if (mode === "login" && !referral) {
+              setError("Solicita a tu patrocinador un enlace de registro izquierdo o derecho.");
+              return;
+            }
             setMode(mode === "login" ? "signup" : "login");
             setError("");
             setMessage("");
           }}
         >
           {mode === "login"
-            ? "¿No tienes cuenta? Crear una"
+            ? referral
+              ? "¿No tienes cuenta? Crear una"
+              : "¿No tienes cuenta? Solicita un enlace de referido"
             : "¿Ya tienes cuenta? Iniciar sesión"}
         </button>
         <Link className="auth-back" href="/">

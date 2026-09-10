@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { referralForSubmit, referralFromMetadata } from "./AuthPage";
+import { referralForSubmit, referralFromMetadata, registrationRequiresReferral } from "./AuthPage";
 
 describe("referral recovery", () => {
   it("restores the sponsor and preferred leg after email confirmation", () => {
@@ -37,5 +37,11 @@ describe("referral recovery", () => {
         preferred_leg: "right",
       })
     ).toEqual({ code: "gentecash", leg: "right" });
+  });
+
+  it("blocks account creation without a binary referral", () => {
+    expect(registrationRequiresReferral("signup", null)).toBe(true);
+    expect(registrationRequiresReferral("login", null)).toBe(false);
+    expect(registrationRequiresReferral("signup", { code: "sponsor", leg: "left" })).toBe(false);
   });
 });
