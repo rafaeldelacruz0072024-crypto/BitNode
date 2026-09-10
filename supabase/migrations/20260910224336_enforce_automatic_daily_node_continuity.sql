@@ -7,30 +7,38 @@ create extension if not exists pg_cron;
 create schema if not exists bitnode_private;
 revoke all on schema bitnode_private from public, anon, authenticated;
 
--- Include completed yield from active open-ended nodes in a continuity reset.
--- This deliberately targets only transactions backed by contract_cycle_rewards;
--- deposits and principal movements cannot match this update.
-do $patch_reset$
-declare
-  v_source text := pg_get_functiondef('public.reset_daily_cycle_for_user(uuid,text)'::regprocedure);
-  v_old_comment text := $old$
-  -- Solo se anulan ganancias provisionales. Las ganancias ya liberadas y el
-  -- capital nunca se modifican mediante un reinicio.
-$old$;
-  v_new_comment text := $new$
+-- Declare the final reset function directly so this migration is independent
+-- of formatting and earlier deployed revisions of the function.
+create or replace function public.reset_daily_cycle_for_user(
+  p_user_id uuid,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform 1
+  from public.daily_task_cycles
+  where user_id = p_user_id
+  for update;
+
+  if p_reason = 'missed_24h_window' then
+    insert into public.user_notifications(user_id, kind)
+    select p_user_id, 'cycle_reset'
+    from public.daily_task_cycles
+    where user_id = p_user_id
+      and (
+        cycle_day > 0
+        or cardinality(completed_tasks) > 0
+        or window_started_at is not null
+        or last_completed_at is not null
+      );
+  end if;
+
   -- La ruptura de continuidad anula el rendimiento generado por nodos activos.
   -- El capital invertido y sus movimientos de principal nunca se modifican.
-$new$;
-  v_old_transactions text := $old$
-  update public.transactions t
-  set status = 'reversed'
-  from public.contract_cycle_rewards r
-  where r.user_id = p_user_id
-    and r.status = 'pending'
-    and r.transaction_id = t.id
-    and t.status = 'pending';
-$old$;
-  v_new_transactions text := $new$
   update public.transactions t
   set status = 'reversed'
   from public.contract_cycle_rewards r
@@ -41,13 +49,7 @@ $old$;
     and r.status in ('pending', 'completed')
     and r.transaction_id = t.id
     and t.status in ('pending', 'completed');
-$new$;
-  v_old_rewards text := $old$
-  update public.contract_cycle_rewards
-  set status = 'reversed', updated_at = now()
-  where user_id = p_user_id and status = 'pending';
-$old$;
-  v_new_rewards text := $new$
+
   update public.contract_cycle_rewards r
   set status = 'reversed', updated_at = now()
   from public.contracts c
@@ -56,24 +58,22 @@ $old$;
     and c.user_id = p_user_id
     and c.status = 'active'
     and r.status in ('pending', 'completed');
-$new$;
-begin
-  if position(v_old_transactions in v_source) = 0
-     or position(v_old_rewards in v_source) = 0 then
-    raise exception 'Unexpected reset function; review before enabling automatic continuity';
-  end if;
 
-  execute replace(
-    replace(
-      replace(v_source, v_old_comment, v_new_comment),
-      v_old_transactions,
-      v_new_transactions
-    ),
-    v_old_rewards,
-    v_new_rewards
-  );
+  update public.daily_task_cycles
+  set cycle_day = 0,
+      completed_tasks = array[]::text[],
+      window_started_at = null,
+      deadline_at = null,
+      last_task_at = now(),
+      last_completed_at = null,
+      updated_at = now()
+  where user_id = p_user_id;
 end;
-$patch_reset$;
+$$;
+
+revoke all on function public.reset_daily_cycle_for_user(uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.reset_daily_cycle_for_user(uuid, text) to service_role;
 
 -- Prevent a second task window from being started before the current completed
 -- window reaches its deadline. This is enforced in the database, not the UI.
