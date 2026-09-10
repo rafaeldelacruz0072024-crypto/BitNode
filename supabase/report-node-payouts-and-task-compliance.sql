@@ -185,7 +185,8 @@ select
   case
     when audit.active_nodes < 1 then 'REVIEW_NO_ACTIVE_NODE'
     when reset.last_reset_at is not null and reset.last_reset_at > cycle.last_completed_at then 'REVIEW_RESET_AFTER_COMPLETION'
-    when cycle.deadline_at <= now() then 'REVIEW_RESET_DUE'
+    when cycle.deadline_at <= now()
+      and cardinality(cycle.completed_tasks) < 4 then 'REVIEW_RESET_DUE'
     when audit.invalid_active_expiry > 0 then 'REVIEW_ACTIVE_NODE_EXPIRY'
     when audit.duplicate_reward_dates > 0 then 'REVIEW_DUPLICATE_REWARDS'
     else 'TASKS_100_PERCENT_NODE_OK_NOT_RESET'
