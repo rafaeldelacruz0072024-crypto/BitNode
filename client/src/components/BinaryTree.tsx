@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import "./binary-tree.css";
 
 type NetworkNode = {
@@ -14,7 +14,10 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
   ownerName: string;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const root = nodes.find(node => node.user_id === currentUserId) || nodes.find(node => !node.parent_id);
+  const [trail, setTrail] = useState<string[]>([]);
+  const [zoom, setZoom] = useState(0.75);
+  const accountRoot = nodes.find(node => node.user_id === currentUserId) || nodes.find(node => !node.parent_id);
+  const root = nodes.find(node => node.user_id === trail.at(-1)) || accountRoot;
   const childrenByParent = new Map<string, Partial<Record<"left" | "right", NetworkNode>>>();
 
   for (const node of nodes) {
@@ -47,11 +50,12 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
       <div className="binary-member-avatar" aria-hidden="true">{node ? initials(node.username) : "+"}</div>
       <b title={node?.username}>{node?.username || "Disponible"}</b>
       <small>{node ? `NIVEL ${depth}` : "ESPERANDO REFERIDO"}</small>
+      {node && <button className="binary-explore" onClick={() => setTrail(previous => [...previous, node.user_id])} aria-label={`Explorar red de ${node.username || "usuario"}`}>Explorar rama ↓</button>}
     </div>
   );
 
   const renderPair = (parentId: string, depth = 1, path = new Set<string>()): ReactNode => {
-    if (path.has(parentId)) return null;
+    if (path.has(parentId) || depth > 3) return null;
     const nextPath = new Set(path).add(parentId);
     const children = childrenByParent.get(parentId) || {};
     if (depth > 1 && !children.left && !children.right) return null;
@@ -77,11 +81,18 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
         <div><span className="dash-eyebrow">ÁRBOL BINARIO</span><h3>Estructura de red</h3></div>
         <button type="button" className="binary-center-button" onClick={centerRoot}>Centrar raíz</button>
       </div>
+      <div className="binary-toolbar" aria-label="Navegación del árbol">
+        <button disabled={!trail.length} onClick={() => setTrail([])}>Mi raíz</button>
+        <button disabled={!trail.length} onClick={() => setTrail(previous => previous.slice(0, -1))}>← Volver</button>
+        <button aria-label="Alejar árbol" disabled={zoom <= 0.3} onClick={() => setZoom(value => Math.max(0.3, value - 0.15))}>−</button>
+        <output aria-live="polite">{Math.round(zoom * 100)}%</output>
+        <button aria-label="Acercar árbol" disabled={zoom >= 1.5} onClick={() => setZoom(value => Math.min(1.5, value + 0.15))}>+</button>
+      </div>
       <div ref={viewportRef} className="binary-viewport" role="region" aria-label="Árbol binario: desplázate horizontalmente para ver ambas piernas" tabIndex={0}>
-        <div className="binary-canvas">
+        <div className="binary-canvas" style={{ zoom }}>
           <div className="binary-root">
             <i className="binary-member-status" />
-            <span>DUEÑO DE LA CUENTA</span>
+            <span>{trail.length ? "RAMA SELECCIONADA" : "DUEÑO DE LA CUENTA"}</span>
             <div className="binary-member-avatar" aria-hidden="true">{initials(root?.username || ownerName)}</div>
             <b>{root?.username || ownerName}</b>
             <small>NODO PRINCIPAL</small>
@@ -89,7 +100,7 @@ export function BinaryTree({ nodes, currentUserId, ownerName }: {
           {root ? renderPair(root.user_id) : null}
         </div>
       </div>
-      <p className="binary-tree-note">Cada usuario ocupa una sola posición: izquierda o derecha dentro de su padre.</p>
+      <p className="binary-tree-note">Desliza para recorrer el árbol. Pulsa «Explorar rama» para profundizar: se muestran tres niveles por vista de la red cargada. «Volver» regresa a la vista anterior.</p>
     </section>
   );
 }
