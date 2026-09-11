@@ -555,6 +555,24 @@ async function createContext(opts) {
 // server/nowpayments.ts
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+
+// shared/depositCashback.ts
+var DEPOSIT_CASHBACK_TIERS = [
+  { minimum: 1e3, rate: 0.2 },
+  { minimum: 500, rate: 0.1 }
+];
+var DEPOSIT_CASHBACK_START = Date.parse("2026-09-11T00:00:00-04:00");
+function depositCashbackTransactionId(sourceTransactionId) {
+  return `CASHBACK-${sourceTransactionId}`;
+}
+function depositCashback(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return { rate: 0, amount: 0 };
+  const tier = DEPOSIT_CASHBACK_TIERS.find((item) => amount >= item.minimum);
+  const rate = tier?.rate ?? 0;
+  return { rate, amount: Number((amount * rate).toFixed(2)) };
+}
+
+// server/nowpayments.ts
 var NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 var SUPPORTED_DEPOSIT_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
 var supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -590,6 +608,13 @@ function validIpnSignature(body, signature) {
 function validDepositCurrency(value) {
   const currency = String(value || "").toLowerCase();
   return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
+}
+function depositCashbackEntry(deposit) {
+  const createdAt = new Date(deposit.created_at).getTime();
+  if (!Number.isFinite(createdAt) || createdAt < DEPOSIT_CASHBACK_START) return null;
+  const cashback = depositCashback(Number(deposit.amount));
+  if (cashback.amount <= 0) return null;
+  return { id: depositCashbackTransactionId(deposit.id), user_id: deposit.user_id, username: deposit.username, type: "deposit", label: `Cashback promocional ${cashback.rate * 100}%`, amount: cashback.amount, status: "completed", network: deposit.network, provider_status: `promo_cashback:${deposit.id}` };
 }
 function registerNowPaymentsRoutes(app2) {
   app2.post("/api/payments/nowpayments/payment", async (req, res) => {
@@ -659,8 +684,24 @@ function registerNowPaymentsRoutes(app2) {
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
     const status = ["finished", "confirmed"].includes(providerStatus) ? "completed" : ["failed", "expired", "refunded"].includes(providerStatus) ? "failed" : "pending";
     if (orderId) {
-      const { error } = await admin3.from("transactions").update({ status, provider_status: providerStatus, provider_payment_id: body.payment_id ? String(body.payment_id) : void 0 }).eq("id", orderId).eq("type", "deposit");
+      const { data: deposit, error: lookupError } = await admin3.from("transactions").select("id,user_id,username,amount,network,created_at,provider_payment_id").eq("id", orderId).eq("type", "deposit").maybeSingle();
+      if (lookupError) return res.status(500).json({ error: "No se pudo consultar la transacci\xF3n." });
+      if (!deposit) return res.status(404).json({ error: "Dep\xF3sito no encontrado." });
+      const paymentId = body.payment_id ? String(body.payment_id) : "";
+      if (paymentId && deposit.provider_payment_id && paymentId !== String(deposit.provider_payment_id)) return res.status(409).json({ error: "El pago no corresponde al dep\xF3sito." });
+      const { error } = await admin3.from("transactions").update({ status, provider_status: providerStatus, provider_payment_id: paymentId || void 0 }).eq("id", orderId).eq("type", "deposit");
       if (error) return res.status(500).json({ error: "No se pudo actualizar la transacci\xF3n." });
+      const cashbackId = depositCashbackTransactionId(orderId);
+      if (status === "completed") {
+        const cashback = depositCashbackEntry({ ...deposit, amount: Number(deposit.amount), created_at: String(deposit.created_at) });
+        if (cashback) {
+          const { error: cashbackError } = await admin3.from("transactions").upsert({ ...cashback, created_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "id" });
+          if (cashbackError) return res.status(500).json({ error: "No se pudo acreditar el cashback." });
+        }
+      } else if (status === "failed") {
+        const { error: reversalError } = await admin3.from("transactions").update({ status: "reversed", provider_status: `promo_cashback:reversed:${orderId}` }).eq("id", cashbackId).like("provider_status", "promo_cashback:%");
+        if (reversalError) return res.status(500).json({ error: "No se pudo revertir el cashback." });
+      }
     }
     return res.json({ received: true });
   });

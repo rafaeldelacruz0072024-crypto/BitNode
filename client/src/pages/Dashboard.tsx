@@ -52,6 +52,7 @@ import { confirmWithdrawal, requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
 import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
+import { depositCashback } from "@shared/depositCashback";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -1817,7 +1818,7 @@ function ProfilePanel({
   );
 }
 
-function DepositPanel({
+export function DepositPanel({
   title,
   copy,
 }: {
@@ -1836,6 +1837,7 @@ function DepositPanel({
     payCurrency: string;
   } | null>(null);
   const [qrImage, setQrImage] = useState("");
+  const cashback = depositCashback(amount);
   useEffect(() => {
     if (!payment?.payAddress) {
       setQrImage("");
@@ -1886,6 +1888,14 @@ function DepositPanel({
       <span className="dash-eyebrow">BALANCE DE CUENTA</span>
       <h2>{title}</h2>
       <p>{copy}</p>
+      <section className="deposit-cashback-promo" aria-label="Promoción Giveaway Deposit Cashback">
+        <div><span className="dash-eyebrow">PROMOCIÓN ESPECIAL · GIVEAWAY</span><h3>Deposit Cashback</h3><p>Más depósitos, más oportunidades.</p></div>
+        <div className="cashback-tiers">
+          <span><b>+500 USDT</b><strong>10%</strong><small>CASHBACK</small></span>
+          <span><b>+1,000 USDT</b><strong>20%</strong><small>CASHBACK</small></span>
+        </div>
+        <small>El cashback se acredita automáticamente después de confirmar el depósito. Una bonificación por transacción válida.</small>
+      </section>
       <section className="dash-card money-form payment-form">
         <label>
           Monto del depósito
@@ -1914,6 +1924,7 @@ function DepositPanel({
           Redes disponibles: TRC20 y BEP20. El balance se acredita
           automáticamente cuando recibimos la confirmación IPN válida.
         </small>
+        {cashback.rate > 0 && <div className="cashback-estimate" role="status"><span>Cashback estimado ({cashback.rate * 100}%)</span><strong>+{money(cashback.amount)}</strong><small>Total después de confirmar: {money(amount + cashback.amount)}</small></div>}
         {error && (
           <div className="form-error" role="alert">
             {error}

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { describe, expect, it, beforeEach } from "vitest";
-import { validDepositCurrency, validIpnSignature } from "./nowpayments";
+import { depositCashbackEntry, validDepositCurrency, validIpnSignature } from "./nowpayments";
 
 function signature(body: Record<string, unknown>, secret: string) {
   const sorted = Object.keys(body).sort().reduce<Record<string, unknown>>((result, key) => {
@@ -34,5 +34,20 @@ describe("supported deposit networks", () => {
     expect(validDepositCurrency("usdtbsc")).toBe("usdtbsc");
     expect(validDepositCurrency("usdterc20")).toBeNull();
     expect(validDepositCurrency("btc")).toBeNull();
+  });
+});
+
+describe("confirmed deposit cashback ledger entry", () => {
+  const deposit = { id: "NP-1", user_id: "user-1", username: "cliente", amount: 500, network: "usdtbsc", created_at: "2026-09-11T04:00:00.000Z" };
+
+  it("creates deterministic 10% and 20% credits", () => {
+    expect(depositCashbackEntry(deposit)).toMatchObject({ id: "CASHBACK-NP-1", amount: 50, status: "completed" });
+    expect(depositCashbackEntry({ ...deposit, amount: 1000 })).toMatchObject({ id: "CASHBACK-NP-1", amount: 200, label: "Cashback promocional 20%" });
+  });
+
+  it("does not credit deposits below the tier, before launch, or with invalid dates", () => {
+    expect(depositCashbackEntry({ ...deposit, amount: 499.99 })).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, created_at: "2026-09-11T03:59:59.999Z" })).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, created_at: "invalid" })).toBeNull();
   });
 });
