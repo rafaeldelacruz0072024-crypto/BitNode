@@ -62,6 +62,7 @@ export async function fetchDailyTaskProgress() {
     last_task_at: string | null;
     cycle_reset?: boolean;
     registered_at?: string | null;
+    first_node_purchased_at?: string | null;
     tasks_available_at?: string | null;
     tasks_available?: boolean;
   };

@@ -1,8 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 
-const ADMIN_EMAIL = "gentecash@gmail.com";
-
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -22,7 +20,7 @@ export async function authenticatedAdmin(req: Request) {
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesión no es válida.", status: 401 } as const;
   const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
-  if (profileError || profile?.role !== "admin" || data.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+  if (profileError || profile?.role !== "admin") {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 } as const;
   }
   return { client, userId: data.user.id } as const;

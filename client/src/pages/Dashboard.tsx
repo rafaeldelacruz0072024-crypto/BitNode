@@ -126,9 +126,9 @@ function DailyTasksPanel({
       .then(async progress => {
         if (!progress) return;
         const authUser = (await supabase?.auth.getUser())?.data.user;
-        const registeredAt = progress.registered_at || authUser?.created_at || null;
-        const fallbackAvailableAt = registeredAt
-          ? new Date(new Date(registeredAt).getTime() + 24 * 60 * 60 * 1000)
+        const firstNodeAt = progress.first_node_purchased_at || progress.registered_at || null;
+        const fallbackAvailableAt = firstNodeAt
+          ? new Date(new Date(firstNodeAt).getTime() + 24 * 60 * 60 * 1000)
           : null;
         const availableAt = progress.tasks_available_at
           ? new Date(progress.tasks_available_at)
@@ -264,7 +264,7 @@ function DailyTasksPanel({
         <h2>Tareas disponibles en</h2>
         <strong className="task-unlock-clock">{timeLeft}</strong>
         <p>
-          Tus tareas se habilitan 24 horas después de registrar la cuenta: {new Date(tasksAvailableAt).toLocaleString("es-DO")}.
+          Tus tareas se habilitan 24 horas después de tu primera compra de nodo: {new Date(tasksAvailableAt).toLocaleString("es-DO")}.
         </p>
         <div className="task-unlock-orbit" aria-hidden="true"><Clock3 size={28} /></div>
       </div>

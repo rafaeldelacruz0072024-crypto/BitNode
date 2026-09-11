@@ -39,7 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return res.status(401).json({ error: "La sesión no es válida o expiró.", status: "unauthenticated" });
     const profile = await userProfile(user.id);
     if (!profile || profile.role !== "admin") return res.status(403).json({ error: "El usuario no tiene rol administrativo.", status: "forbidden" });
-    if ((user.email || "").toLowerCase() !== "gentecash@gmail.com") return res.status(403).json({ error: "Correo administrativo no autorizado.", status: "forbidden" });
     if (req.method === "GET") return res.status(200).json({ status: "ready", readOnly: false, user: { id: user.id, email: user.email, username: profile.username, role: profile.role }, scope: ["overview", "deposit"] });
 
     const targetUserId = String(req.body?.userId || "").trim();

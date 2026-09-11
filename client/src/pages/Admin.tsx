@@ -31,6 +31,7 @@ type SectionName =
   | "Operaciones"
   | "Retiros"
   | "Contratos"
+  | "Control de nodos"
   | "Transacciones"
   | "Comisiones"
   | "Configuración";
@@ -89,6 +90,21 @@ type AdminCommission = {
   createdAt: string | null;
 };
 
+type NodeControlRow = {
+  id?: string;
+  contract_id?: string;
+  username: string;
+  plan_name: string;
+  amount?: number;
+  cycle_day?: number;
+  cycle_day_before?: number;
+  completed_tasks?: number;
+  completed_tasks_before?: string[];
+  deadline_at?: string | null;
+  reset_at?: string;
+  ends_at?: string | null;
+};
+
 type AdminData = {
   status: "ready";
   readOnly: boolean;
@@ -131,6 +147,7 @@ const sections: SectionName[] = [
   "Operaciones",
   "Retiros",
   "Contratos",
+  "Control de nodos",
   "Transacciones",
   "Comisiones",
   "Configuración",
@@ -141,6 +158,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Operaciones: CircleDollarSign,
   Retiros: WalletCards,
   Contratos: FileClock,
+  "Control de nodos": Server,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
   Configuración: Settings2,
@@ -619,6 +637,46 @@ export function UsersSection({
       )}
     </article>
   );
+}
+
+function NodeControlSection() {
+  const [data, setData] = useState<{ reset: NodeControlRow[]; complying: NodeControlRow[]; completed: NodeControlRow[]; totals: { reset: number; complying: number; completed: number } } | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/node-control", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "No se pudo cargar el control de nodos.");
+      setData(body);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el control de nodos."); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
+  if (loading) return <LoadingState />;
+  if (error) return <div className="admin-data-error" role="alert">{error}<button onClick={() => void load()}>Reintentar</button></div>;
+  if (!data) return null;
+
+  const groups: Array<[string, string, NodeControlRow[], string]> = [
+    ["Nodos reiniciados", "No cumplieron la jornada dentro de 24 horas", data.reset, "reset"],
+    ["Cumpliendo tareas", "Jornada activa con tareas completadas y plazo vigente", data.complying, "active"],
+    ["Nodos completados", "Ciclos finalizados conservados en el historial", data.completed, "completed"],
+  ];
+  return <div className="node-control-grid">
+    <div className="node-control-metrics">
+      <article><span>REINICIADOS</span><strong>{data.totals.reset}</strong></article>
+      <article><span>EN CUMPLIMIENTO</span><strong>{data.totals.complying}</strong></article>
+      <article><span>COMPLETADOS</span><strong>{data.totals.completed}</strong></article>
+    </div>
+    {groups.map(([title, copy, rows, kind]) => <article className="admin-card admin-card-full" key={title}>
+      <div className="card-heading"><div><p className="admin-kicker">TASK CONTROL / {kind.toUpperCase()}</p><h2>{title}</h2><p className="config-note">{copy}</p></div><span className="card-status">{rows.length} registros</span></div>
+      {!rows.length ? <EmptyState title="Sin registros" detail="No hay nodos en este estado." /> : <DataTable label={title}><thead><tr><th>Usuario</th><th>Nodo</th><th>Capital</th><th>Jornada</th><th>Tareas</th><th>Fecha límite / evento</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || `${row.contract_id}-${index}`}><td><strong>{row.username}</strong></td><td>{row.plan_name}<small>{row.contract_id || row.id}</small></td><td>{row.amount == null ? "—" : money(row.amount)}</td><td>{row.cycle_day ?? row.cycle_day_before ?? 0}</td><td>{row.completed_tasks ?? row.completed_tasks_before?.length ?? 0} / 4</td><td>{dateLabel(row.reset_at || row.deadline_at || row.ends_at)}</td></tr>)}</tbody></DataTable>}
+    </article>)}
+  </div>;
 }
 
 function OperationsSection({
@@ -1578,6 +1636,7 @@ export default function Admin() {
           ) : (
             <LoadingState />
           ))}
+        {activeSection === "Control de nodos" && <NodeControlSection />}
         {activeSection === "Transacciones" &&
           (adminData ? (
             <TransactionsSection rows={adminData.transactions} />

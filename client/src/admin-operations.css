@@ -10,6 +10,8 @@
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 
+.node-control-grid{display:grid;gap:14px}.node-control-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.node-control-metrics article{padding:20px;border:1px solid rgba(109,124,255,.28);border-radius:8px;background:linear-gradient(145deg,rgba(20,25,57,.92),#090c18)}.node-control-metrics span{display:block;color:#7f89a9;font:9px 'IBM Plex Mono';letter-spacing:.08em}.node-control-metrics strong{display:block;margin-top:10px;color:#eef1ff;font:600 25px 'IBM Plex Mono'}@media(max-width:700px){.node-control-metrics{grid-template-columns:1fr}.node-control-metrics article{padding:15px}}
+
 .admin-operation-search:focus-within {
   border-color: var(--indigo);
   box-shadow: 0 0 0 3px rgba(109, 124, 255, 0.12);

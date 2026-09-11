@@ -1068,7 +1068,6 @@ function registerDepositRoutes(app2) {
 
 // server/adminWithdrawals.ts
 import { createClient as createClient6 } from "@supabase/supabase-js";
-var ADMIN_EMAIL = "gentecash@gmail.com";
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1086,7 +1085,7 @@ async function authenticatedAdmin(req) {
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
   const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
-  if (profileError || profile?.role !== "admin" || data.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+  if (profileError || profile?.role !== "admin") {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
   }
   return { client, userId: data.user.id };
@@ -1218,6 +1217,51 @@ function registerAdminMonthlyRoiRoutes(app2) {
     } catch {
       return res.status(503).json({ error: "No se pudieron guardar los porcentajes." });
     }
+  });
+}
+
+// server/adminNodeControl.ts
+function registerAdminNodeControlRoutes(app2) {
+  app2.get("/api/admin/node-control", async (req, res) => {
+    const admin3 = await authenticatedAdmin(req);
+    if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+    const [contractsResult, cyclesResult, resetsResult, profilesResult, plansResult] = await Promise.all([
+      admin3.client.from("contracts").select("id,user_id,plan_id,amount,status,starts_at,ends_at,created_at").order("created_at", { ascending: false }).limit(1e3),
+      admin3.client.from("daily_task_cycles").select("user_id,cycle_day,completed_tasks,window_started_at,deadline_at,last_completed_at"),
+      admin3.client.from("node_task_reset_log").select("id,user_id,contract_id,reason,reset_at,cycle_day_before,completed_tasks_before").order("reset_at", { ascending: false }).limit(500),
+      admin3.client.from("profiles").select("id,username"),
+      admin3.client.from("plans").select("id,name")
+    ]);
+    const error = contractsResult.error || cyclesResult.error || resetsResult.error || profilesResult.error || plansResult.error;
+    if (error) return res.status(500).json({ error: "No se pudo cargar el control de nodos.", details: error.message });
+    const cycles = new Map((cyclesResult.data || []).map((row) => [row.user_id, row]));
+    const usernames = new Map((profilesResult.data || []).map((row) => [row.id, row.username || row.id.slice(0, 8)]));
+    const plans = new Map((plansResult.data || []).map((row) => [row.id, row.name]));
+    const now = Date.now();
+    const format = (contract) => {
+      const cycle = cycles.get(contract.user_id);
+      return {
+        ...contract,
+        username: usernames.get(contract.user_id) || contract.user_id.slice(0, 8),
+        plan_name: plans.get(contract.plan_id) || contract.plan_id,
+        cycle_day: cycle?.cycle_day || 0,
+        completed_tasks: cycle?.completed_tasks?.length || 0,
+        deadline_at: cycle?.deadline_at || null
+      };
+    };
+    const contracts = contractsResult.data || [];
+    const complying = contracts.filter((contract) => {
+      if (contract.status !== "active") return false;
+      const cycle = cycles.get(contract.user_id);
+      return Boolean(cycle?.window_started_at && cycle.deadline_at && new Date(cycle.deadline_at).getTime() > now && (cycle.completed_tasks?.length || 0) > 0);
+    }).map(format);
+    const completed = contracts.filter((contract) => ["completed", "expired"].includes(contract.status)).map(format);
+    const resetRows = (resetsResult.data || []).map((row) => ({
+      ...row,
+      username: usernames.get(row.user_id) || row.user_id.slice(0, 8),
+      plan_name: plans.get(contracts.find((contract) => contract.id === row.contract_id)?.plan_id || "") || "Nodo"
+    }));
+    return res.json({ reset: resetRows, complying, completed, totals: { reset: resetRows.length, complying: complying.length, completed: completed.length } });
   });
 }
 
@@ -1401,6 +1445,7 @@ function createApp() {
   registerDepositRoutes(app2);
   registerAdminWithdrawalRoutes(app2);
   registerAdminMonthlyRoiRoutes(app2);
+  registerAdminNodeControlRoutes(app2);
   registerEmailSecurityRoutes(app2);
   app2.use(
     "/api/trpc",
