@@ -5,6 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { NodeCycleProvider, NodeCycleProgress } from "@/components/NodeCycleProgress";
+import MarketPredictions from "@/components/MarketPredictions";
 import { useCycleNotifications } from "@/components/CycleNotifications";
 import { Link, useLocation } from "wouter";
 import {
@@ -381,6 +382,7 @@ const nav = [
   ["Activar nodos", "/dashboard/activate", Gem],
   ["Tareas diarias", "/dashboard/tasks", CheckCircle2],
   ["Mis nodos", "/dashboard/nodes", Box],
+  ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
   ["Depositar", "/dashboard/deposit", Plus],
   ["Retirar", "/dashboard/withdraw", Wallet],
@@ -758,7 +760,7 @@ export default function Dashboard() {
   if (authLoading)
     return <div className="auth-loading">Verificando sesión…</div>;
   if (!authUserId) return null;
-  const content = isHome ? (
+  const content = section === "predictions" ? <MarketPredictions /> : isHome ? (
     <HomePanel
       user={user}
       commissionSummary={commissionSummary}
