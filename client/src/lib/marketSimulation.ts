@@ -103,14 +103,30 @@ export function advancePredictions(
   ].slice(0, 30);
 }
 
+export function tickPredictionPrices(
+  rows: Prediction[],
+  quoteStep: number
+): Prediction[] {
+  return rows.map(row => {
+    if (row.status === "Completada") return row;
+    const drift = (sample(row.id * 79 + quoteStep * 3) - 0.5) * 0.0024;
+    const confidenceDrift = sample(row.id * 17 + quoteStep) > 0.66
+      ? sample(row.id + quoteStep) > 0.5 ? 1 : -1
+      : 0;
+    return {
+      ...row,
+      price: round(Math.max(row.entry * 0.94, row.price * (1 + drift)), row.decimals),
+      confidence: Math.max(50, Math.min(89, row.confidence + confidenceDrift)),
+    };
+  });
+}
+
 export function simulationSummary(rows: Prediction[]) {
   const completed = rows.filter(row => row.status === "Completada");
   return {
     count: rows.length,
     volume: rows.reduce((sum, row) => sum + row.amount, 0),
-    result: round(
-      completed.reduce((sum, row) => sum + predictionReturn(row).amount, 0)
-    ),
+    result: round(rows.reduce((sum, row) => sum + predictionReturn(row).amount, 0)),
     accuracy: completed.length
       ? (completed.filter(row => predictionReturn(row).amount > 0).length /
           completed.length) *

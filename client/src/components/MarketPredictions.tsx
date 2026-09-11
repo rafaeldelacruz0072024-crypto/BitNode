@@ -15,6 +15,7 @@ import {
   initialPredictions,
   predictionReturn,
   simulationSummary,
+  tickPredictionPrices,
   type Market,
 } from "@/lib/marketSimulation";
 import "./market-predictions.css";
@@ -43,6 +44,7 @@ export default function MarketPredictions() {
   const [simulation, setSimulation] = useState(() => ({
     rows: initialPredictions(),
     step: 0,
+    quoteStep: 0,
   }));
   const [running, setRunning] = useState(true);
   const [market, setMarket] = useState<Market | "Todos">("Todos");
@@ -57,8 +59,22 @@ export default function MarketPredictions() {
       setSimulation(current => ({
         rows: advancePredictions(current.rows, current.step + 1),
         step: current.step + 1,
+        quoteStep: current.quoteStep + 1,
       }));
     }, 8000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      setSimulation(current => ({
+        ...current,
+        rows: tickPredictionPrices(current.rows, current.quoteStep + 1),
+        quoteStep: current.quoteStep + 1,
+      }));
+    }, 1800);
     return () => window.clearInterval(timer);
   }, [running]);
 
@@ -140,7 +156,7 @@ export default function MarketPredictions() {
         >
           <span>RESULTADO SIMULADO</span>
           <strong>{signedMoney(summary.result)}</strong>
-          <small>Solo escenarios completados</small>
+          <small>Resultado flotante de la muestra</small>
         </article>
         <article className="mp-purple">
           <span>ACIERTOS DE LA MUESTRA</span>
@@ -176,7 +192,7 @@ export default function MarketPredictions() {
           <button
             type="button"
             onClick={() => {
-              setSimulation({ rows: initialPredictions(), step: 0 });
+              setSimulation({ rows: initialPredictions(), step: 0, quoteStep: 0 });
               setRunning(false);
               setMarket("Todos");
               setStatus("Todas");
@@ -275,7 +291,7 @@ export default function MarketPredictions() {
                       ? "CIERRE SIMULADO"
                       : "PRECIO SIMULADO"}
                   </span>
-                  <strong className="mp-live-price" key={`${row.id}-${row.ticks}`}>{price(row.price, row.decimals)}</strong>
+                  <strong className="mp-live-price" key={`${row.id}-${simulation.quoteStep}`}>{price(row.price, row.decimals)}</strong>
                   <small>Escenario #{String(row.id).padStart(4, "0")}</small>
                 </div>
                 <div className="mp-confidence">

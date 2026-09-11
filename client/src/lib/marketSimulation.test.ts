@@ -5,6 +5,7 @@ import {
   initialPredictions,
   predictionReturn,
   simulationSummary,
+  tickPredictionPrices,
 } from "./marketSimulation";
 
 describe("prediction simulation", () => {
@@ -24,7 +25,7 @@ describe("prediction simulation", () => {
       amount: -20,
     });
   });
-  it("counts only completed results and handles no completed scenarios", () => {
+  it("keeps a floating result while accuracy uses completed scenarios", () => {
     const row = {
       ...createPrediction(1),
       entry: 100,
@@ -39,13 +40,17 @@ describe("prediction simulation", () => {
     expect(summary).toEqual({
       count: 2,
       volume: 2000,
-      result: 10,
+      result: 20,
       accuracy: 100,
     });
-    expect(simulationSummary([row])).toMatchObject({
-      result: 0,
-      accuracy: null,
-    });
+    expect(simulationSummary([row])).toMatchObject({ result: 10, accuracy: null });
+  });
+  it("moves monitored quotes while completed results remain frozen", () => {
+    const monitored = createPrediction(1);
+    const completed = { ...createPrediction(2), status: "Completada" as const };
+    const next = tickPredictionPrices([monitored, completed], 4);
+    expect(next[0].price).not.toBe(monitored.price);
+    expect(next[1]).toEqual(completed);
   });
   it("freezes completed scenarios while settling monitored ones", () => {
     const rows = initialPredictions();
