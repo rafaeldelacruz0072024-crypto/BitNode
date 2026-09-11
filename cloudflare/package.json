@@ -1,0 +1,17 @@
+{
+  "name": "bitnode-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node wrangler.mjs dev --config ../wrangler.jsonc --env staging --local",
+    "check": "node wrangler.mjs deploy --config ../wrangler.jsonc --env staging --dry-run",
+    "deploy:staging": "node wrangler.mjs deploy --config ../wrangler.jsonc --env staging",
+    "deploy:production": "node wrangler.mjs deploy --config ../wrangler.jsonc --env production",
+    "whoami": "node wrangler.mjs whoami",
+    "types": "node wrangler.mjs types --config ../wrangler.jsonc --env staging worker-configuration.d.ts",
+    "test": "node --test worker.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.131.0"
+  }
+}

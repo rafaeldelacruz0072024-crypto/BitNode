@@ -4,6 +4,11 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "cloudflare:build": "vite build",
+    "cloudflare:dev": "npm run cloudflare:build && npm --prefix cloudflare run dev",
+    "cloudflare:check": "npm run cloudflare:build && npm --prefix cloudflare run check",
+    "cloudflare:deploy:staging": "npm run cloudflare:build && npm --prefix cloudflare run deploy:staging",
+    "cloudflare:deploy:production": "npm run cloudflare:build && npm --prefix cloudflare run deploy:production",
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/app.ts --platform=node --packages=external --bundle --format=esm --outfile=api/handler.mjs",
     "start": "NODE_ENV=production node dist/index.js",

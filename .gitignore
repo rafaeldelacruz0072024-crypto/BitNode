@@ -115,3 +115,7 @@ client/public/__manus__/version.json
 .vercel
 .env*
 /supabase/.temp/
+.wrangler/
+.dev.vars
+.dev.vars.*
+cloudflare/worker-configuration.d.ts
