@@ -95,6 +95,36 @@
   letter-spacing: 0.1em;
   color: #8390b2;
 }
+.market-sim .mp-operation-feed {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 48px;
+  margin: -7px 0 20px;
+  padding: 0 16px;
+  overflow: hidden;
+  border: 1px solid rgba(113, 139, 213, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(14, 22, 45, 0.94), rgba(7, 11, 24, 0.84));
+}
+.market-sim .mp-feed-label {
+  display: flex; align-items: center; gap: 8px; color: #8fa9ff;
+  font: 600 9px/1 "IBM Plex Mono", monospace; letter-spacing: 0.12em; white-space: nowrap;
+}
+.market-sim .mp-feed-window { position: relative; height: 30px; overflow: hidden; }
+.market-sim .mp-feed-window > div {
+  position: absolute; inset: 0; display: flex; align-items: center; gap: 12px;
+  opacity: 0; transform: translateY(14px); transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.market-sim .mp-feed-window > div.is-active { opacity: 1; transform: translateY(0); }
+.market-sim .mp-feed-window i { width: 5px; height: 5px; border-radius: 50%; background: #35efbd; box-shadow: 0 0 10px #35efbd; }
+.market-sim .mp-feed-window strong { color: #eef3ff; font-size: 11px; }
+.market-sim .mp-feed-window span { color: #8796bd; font-size: 10px; }
+.market-sim .mp-feed-window b { color: #35efbd; font: 600 10px/1 "IBM Plex Mono", monospace; }
+.market-sim .mp-operation-feed > small { display: flex; align-items: center; gap: 7px; color: #607092; font: 8px/1 "IBM Plex Mono", monospace; letter-spacing: 0.12em; }
+.market-sim .mp-operation-feed > small i { width: 5px; height: 5px; border-radius: 50%; background: #52607d; }
+.market-sim .mp-operation-feed.is-running > small i { background: #35efbd; animation: mp-feed-pulse 1.2s ease-in-out infinite; }
 .market-sim .mp-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -251,6 +281,9 @@
   background: linear-gradient(115deg, #0e1423, #0a0f1b);
   overflow: hidden;
 }
+.market-sim .mp-row.is-new-operation { animation: mp-operation-in 0.55s cubic-bezier(0.2, 0.75, 0.25, 1); border-color: rgba(105, 134, 255, 0.38); }
+.market-sim .mp-live-price { display: inline-block; animation: mp-price-tick 0.5s ease; }
+.market-sim .mp-metrics article { animation: mp-metric-tick 0.45s ease; }
 .market-sim .mp-row-header {
   display: flex;
   justify-content: space-between;
@@ -438,6 +471,10 @@
     box-shadow: 0 0 0 4px #36d9a015;
   }
 }
+@keyframes mp-operation-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mp-price-tick { 0% { color: #35efbd; text-shadow: 0 0 12px rgba(53, 239, 189, 0.65); transform: translateY(-2px); } 100% { color: inherit; text-shadow: none; transform: translateY(0); } }
+@keyframes mp-metric-tick { 0% { transform: translateY(-2px); border-color: rgba(105, 134, 255, 0.48); } 100% { transform: translateY(0); } }
+@keyframes mp-feed-pulse { 50% { opacity: 0.3; box-shadow: 0 0 10px #35efbd; } }
 @media (max-width: 1100px) {
   .market-sim .mp-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -450,6 +487,11 @@
   }
 }
 @media (max-width: 700px) {
+  .market-sim .mp-operation-feed { grid-template-columns: 1fr auto; gap: 8px; padding: 9px 12px; }
+  .market-sim .mp-feed-label { grid-column: 1 / -1; }
+  .market-sim .mp-feed-window { min-width: 0; }
+  .market-sim .mp-feed-window > div { gap: 7px; }
+  .market-sim .mp-feed-window span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .market-sim .mp-heading {
     align-items: flex-start;
     flex-direction: column;

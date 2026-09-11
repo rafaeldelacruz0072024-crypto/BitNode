@@ -31,6 +31,14 @@ const price = (value: number, decimals: number) =>
     maximumFractionDigits: decimals,
   });
 
+const operationFeed = [
+  ["BTC / USDT", "Analizando impulso", "+0.42%"],
+  ["EUR / USD", "Validando señal", "68%"],
+  ["NASDAQ 100", "Ajustando escenario", "−0.18%"],
+  ["ETH / USDT", "Operación virtual", "+0.31%"],
+  ["S&P 500", "Calculando resultado", "+0.12%"],
+] as const;
+
 export default function MarketPredictions() {
   const [simulation, setSimulation] = useState(() => ({
     rows: initialPredictions(),
@@ -40,6 +48,7 @@ export default function MarketPredictions() {
   const [market, setMarket] = useState<Market | "Todos">("Todos");
   const [status, setStatus] = useState("Todas");
   const [notice, setNotice] = useState("");
+  const [activityIndex, setActivityIndex] = useState(0);
 
   useEffect(() => {
     if (!running) return;
@@ -50,6 +59,15 @@ export default function MarketPredictions() {
         step: current.step + 1,
       }));
     }, 8000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(
+      () => setActivityIndex(value => (value + 1) % operationFeed.length),
+      1400
+    );
     return () => window.clearInterval(timer);
   }, [running]);
 
@@ -90,8 +108,21 @@ export default function MarketPredictions() {
         <span>USD VIRTUAL</span>
       </div>
 
+      <div className={`mp-operation-feed ${running ? "is-running" : ""}`} aria-label="Actividad de operaciones simuladas">
+        <span className="mp-feed-label"><Activity size={14} /> OPERACIONES SIMULADAS</span>
+        <div className="mp-feed-window" aria-live="polite">
+          {operationFeed.map((item, index) => (
+            <div className={index === activityIndex ? "is-active" : ""} key={item[0]}>
+              <i /><strong>{item[0]}</strong><span>{item[1]}</span><b>{item[2]}</b>
+            </div>
+          ))}
+        </div>
+        <small>{running ? "PROCESANDO" : "EN PAUSA"}<i /></small>
+      </div>
+
       <section
         className="mp-metrics"
+        key={`metrics-${simulation.step}`}
         aria-label="Resumen de los 30 escenarios simulados"
       >
         <article>
@@ -127,7 +158,7 @@ export default function MarketPredictions() {
           <h3>
             <ScanLine size={17} /> Escenarios monitoreados
           </h3>
-          <span>Ciclo acelerado · actualización cada 8 s</span>
+          <span>Ciclo acelerado · actualización cada 8 s · actividad continua</span>
         </div>
         <div className="mp-actions">
           <button
@@ -203,7 +234,7 @@ export default function MarketPredictions() {
             row.direction === "Alcista" ? ArrowUpRight : ArrowDownRight;
           return (
             <article
-              className="mp-row"
+              className={`mp-row ${row.ticks === 0 && row.status === "Monitoreando" ? "is-new-operation" : ""}`}
               key={row.id}
               aria-label={`Escenario ${row.id}: ${row.pair}, ${row.status}`}
             >
@@ -244,7 +275,7 @@ export default function MarketPredictions() {
                       ? "CIERRE SIMULADO"
                       : "PRECIO SIMULADO"}
                   </span>
-                  <strong>{price(row.price, row.decimals)}</strong>
+                  <strong className="mp-live-price" key={`${row.id}-${row.ticks}`}>{price(row.price, row.decimals)}</strong>
                   <small>Escenario #{String(row.id).padStart(4, "0")}</small>
                 </div>
                 <div className="mp-confidence">
