@@ -96,9 +96,10 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       } as const;
       const transition = transitions[action as keyof typeof transitions];
       if (!transition.from.includes(status as never)) return res.status(409).json({ error: "La solicitud no permite esta acción en su estado actual." });
-      const { error: updateError } = await admin.client.from("transactions")
-        .update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status);
+      const { data: updated, error: updateError } = await admin.client.from("transactions")
+        .update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
       if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
+      if (!updated) return res.status(409).json({ error: "El retiro cambió de estado. Actualiza la lista." });
       return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
     } catch (error) {
       console.error("[admin-withdrawals]", error);

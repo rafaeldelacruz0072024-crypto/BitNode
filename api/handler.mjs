@@ -716,6 +716,7 @@ function validWallet(network, wallet) {
 }
 function validateWithdrawalInput(amount, network, wallet, usedToday) {
   if (!Number.isFinite(amount) || amount < 10 || amount > LIMIT) return "El retiro debe estar entre $10 y $1,000 USDT.";
+  if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-8) return "El monto debe tener hasta dos decimales.";
   if (!NETWORKS.has(network) || !validWallet(network, wallet)) return "La red o la wallet no son v\xE1lidas.";
   if (usedToday + amount > LIMIT) return `L\xEDmite diario excedido. Ya solicitaste ${usedToday.toFixed(2)} USDT hoy.`;
   return null;
@@ -1153,8 +1154,9 @@ function registerAdminWithdrawalRoutes(app2) {
       };
       const transition = transitions[action];
       if (!transition.from.includes(status)) return res.status(409).json({ error: "La solicitud no permite esta acci\xF3n en su estado actual." });
-      const { error: updateError } = await admin3.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status);
+      const { data: updated, error: updateError } = await admin3.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
       if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
+      if (!updated) return res.status(409).json({ error: "El retiro cambi\xF3 de estado. Actualiza la lista." });
       return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
@@ -1278,16 +1280,6 @@ function createFinancialRateLimiter(overrides = {}) {
 // server/emailSecurity.ts
 import crypto3 from "node:crypto";
 import { createClient as createClient7 } from "@supabase/supabase-js";
-
-// shared/withdrawalFee.ts
-var WITHDRAW_FEE_RATE = 0.05;
-var WITHDRAW_MIN_FEE = 1;
-function withdrawalFee(amount) {
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-  return Math.round(Math.max(WITHDRAW_MIN_FEE, amount * WITHDRAW_FEE_RATE) * 100) / 100;
-}
-
-// server/emailSecurity.ts
 var CODE_TTL_MS = 10 * 60 * 1e3;
 function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -1344,6 +1336,10 @@ function normalizedPayload(purpose, input) {
   if (error) throw new Error(error);
   return { amount, network, wallet };
 }
+function withdrawalError(res, error) {
+  if (error.code !== "P0001") return res.status(503).json({ error: "No se pudo verificar el retiro. Intenta nuevamente." });
+  return res.status(error.message.includes("ventana") ? 423 : 400).json({ error: error.message });
+}
 function registerEmailSecurityRoutes(app2) {
   app2.post("/api/security/email-code/request", async (req, res) => {
     const auth = await authenticated(req);
@@ -1352,6 +1348,13 @@ function registerEmailSecurityRoutes(app2) {
     if (purpose !== "withdrawal" && purpose !== "wallet_change") return res.status(400).json({ error: "Operaci\xF3n no v\xE1lida." });
     try {
       const payload = normalizedPayload(purpose, req.body?.payload);
+      if (purpose === "withdrawal") {
+        const { error: error2 } = await auth.client.rpc("validate_withdrawal_request", {
+          p_user_id: auth.user.id,
+          p_amount: "amount" in payload ? payload.amount : 0
+        });
+        if (error2) return withdrawalError(res, error2);
+      }
       const recentSince = new Date(Date.now() - 6e4).toISOString();
       const { count } = await auth.client.from("email_security_challenges").select("id", { count: "exact", head: true }).eq("user_id", auth.user.id).gte("created_at", recentSince);
       if ((count || 0) > 0) return res.status(429).json({ error: "Espera un minuto antes de solicitar otro c\xF3digo." });
@@ -1377,35 +1380,32 @@ function registerEmailSecurityRoutes(app2) {
     const challengeId = String(req.body?.challengeId || "");
     const code = String(req.body?.code || "").trim();
     const { data: challenge } = await auth.client.from("email_security_challenges").select("*").eq("id", challengeId).eq("user_id", auth.user.id).maybeSingle();
-    if (!challenge || challenge.consumed_at || new Date(challenge.expires_at).getTime() < Date.now()) return res.status(400).json({ error: "El c\xF3digo expir\xF3 o ya fue utilizado." });
+    if (!challenge || challenge.purpose !== "withdrawal" && challenge.consumed_at || !challenge.consumed_at && new Date(challenge.expires_at).getTime() < Date.now()) return res.status(400).json({ error: "El c\xF3digo expir\xF3 o ya fue utilizado." });
     if (challenge.attempts >= 5) return res.status(429).json({ error: "Se agotaron los intentos. Solicita otro c\xF3digo." });
     if (!/^\d{6}$/.test(code) || !safeEqual(challenge.code_hash, digest(challengeId, code))) {
       await auth.client.from("email_security_challenges").update({ attempts: challenge.attempts + 1 }).eq("id", challengeId);
       return res.status(400).json({ error: "C\xF3digo incorrecto." });
     }
+    if (challenge.purpose === "withdrawal") {
+      const { data: result, error } = await auth.client.rpc("confirm_verified_withdrawal", {
+        p_user_id: auth.user.id,
+        p_challenge_id: challengeId,
+        p_code_hash: digest(challengeId, code)
+      });
+      if (error) return withdrawalError(res, error);
+      if (!result?.id) return res.status(503).json({ error: "No se pudo verificar el retiro." });
+      await sendEmail(auth.user.email, "Retiro confirmado en BitNode", `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px"><h1>Retiro confirmado</h1><p>Solicitud: <b>${escapeHtml(result.id)}</b></p><p>Monto reservado: <b>${Number(result.amount).toFixed(2)} USDT</b></p><p>Comisi\xF3n: ${Number(result.fee).toFixed(2)} USDT \xB7 Neto: ${Number(result.netAmount).toFixed(2)} USDT</p><p>Wallet: ${escapeHtml(result.wallet)}</p></div>`, `withdrawal-confirmed-${result.id}`).catch(() => void 0);
+      return res.status(201).json(result);
+    }
     const { data: consumed } = await auth.client.from("email_security_challenges").update({ consumed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", challengeId).is("consumed_at", null).select("id").maybeSingle();
     if (!consumed) return res.status(409).json({ error: "Este c\xF3digo ya fue utilizado." });
     const payload = challenge.payload;
     if (challenge.purpose === "wallet_change") {
-      const { error: error2 } = await auth.client.auth.admin.updateUserById(auth.user.id, { user_metadata: { ...auth.user.user_metadata, wallet_bep20: String(payload.wallet) } });
-      if (error2) return res.status(500).json({ error: "No se pudo guardar la wallet." });
+      const { error } = await auth.client.auth.admin.updateUserById(auth.user.id, { user_metadata: { ...auth.user.user_metadata, wallet_bep20: String(payload.wallet) } });
+      if (error) return res.status(500).json({ error: "No se pudo guardar la wallet." });
       return res.json({ status: "verified", message: "Wallet confirmada y guardada." });
     }
-    const amount = Number(payload.amount);
-    const network = String(payload.network);
-    const wallet = String(payload.wallet);
-    const fee = withdrawalFee(amount);
-    const start = /* @__PURE__ */ new Date();
-    start.setUTCHours(0, 0, 0, 0);
-    const { data: today } = await auth.client.from("transactions").select("amount").eq("user_id", auth.user.id).eq("type", "withdraw").gte("created_at", start.toISOString());
-    const used = (today || []).reduce((sum, row) => sum + Math.abs(Number(row.amount) || 0), 0);
-    const validation = validateWithdrawalInput(amount, network, wallet, used);
-    if (validation) return res.status(400).json({ error: validation });
-    const id = `WDR-${crypto3.randomUUID()}`;
-    const { error } = await auth.client.from("transactions").insert({ id, user_id: auth.user.id, username: auth.user.user_metadata?.username || auth.user.email?.split("@")[0], type: "withdraw", label: `Solicitud de retiro \xB7 ${network}`, amount: -amount, status: "pending", network, wallet, fee, net_amount: amount - fee, provider_status: "email_verified", created_at: (/* @__PURE__ */ new Date()).toISOString() });
-    if (error) return res.status(500).json({ error: "No se pudo registrar el retiro." });
-    await sendEmail(auth.user.email, "Retiro confirmado en BitNode", `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px"><h1>Retiro confirmado</h1><p>Solicitud: <b>${escapeHtml(id)}</b></p><p>Monto: <b>${amount.toFixed(2)} USDT</b></p><p>Comisi\xF3n: ${fee.toFixed(2)} USDT \xB7 Neto: ${(amount - fee).toFixed(2)} USDT</p><p>Wallet: ${escapeHtml(wallet)}</p></div>`, `withdrawal-confirmed-${id}`).catch(() => void 0);
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Correo verificado. Solicitud registrada." });
+    return res.status(400).json({ error: "Operaci\xF3n no v\xE1lida." });
   });
   app2.post("/api/email/welcome", async (req, res) => {
     const auth = await authenticated(req);

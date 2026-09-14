@@ -61,6 +61,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       }
     );
+    const summaryResponse = await fetch(`${baseUrl}/rest/v1/rpc/get_account_ledger_summary`, {
+      method: "POST",
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_user_id: user.id }),
+    });
+    if (!summaryResponse.ok) throw new Error("Could not verify the complete account ledger.");
+    const ledger = await summaryResponse.json();
     if (!ledgerResponse.ok)
       throw new Error(`Ledger lookup failed with ${ledgerResponse.status}.`);
     if (!contractsResponse.ok)
@@ -73,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const contracts = (await contractsResponse.json()) as Array<
       Record<string, unknown>
     >;
-    return res.status(200).json({ transactions, contracts });
+    return res.status(200).json({ transactions, contracts, ledger });
   } catch (error) {
     console.error("[account-summary]", error);
     return res

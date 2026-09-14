@@ -19,7 +19,7 @@ export type Movement = {
   type: "deposit" | "withdraw" | "contract" | "yield";
   label: string;
   amount: number;
-  status: "completed" | "pending";
+  status: "completed" | "pending" | "approved" | "rejected" | "failed" | "reversed";
   date: string;
   network?: string;
   wallet?: string;

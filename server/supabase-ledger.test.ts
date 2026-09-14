@@ -20,12 +20,22 @@ describe("Supabase transaction ledger", () => {
     });
   });
 
-  it("subtracts node activation and ignores pending movements", () => {
+  it("subtracts node activation and reserves pending withdrawals", () => {
     expect(summarizeCompletedLedger([
       movement("ADMIN-1", "deposit", 100),
       movement("NODE-1", "contract", -10),
       movement("PENDING-1", "withdraw", -50, "pending"),
       movement("YIELD-1", "yield", 1.25),
-    ])).toEqual({ balance: 91.25, totalInvested: 10, totalYield: 1.25 });
+    ])).toEqual({ balance: 41.25, totalInvested: 10, totalYield: 1.25 });
+  });
+
+  it("keeps a single debit through approval and payment and releases rejected holds", () => {
+    for (const status of ["pending", "approved", "completed"] as const) {
+      expect(summarizeCompletedLedger([movement("deposit", "deposit", 100), movement("withdraw", "withdraw", -60, status)]).balance).toBe(40);
+    }
+    for (const status of ["rejected", "failed"] as const) {
+      expect(summarizeCompletedLedger([movement("deposit", "deposit", 100), movement("withdraw", "withdraw", -60, status)]).balance).toBe(100);
+    }
+    expect(summarizeCompletedLedger([movement("pending-deposit", "deposit", 100, "pending")]).balance).toBe(0);
   });
 });

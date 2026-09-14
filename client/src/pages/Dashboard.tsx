@@ -42,8 +42,6 @@ import {
 } from "@/lib/localUserStore";
 import {
   fetchAccountSummary,
-  fetchTransactions,
-  summarizeCompletedLedger,
 } from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
@@ -597,7 +595,7 @@ export default function Dashboard() {
     fetchAccountSummary()
       .then(summary => {
         if (!active || summary === null) return;
-        const ledger = summarizeCompletedLedger(summary.movements);
+        const ledger = summary.ledger;
         setUser(prev => ({
           ...prev,
           balance: ledger.balance,
@@ -631,7 +629,7 @@ export default function Dashboard() {
     network: string,
     wallet: string,
     fee: number,
-    result: { id: string; fee: number; netAmount: number }
+    result: { id: string; fee: number; netAmount: number; balance: number }
   ) => {
     try {
       const movement = {
@@ -646,9 +644,9 @@ export default function Dashboard() {
         fee: result.fee ?? fee,
         netAmount: result.netAmount ?? amount - fee,
       };
-      setUser(prev => ({ ...prev, movements: [movement, ...prev.movements] }));
+      setUser(prev => ({ ...prev, balance: result.balance, movements: [movement, ...prev.movements.filter(item => item.id !== result.id)] }));
       showNotice(
-        `Solicitud registrada: recibirás ${money(result.netAmount)}. El balance no se descuenta hasta aprobación.`
+        `Solicitud registrada: recibirás ${money(result.netAmount)}. El monto solicitado ya está reservado y se libera si el retiro es rechazado.`
       );
     } catch (cause) {
       showNotice(
@@ -748,11 +746,10 @@ export default function Dashboard() {
       movements: [...movements, ...prev.movements],
     }));
     if (authUserId) {
-      fetchTransactions(authUserId)
-        .then(remote => {
-          if (remote === null) return;
-          const ledger = summarizeCompletedLedger(remote);
-          setUser(prev => ({ ...prev, ...ledger, movements: remote }));
+      fetchAccountSummary()
+        .then(summary => {
+          if (summary === null) return;
+          setUser(prev => ({ ...prev, ...summary.ledger, movements: summary.movements }));
         })
         .catch(() => undefined);
     }
@@ -1087,7 +1084,7 @@ function SectionPanel({
     network: string,
     wallet: string,
     fee: number,
-    result: { id: string; fee: number; netAmount: number }
+    result: { id: string; fee: number; netAmount: number; balance: number }
   ) => void;
   activate: (item: (typeof catalog)[number], amount: number) => void;
   reward: (
@@ -1364,11 +1361,7 @@ function SectionPanel({
                   {"detail" in m && m.detail && <span className={`history-origin ${m.label.startsWith("ROI") ? "history-roi" : ""}`}>{m.detail}</span>}
                   <span>
                     {m.date} ·{" "}
-                    {m.status === "pending"
-                      ? "Pendiente"
-                      : m.status === "credited"
-                        ? "Acreditado"
-                        : "Completado"}
+                    {({ pending: "Pendiente", approved: "Aprobado", rejected: "Rechazado", failed: "Fallido", reversed: "Anulado", credited: "Acreditado", completed: "Completado" } as Record<string, string>)[m.status] || m.status}
                   </span>
                 </div>
                 <strong className={m.amount >= 0 ? "positive" : "negative"}>
@@ -1988,7 +1981,7 @@ function WithdrawalForm({
     network: string,
     wallet: string,
     fee: number,
-    result: { id: string; fee: number; netAmount: number }
+    result: { id: string; fee: number; netAmount: number; balance: number }
   ) => void;
 }) {
   const [amount, setAmount] = useState(10);
@@ -2011,6 +2004,8 @@ function WithdrawalForm({
   const validate = () => {
     if (!Number.isFinite(amount) || amount < 10)
       return "El monto mínimo de retiro es de $10.00 USDT.";
+    if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-8)
+      return "El monto debe tener hasta dos decimales.";
     if (amount > user.balance)
       return `No puedes retirar más de ${money(user.balance)} disponibles.`;
     if (usedToday + amount > WITHDRAW_DAILY_LIMIT)
@@ -2080,7 +2075,7 @@ function WithdrawalForm({
           Disponible: {money(user.balance)} · Límite diario:{" "}
           {money(WITHDRAW_DAILY_LIMIT)} · Usado hoy: {money(usedToday)}
         </small>
-        <p className="withdrawal-processing-note">Método único: USDT BEP20. Los retiros se procesan manualmente en un plazo de hasta 48 horas.</p>
+        <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar por correo, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
         <div className="fee-summary">
           <span>
             Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(0)}% · mínimo 1 USDT){" "}
@@ -2124,7 +2119,8 @@ function WithdrawalForm({
               <br />
               Recibirás: <strong>{money(net)} USDT</strong>
             </p>
-            {challenge && <><p>Enviado a <strong>{challenge.email}</strong>. Caduca en 10 minutos.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,""));setError("");}} placeholder="000000" />{error && <div className="form-error" role="alert">{error}</div>}</>}
+            {challenge && <><p>Enviado a <strong>{challenge.email}</strong>. Caduca en 10 minutos.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,""));setError("");}} placeholder="000000" /></>}
+            {error && <div className="form-error" role="alert">{error}</div>}
             <div className="confirm-actions">
               <button
                 className="confirm-cancel"

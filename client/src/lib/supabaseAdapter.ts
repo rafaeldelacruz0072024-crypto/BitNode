@@ -70,6 +70,10 @@ export function mergeTransactions(local: Movement[], remote: Movement[]) {
 export function summarizeCompletedLedger(movements: Movement[]) {
   return movements.reduce(
     (summary, movement) => {
+      if (movement.type === "withdraw" && (movement.status === "pending" || movement.status === "approved")) {
+        summary.balance += Number.isFinite(movement.amount) ? movement.amount : 0;
+        return summary;
+      }
       if (movement.status !== "completed") return summary;
       summary.balance += Number.isFinite(movement.amount) ? movement.amount : 0;
       if (movement.type === "contract" && movement.amount < 0)
@@ -82,7 +86,7 @@ export function summarizeCompletedLedger(movements: Movement[]) {
   );
 }
 
-type AccountSummary = { movements: Movement[]; contracts: Contract[] };
+type AccountSummary = { movements: Movement[]; contracts: Contract[]; ledger: { balance: number; totalInvested: number; totalYield: number } };
 
 function formatPercent(value: unknown) {
   const percent = Number(value) * 100;
@@ -135,7 +139,11 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
           : "Indefinida",
     };
   });
-  return { movements, contracts };
+  const ledger = payload.ledger;
+  if (!ledger || ![ledger.balance, ledger.totalInvested, ledger.totalYield].every(value => typeof value === "number" && Number.isFinite(value))) {
+    throw new Error("No se pudo verificar el saldo disponible.");
+  }
+  return { movements, contracts, ledger };
 }
 
 export async function fetchTransactions(

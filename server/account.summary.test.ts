@@ -14,7 +14,8 @@ describe("account summary ownership", () => {
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: "auth-user-123" }), { status: 200 }))
       .mockResolvedValueOnce(new Response("[]", { status: 200 }))
-      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ balance: 750, totalInvested: 100, totalYield: 25 }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     let statusCode = 0;
@@ -36,9 +37,11 @@ describe("account summary ownership", () => {
     );
 
     expect(statusCode).toBe(200);
-    expect(body).toEqual({ transactions: [], contracts: [] });
+    expect(body).toEqual({ transactions: [], contracts: [], ledger: { balance: 750, totalInvested: 100, totalYield: 25 } });
     const requestedUrls = fetchMock.mock.calls.map(call => String(call[0]));
     expect(requestedUrls[1]).toContain("user_id=eq.auth-user-123");
     expect(requestedUrls[2]).toContain("user_id=eq.auth-user-123");
+    expect(requestedUrls[3]).toContain("rpc/get_account_ledger_summary");
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({ p_user_id: "auth-user-123" });
   });
 });

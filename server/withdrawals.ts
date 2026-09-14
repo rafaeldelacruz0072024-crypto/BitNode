@@ -23,6 +23,7 @@ export function validWallet(network: string, wallet: string) {
 
 export function validateWithdrawalInput(amount: number, network: string, wallet: string, usedToday: number) {
   if (!Number.isFinite(amount) || amount < 10 || amount > LIMIT) return "El retiro debe estar entre $10 y $1,000 USDT.";
+  if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-8) return "El monto debe tener hasta dos decimales.";
   if (!NETWORKS.has(network) || !validWallet(network, wallet)) return "La red o la wallet no son válidas.";
   if (usedToday + amount > LIMIT) return `Límite diario excedido. Ya solicitaste ${usedToday.toFixed(2)} USDT hoy.`;
   return null;

@@ -25,5 +25,5 @@ export async function confirmWithdrawal(challengeId: string, code: string) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(payload.error || "No se pudo confirmar el retiro."));
-  return payload as { id: string; status: "pending"; fee: number; netAmount: number; message: string };
+  return payload as { id: string; status: string; fee: number; netAmount: number; balance: number; message: string };
 }
