@@ -2053,11 +2053,13 @@ function WithdrawalForm({
   const [challenge, setChallenge] = useState<{ id: string; email: string } | null>(null);
   const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const last24Hours = Date.now() - 24 * 60 * 60 * 1000;
   const usedToday = user.movements
     .filter(
       movement =>
-        movement.type === "withdraw" && movement.date.slice(0, 10) === todayKey
+        movement.type === "withdraw" &&
+        Number.isFinite(new Date(movement.date).getTime()) &&
+        new Date(movement.date).getTime() >= last24Hours
     )
     .reduce((sum, movement) => sum + Math.abs(movement.amount), 0);
   const fee = withdrawalFee(amount);
@@ -2133,9 +2135,14 @@ function WithdrawalForm({
           </label>
         </div>
         <small>
-          Disponible: {money(user.balance)} · Límite diario:{" "}
-          {money(WITHDRAW_DAILY_LIMIT)} · Usado hoy: {money(usedToday)}
+          Balance total: {money(user.balance)} · Límite por 24 horas:{" "}
+          {money(WITHDRAW_DAILY_LIMIT)} · Usado: {money(usedToday)}
         </small>
+        <p className="withdrawal-schedule-note">
+          Comisión directa: disponible 24 horas después de acreditarse. Bonos
+          binario y de rango: disponibles únicamente los miércoles, hora de
+          Santo Domingo. Capital y rendimientos conservan sus reglas actuales.
+        </p>
         <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar por correo, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
         <div className="fee-summary">
           <span>
