@@ -413,8 +413,8 @@ function nextLiveFarmEvent(): LiveFarmEvent {
     id: `${Date.now()}-${node}`,
     node: `BN-${node}`,
     network: liveNetworks[Math.floor(Math.random() * liveNetworks.length)],
-    operations: 1800 + Math.floor(Math.random() * 4500),
-    commission: Number((0.12 + Math.random() * 3.85).toFixed(4)),
+    operations: 350 + Math.floor(Math.random() * 9450),
+    commission: Number((0.035 + Math.random() * 8.715).toFixed(4)),
   };
 }
 const catalog = [
@@ -639,8 +639,8 @@ export default function Dashboard() {
   }, [authUserId]);
   useEffect(() => {
     const timer = window.setInterval(
-      () => setLiveNodes(value => value + (Math.random() > 0.5 ? 1 : 0)),
-      5000
+      () => setLiveNodes(value => Math.max(14800, value + Math.floor(Math.random() * 13) - 4)),
+      2800
     );
     return () => window.clearInterval(timer);
   }, []);
@@ -1059,14 +1059,19 @@ function HomePanel({
 function LiveFarm({ liveNodes }: { liveNodes: number }) {
   const [events, setEvents] = useState(liveRows);
   const [latestEventId, setLatestEventId] = useState(liveRows[0].id);
+  const [uptime, setUptime] = useState(99.77);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    let timer = 0;
+    const refresh = () => {
       const next = nextLiveFarmEvent();
       setLatestEventId(next.id);
       setEvents(current => [next, ...current].slice(0, 4));
-    }, 4200);
-    return () => window.clearInterval(interval);
+      setUptime(Number((99.61 + Math.random() * 0.38).toFixed(2)));
+      timer = window.setTimeout(refresh, 2400 + Math.random() * 3200);
+    };
+    timer = window.setTimeout(refresh, 1800);
+    return () => window.clearTimeout(timer);
   }, []);
 
   return (
@@ -1083,14 +1088,14 @@ function LiveFarm({ liveNodes }: { liveNodes: number }) {
             <i />
           </span>
           <span>
-            UPTIME <strong>99.77%</strong>
+            UPTIME <strong>{uptime.toFixed(2)}%</strong>
           </span>
         </div>
       </div>
       <div className="farm-summary">
         <strong>{liveNodes.toLocaleString("en-US")}</strong>
         <span>NODOS</span>
-        <strong>99.77%</strong>
+        <strong>{uptime.toFixed(2)}%</strong>
         <span>UPTIME</span>
       </div>
       {events.map(row => (
