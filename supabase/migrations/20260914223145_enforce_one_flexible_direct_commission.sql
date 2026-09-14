@@ -13,6 +13,8 @@ create table if not exists bitnode_private.flexible_direct_commission_claims (
   claimed_at timestamptz not null default now()
 );
 
+alter table bitnode_private.flexible_direct_commission_claims enable row level security;
+
 revoke all on table bitnode_private.flexible_direct_commission_claims
   from public, anon, authenticated;
 
