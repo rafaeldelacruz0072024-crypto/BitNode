@@ -78,6 +78,8 @@ const DAILY_TASKS = [
   ["sign_checkpoint", "Firmar checkpoint", "Confirma tu participación diaria."],
 ] as const;
 
+const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
+
 function binaryReferralUrl(code: string, side: "izquierda" | "derecha") {
   const configuredUrl = import.meta.env.VITE_APP_URL as string | undefined;
   const origin =
@@ -499,6 +501,7 @@ export default function Dashboard() {
   } = useSupabaseSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cashbackPromoOpen, setCashbackPromoOpen] = useState(false);
   const [liveNodes, setLiveNodes] = useState(15014);
   const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
@@ -517,6 +520,30 @@ export default function Dashboard() {
   }, []);
   const authUserId = authUser?.id;
   const cycleNotifications = useCycleNotifications(authUserId);
+  useEffect(() => {
+    if (!authUserId) return;
+    const key = `${CASHBACK_PROMO_SESSION_KEY}:${authUserId}`;
+    if (window.sessionStorage.getItem(key) !== "1") {
+      setCashbackPromoOpen(true);
+    }
+  }, [authUserId]);
+  useEffect(() => {
+    if (!cashbackPromoOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCashbackPromoOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [cashbackPromoOpen]);
+  const closeCashbackPromo = () => {
+    if (authUserId) {
+      window.sessionStorage.setItem(
+        `${CASHBACK_PROMO_SESSION_KEY}:${authUserId}`,
+        "1"
+      );
+    }
+    setCashbackPromoOpen(false);
+  };
   useEffect(() => {
     if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
   }, [authLoading, authConfigured, authUser, navigate]);
@@ -786,6 +813,32 @@ export default function Dashboard() {
   );
   return (
     <div className="dashboard-shell dashboard-future">
+      {cashbackPromoOpen && (
+        <div
+          className="cashback-login-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Promoción de cashback por depósito"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) closeCashbackPromo();
+          }}
+        >
+          <div className="cashback-login-modal">
+            <button
+              className="cashback-login-close"
+              type="button"
+              aria-label="Cerrar promoción"
+              onClick={closeCashbackPromo}
+            >
+              <X aria-hidden="true" />
+            </button>
+            <img
+              src="/deposit-cashback-giveaway.png"
+              alt="Giveaway BitNode: cashback de 10% para depósitos de 500 USDT o más y 20% para depósitos de 1,000 USDT o más"
+            />
+          </div>
+        </div>
+      )}
       {notice && (
         <div className="notice dash-notice" role="status">
           {notice}
@@ -811,6 +864,9 @@ export default function Dashboard() {
         <button
           className="logout"
           onClick={async () => {
+            window.sessionStorage.removeItem(
+              `${CASHBACK_PROMO_SESSION_KEY}:${authUserId}`
+            );
             await supabase?.auth.signOut();
             showNotice("Sesión cerrada.");
             navigate("/");
