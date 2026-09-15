@@ -88,6 +88,28 @@ export function summarizeCompletedLedger(movements: Movement[]) {
 
 type AccountSummary = { movements: Movement[]; contracts: Contract[]; ledger: { balance: number; totalInvested: number; totalYield: number } };
 
+export type WithdrawalAvailability = {
+  lockedDirect: number;
+  withdrawableBalance: number;
+  nextDirectAvailableAt: string | null;
+};
+
+export async function fetchWithdrawalAvailability(): Promise<WithdrawalAvailability> {
+  const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+  if (!session?.access_token) throw new Error("Sesión requerida para consultar la comisión directa.");
+  const response = await fetch("/api/account/withdrawal-availability", {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(payload.error || "No se pudo cargar el contador."));
+  if (!Number.isFinite(payload.lockedDirect) || !Number.isFinite(payload.withdrawableBalance) ||
+    (payload.nextDirectAvailableAt !== null &&
+      (typeof payload.nextDirectAvailableAt !== "string" || !Number.isFinite(Date.parse(payload.nextDirectAvailableAt))))) {
+    throw new Error("El servidor devolvió un contador inválido.");
+  }
+  return payload as WithdrawalAvailability;
+}
+
 function formatPercent(value: unknown) {
   const percent = Number(value) * 100;
   return Number.isFinite(percent) ? `${Number(percent.toFixed(4))}%` : "0%";

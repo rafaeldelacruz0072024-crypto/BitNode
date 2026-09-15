@@ -43,6 +43,8 @@ import {
 } from "@/lib/localUserStore";
 import {
   fetchAccountSummary,
+  fetchWithdrawalAvailability,
+  type WithdrawalAvailability,
 } from "@/lib/supabaseAdapter";
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
@@ -2116,6 +2118,24 @@ function WithdrawalForm({
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [availability, setAvailability] = useState<WithdrawalAvailability | null>(null);
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [countdownNow, setCountdownNow] = useState(Date.now());
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void fetchWithdrawalAvailability()
+        .then(result => { if (active) { setAvailability(result); setAvailabilityError(""); } })
+        .catch(cause => { if (active) { setAvailability(null); setAvailabilityError(cause instanceof Error ? cause.message : "No se pudo cargar el contador."); } });
+    };
+    refresh();
+    const refreshTimer = window.setInterval(refresh, 15_000);
+    const clockTimer = window.setInterval(() => setCountdownNow(Date.now()), 1_000);
+    return () => { active = false; window.clearInterval(refreshTimer); window.clearInterval(clockTimer); };
+  }, []);
+  const nextDirectAt = availability?.nextDirectAvailableAt ? Date.parse(availability.nextDirectAvailableAt) : null;
+  const directSecondsLeft = nextDirectAt === null ? 0 : Math.max(0, Math.ceil((nextDirectAt - countdownNow) / 1000));
+  const directCountdown = `${String(Math.floor(directSecondsLeft / 3600)).padStart(2, "0")}:${String(Math.floor((directSecondsLeft % 3600) / 60)).padStart(2, "0")}:${String(directSecondsLeft % 60).padStart(2, "0")}`;
   useEffect(() => {
     let active = true;
     fetchPrivateUserDetails()
@@ -2213,6 +2233,15 @@ function WithdrawalForm({
           Balance total: {money(user.balance)} · Límite por 24 horas:{" "}
           {money(WITHDRAW_DAILY_LIMIT)} · Usado: {money(usedToday)}
         </small>
+        {availability && <div className="withdrawal-schedule-note" role="timer">
+          <strong>Comisión directa retenida: {money(availability.lockedDirect)}</strong>
+          {availability.lockedDirect > 0 && nextDirectAt !== null ? (
+            <span> · {directSecondsLeft > 0 ? `Próxima liberación en ${directCountdown}` : "Plazo cumplido; actualizando disponibilidad…"} · <time dateTime={availability.nextDirectAvailableAt!}>{new Date(nextDirectAt).toLocaleString("es-DO", { timeZone: "America/Santo_Domingo", dateStyle: "short", timeStyle: "short" })} (Santo Domingo)</time></span>
+          ) : <span> · Sin comisión directa pendiente de las 24 horas.</span>}
+          <div>Disponible para retiro ahora: {money(availability.withdrawableBalance)}</div>
+        </div>}
+        {!availability && !availabilityError && <small className="withdrawal-schedule-note">Consultando la comisión directa…</small>}
+        {!availability && availabilityError && <small className="withdrawal-schedule-note">{availabilityError}</small>}
         <p className="withdrawal-schedule-note">
           Comisión directa: disponible 24 horas después de acreditarse. Bonos
           binario y de rango: disponibles únicamente los miércoles, hora de
