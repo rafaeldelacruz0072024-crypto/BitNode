@@ -459,14 +459,16 @@ function SummarySection({ data }: { data: AdminData | null }) {
 }
 
 export function UsersSection({
-  users,
+  data,
   onUpdated,
 }: {
-  users: AdminUser[];
+  data: AdminData;
   onUpdated: () => Promise<void>;
 }) {
+  const { users } = data;
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [monitorId, setMonitorId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const filtered = useMemo(
@@ -480,6 +482,10 @@ export function UsersSection({
     [query, users]
   );
   const selected = users.find(user => user.id === selectedId) || null;
+  const monitored = users.find(user => user.id === monitorId) || null;
+  const accountTransactions = monitored ? data.transactions.filter(row => row.userId === monitored.id) : [];
+  const accountContracts = monitored ? data.contracts.filter(row => row.userId === monitored.id) : [];
+  const accountCommissions = monitored ? data.commissions.entries.filter(row => row.beneficiaryId === monitored.id || row.sourceUserId === monitored.id) : [];
   const [editor, setEditor] = useState<Record<string, string>>({});
 
   function selectUser(user: AdminUser) {
@@ -594,6 +600,9 @@ export function UsersSection({
                 <td>{dateLabel(user.createdAt)}</td>
                 <td>{dateLabel(user.lastSignInAt)}</td>
                 <td>
+                  <button className="admin-refresh" type="button" onClick={() => { setMonitorId(user.id); setSelectedId(""); }}>
+                    Monitorear cuenta
+                  </button>
                   <button className="admin-refresh" type="button" onClick={() => selectUser(user)}>
                     Gestionar
                   </button>
@@ -602,6 +611,33 @@ export function UsersSection({
             ))}
           </tbody>
         </DataTable>
+      )}
+      {monitored && (
+        <section className="admin-user-manager" aria-label={`Monitoreo de ${monitored.username || monitored.email || monitored.id}`}>
+          <div className="card-heading">
+            <div>
+              <p className="admin-kicker">MONITOREO DE CUENTA</p>
+              <h2>{monitored.username || monitored.email || monitored.id}</h2>
+            </div>
+            <button className="admin-refresh" type="button" onClick={() => setMonitorId("")}>Cerrar</button>
+          </div>
+          <p className="config-note">Estado: {userStatusLabel(monitored)} · Último acceso: {dateLabel(monitored.lastSignInAt)} · Wallet BEP20: {monitored.details.walletBep20 || "Sin registrar"}</p>
+          <div className="admin-account-metrics">
+            <div><span>Contratos en el registro</span><strong>{accountContracts.length}</strong></div>
+            <div><span>Movimientos en el registro</span><strong>{accountTransactions.length}</strong></div>
+            <div><span>Comisiones relacionadas</span><strong>{accountCommissions.length}</strong></div>
+          </div>
+          <h3>Movimientos recientes</h3>
+          {accountTransactions.length ? (
+            <DataTable label={`Movimientos de ${monitored.username || monitored.id}`}>
+              <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead>
+              <tbody>{accountTransactions.slice(0, 20).map(row => (
+                <tr key={row.id}><td>{dateLabel(row.createdAt)}</td><td>{row.label || row.type}</td><td>{money(row.amount)}</td><td><StatusPill value={row.status} /></td></tr>
+              ))}</tbody>
+            </DataTable>
+          ) : <p className="config-note">No hay movimientos en los registros cargados.</p>}
+          <p className="config-note">Datos de consulta del panel administrativo, actualizados: {dateLabel(data.lastUpdated)}. Los registros están limitados por la carga del panel.</p>
+        </section>
       )}
       {selected && (
         <form className="admin-user-manager" onSubmit={saveUser}>
@@ -1677,7 +1713,7 @@ export default function Admin() {
         {activeSection === "Resumen" && <SummarySection data={adminData} />}
         {activeSection === "Usuarios" &&
           (adminData ? (
-            <UsersSection users={adminData.users} onUpdated={refreshData} />
+            <UsersSection data={adminData} onUpdated={refreshData} />
           ) : (
             <LoadingState />
           ))}
