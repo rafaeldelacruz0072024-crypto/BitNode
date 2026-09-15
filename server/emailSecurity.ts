@@ -69,8 +69,13 @@ export function registerEmailSecurityRoutes(app: Express) {
     if (!auth) return res.status(401).json({ error: "Sesión Supabase requerida." });
     const wallet = String(req.body?.wallet || "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "La wallet BEP20 no es válida." });
+    const lockedWallet = String(auth.user.app_metadata?.withdrawal_wallet_bep20 || auth.user.user_metadata?.wallet_bep20 || "").trim();
+    if (lockedWallet && lockedWallet.toLowerCase() !== wallet.toLowerCase()) {
+      return res.status(409).json({ error: "La wallet ya está bloqueada. Solicita el cambio a soporte." });
+    }
     const { error } = await auth.client.auth.admin.updateUserById(auth.user.id, {
       user_metadata: { ...auth.user.user_metadata, wallet_bep20: wallet },
+      app_metadata: { ...auth.user.app_metadata, withdrawal_wallet_bep20: wallet },
     });
     if (error) return res.status(500).json({ error: "No se pudo guardar la wallet." });
     return res.json({ status: "saved", message: "Wallet guardada correctamente." });

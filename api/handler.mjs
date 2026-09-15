@@ -745,6 +745,9 @@ function registerWithdrawalRoutes(app2) {
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
+    const lockedWallet = String(data.user.app_metadata?.withdrawal_wallet_bep20 || data.user.user_metadata?.wallet_bep20 || "").trim();
+    if (!lockedWallet) return res.status(400).json({ error: "Guarda primero tu wallet de retiro en Perfil." });
+    if (wallet.toLowerCase() !== lockedWallet.toLowerCase()) return res.status(409).json({ error: "Debes retirar hacia tu wallet registrada. Contacta a soporte para cambiarla." });
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
     const { error: validationError } = await client.rpc("validate_withdrawal_request", {
@@ -1152,6 +1155,36 @@ async function withdrawalWindow(client) {
 }
 var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/support/whatsapp", async (_req, res) => {
+    try {
+      const client = serviceClient();
+      const { data } = await client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+      const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
+      return res.status(200).json({ number });
+    } catch {
+      return res.status(200).json({ number: "" });
+    }
+  });
+  app2.get("/api/admin/support-whatsapp", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const { data } = await admin4.client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+    const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
+    return res.status(200).json({ number });
+  });
+  app2.patch("/api/admin/support-whatsapp", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const number = String(req.body?.number || "").replace(/\D/g, "");
+    if (number.length < 8 || number.length > 15) return res.status(400).json({ error: "Introduce el n\xFAmero con c\xF3digo de pa\xEDs." });
+    const { error } = await admin4.client.from("platform_settings").upsert({
+      key: "support_whatsapp",
+      value: { number, updated_by: admin4.userId },
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }, { onConflict: "key" });
+    if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
+    return res.status(200).json({ number });
+  });
   app2.get("/api/admin/withdrawal-window", async (req, res) => {
     try {
       const admin4 = await authenticatedAdmin(req);
@@ -1401,8 +1434,13 @@ function registerEmailSecurityRoutes(app2) {
     if (!auth) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const wallet = String(req.body?.wallet || "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "La wallet BEP20 no es v\xE1lida." });
+    const lockedWallet = String(auth.user.app_metadata?.withdrawal_wallet_bep20 || auth.user.user_metadata?.wallet_bep20 || "").trim();
+    if (lockedWallet && lockedWallet.toLowerCase() !== wallet.toLowerCase()) {
+      return res.status(409).json({ error: "La wallet ya est\xE1 bloqueada. Solicita el cambio a soporte." });
+    }
     const { error } = await auth.client.auth.admin.updateUserById(auth.user.id, {
-      user_metadata: { ...auth.user.user_metadata, wallet_bep20: wallet }
+      user_metadata: { ...auth.user.user_metadata, wallet_bep20: wallet },
+      app_metadata: { ...auth.user.app_metadata, withdrawal_wallet_bep20: wallet }
     });
     if (error) return res.status(500).json({ error: "No se pudo guardar la wallet." });
     return res.json({ status: "saved", message: "Wallet guardada correctamente." });

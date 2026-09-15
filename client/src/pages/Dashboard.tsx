@@ -21,6 +21,7 @@ import {
   Home,
   LogOut,
   Menu,
+  MessageCircle,
   Plus,
   RefreshCw,
   Settings,
@@ -907,6 +908,18 @@ export default function Dashboard() {
         </header>
         <main className="dash-content"><NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider></main>
       </div>
+      {supportWhatsapp && (
+        <a
+          className="dashboard-whatsapp"
+          href={`https://wa.me/${supportWhatsapp}?text=${encodeURIComponent("Hola, necesito soporte con mi cuenta de BitNode.")}`}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Contactar soporte por WhatsApp"
+        >
+          <MessageCircle size={23} />
+          <span>Soporte</span>
+        </a>
+      )}
     </div>
   );
 }
@@ -1823,6 +1836,7 @@ function ProfilePanel({
               <input
                 value={details.wallet_bep20}
                 maxLength={42}
+                disabled={Boolean(originalWallet)}
                 onChange={event => update("wallet_bep20", event.target.value)}
                 placeholder="0x…"
                 spellCheck={false}
@@ -1846,6 +1860,7 @@ function ProfilePanel({
               <Wallet size={15} />
             </button>
           </div>
+          {originalWallet && <p className="wallet-lock-note">Wallet bloqueada por seguridad. Para cambiarla, contacta a soporte.</p>}
         </section>
         {loading && (
           <div className="form-success" role="status">
@@ -2355,3 +2370,10 @@ function CommissionEntryDetails({
     </div>
   );
 }
+  const [supportWhatsapp, setSupportWhatsapp] = useState("");
+  useEffect(() => {
+    fetch("/api/support/whatsapp")
+      .then(response => response.ok ? response.json() : { number: "" })
+      .then(body => setSupportWhatsapp(String(body.number || "").replace(/\D/g, "")))
+      .catch(() => setSupportWhatsapp(""));
+  }, []);

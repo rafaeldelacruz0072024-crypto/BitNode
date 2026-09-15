@@ -44,6 +44,9 @@ export function registerWithdrawalRoutes(app: Express) {
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
+    const lockedWallet = String(data.user.app_metadata?.withdrawal_wallet_bep20 || data.user.user_metadata?.wallet_bep20 || "").trim();
+    if (!lockedWallet) return res.status(400).json({ error: "Guarda primero tu wallet de retiro en Perfil." });
+    if (wallet.toLowerCase() !== lockedWallet.toLowerCase()) return res.status(409).json({ error: "Debes retirar hacia tu wallet registrada. Contacta a soporte para cambiarla." });
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
 

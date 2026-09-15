@@ -34,6 +34,37 @@ async function withdrawalWindow(client: ReturnType<typeof serviceClient>) {
 const cleanReference = (value: unknown) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 
 export function registerAdminWithdrawalRoutes(app: Express) {
+  app.get("/api/support/whatsapp", async (_req, res) => {
+    try {
+      const client = serviceClient();
+      const { data } = await client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+      const number = data?.value && typeof data.value === "object" ? String((data.value as { number?: string }).number || "") : "";
+      return res.status(200).json({ number });
+    } catch {
+      return res.status(200).json({ number: "" });
+    }
+  });
+
+  app.get("/api/admin/support-whatsapp", async (req, res) => {
+    const admin = await authenticatedAdmin(req);
+    if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+    const { data } = await admin.client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+    const number = data?.value && typeof data.value === "object" ? String((data.value as { number?: string }).number || "") : "";
+    return res.status(200).json({ number });
+  });
+
+  app.patch("/api/admin/support-whatsapp", async (req: Request, res: Response) => {
+    const admin = await authenticatedAdmin(req);
+    if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+    const number = String(req.body?.number || "").replace(/\D/g, "");
+    if (number.length < 8 || number.length > 15) return res.status(400).json({ error: "Introduce el número con código de país." });
+    const { error } = await admin.client.from("platform_settings").upsert({
+      key: "support_whatsapp", value: { number, updated_by: admin.userId }, updated_at: new Date().toISOString(),
+    }, { onConflict: "key" });
+    if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
+    return res.status(200).json({ number });
+  });
+
   app.get("/api/admin/withdrawal-window", async (req, res) => {
     try {
       const admin = await authenticatedAdmin(req);

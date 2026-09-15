@@ -1200,6 +1200,9 @@ function ConfigurationSection({
   const [withdrawalWindow, setWithdrawalWindow] = useState(false);
   const [windowBusy, setWindowBusy] = useState(false);
   const [windowMessage, setWindowMessage] = useState("");
+  const [supportWhatsapp, setSupportWhatsapp] = useState("");
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
   useEffect(() => {
     void (async () => {
       const session = (await supabase?.auth.getSession())?.data.session;
@@ -1209,6 +1212,27 @@ function ConfigurationSection({
       if (response.ok) setWithdrawalWindow(body.enabled === true);
     })();
   }, []);
+  useEffect(() => {
+    void (async () => {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) return;
+      const response = await fetch("/api/admin/support-whatsapp", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const body = await response.json().catch(() => ({})) as { number?: string };
+      if (response.ok) setSupportWhatsapp(String(body.number || ""));
+    })();
+  }, []);
+  async function saveSupportWhatsapp() {
+    setSupportBusy(true); setSupportMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/support-whatsapp", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ number: supportWhatsapp }) });
+      const body = await response.json().catch(() => ({})) as { number?: string; error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo guardar el número.");
+      setSupportWhatsapp(String(body.number || "")); setSupportMessage("WhatsApp de soporte actualizado.");
+    } catch (error) { setSupportMessage(error instanceof Error ? error.message : "No se pudo guardar el número."); }
+    finally { setSupportBusy(false); }
+  }
   async function toggleWithdrawalWindow() {
     setWindowBusy(true); setWindowMessage("");
     try {
@@ -1226,6 +1250,15 @@ function ConfigurationSection({
   return (
     <div>
       <MonthlyRoiControl />
+      <article className="admin-card admin-card-full admin-support-whatsapp">
+        <div className="card-heading"><div><p className="admin-kicker">USER SUPPORT</p><h2>WhatsApp de soporte</h2></div></div>
+        <p className="config-note">Este número aparece en el botón flotante del dashboard. Escríbelo con código de país.</p>
+        <div className="admin-support-row">
+          <input value={supportWhatsapp} onChange={event => setSupportWhatsapp(event.target.value)} placeholder="18095551234" inputMode="tel" aria-label="Número de WhatsApp de soporte" />
+          <button className="admin-user-save" type="button" onClick={() => void saveSupportWhatsapp()} disabled={supportBusy}>{supportBusy ? "Guardando…" : "Guardar WhatsApp"}</button>
+        </div>
+        {supportMessage && <p className="config-note" role="status">{supportMessage}</p>}
+      </article>
       <article className="admin-card admin-card-full admin-withdrawal-window">
         <div className="card-heading">
           <div><p className="admin-kicker">WITHDRAWAL TEST WINDOW</p><h2>Ventana de retiros</h2></div>

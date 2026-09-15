@@ -75,6 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { error: authUpdateError } = await client.auth.admin.updateUserById(userId, {
       email,
       user_metadata: metadata,
+      app_metadata: {
+        ...(target.user.app_metadata || {}),
+        withdrawal_wallet_bep20: details.wallet_bep20 || null,
+      },
     });
     if (authUpdateError) return res.status(400).json({ error: authUpdateError.message });
 
