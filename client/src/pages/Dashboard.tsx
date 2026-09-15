@@ -1479,6 +1479,13 @@ function SectionPanel({
       entry => entry.status !== "credited"
     );
     const binaryVolume = commissionSummary?.binaryVolume;
+    const leftPoints = Number(binaryVolume?.left || 0);
+    const rightPoints = Number(binaryVolume?.right || 0);
+    const matchedPoints = Number(binaryVolume?.matched || 0);
+    const leftPendingPoints = Math.max(leftPoints - matchedPoints, 0);
+    const rightPendingPoints = Math.max(rightPoints - matchedPoints, 0);
+    const nextMatchPoints = Math.min(leftPendingPoints, rightPendingPoints);
+    const pointLabel = (value: number) => `${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts`;
     const pairingLabel =
       binaryVolume?.status === "paired"
         ? "Emparejado"
@@ -1537,11 +1544,51 @@ function SectionPanel({
             );
           })}
         </div>
+        <section className="binary-points-board dash-card">
+          <div className="dash-card-head">
+            <div>
+              <span className="dash-eyebrow">VOLUMEN BINARIO EN VIVO</span>
+              <h3>Puntos de tus piernas</h3>
+            </div>
+            <span className="ledger-status">1 USDT = 1 PUNTO</span>
+          </div>
+          <div className="binary-points-grid">
+            <article className="binary-point-card left"><span>Pierna izquierda</span><strong>{pointLabel(leftPoints)}</strong><small>Pendientes: {pointLabel(leftPendingPoints)}</small></article>
+            <article className="binary-point-card right"><span>Pierna derecha</span><strong>{pointLabel(rightPoints)}</strong><small>Pendientes: {pointLabel(rightPendingPoints)}</small></article>
+            <article className="binary-point-card matched"><span>Match histórico</span><strong>{pointLabel(matchedPoints)}</strong><small>Volumen ya emparejado</small></article>
+            <article className="binary-point-card next"><span>Match disponible</span><strong>{pointLabel(nextMatchPoints)}</strong><small>Puntos listos para cruzar</small></article>
+          </div>
+          <div className="binary-pending-bars">
+            <div><span>Izquierda disponible <b>{pointLabel(leftPendingPoints)}</b></span><i><em style={{ width: `${Math.min(100, leftPendingPoints / Math.max(leftPendingPoints, rightPendingPoints, 1) * 100)}%` }} /></i></div>
+            <div><span>Derecha disponible <b>{pointLabel(rightPendingPoints)}</b></span><i><em style={{ width: `${Math.min(100, rightPendingPoints / Math.max(leftPendingPoints, rightPendingPoints, 1) * 100)}%` }} /></i></div>
+          </div>
+          {binaryVolume?.updatedAt && <p className="binary-points-updated">Última actualización: {new Date(binaryVolume.updatedAt).toLocaleString("es-MX")}</p>}
+        </section>
         <BinaryTree
           nodes={networkSummary?.networkNodes || []}
           currentUserId={currentUserId}
           ownerName={networkSummary?.ownerUsername || user.username}
         />
+        <section className="binary-match-history dash-card">
+          <div className="dash-card-head">
+            <div><span className="dash-eyebrow">HISTÓRICO BINARIO</span><h3>Historial de match</h3></div>
+            <span className="ledger-status">{binaryEntries.length} MATCH{binaryEntries.length === 1 ? "" : "ES"}</span>
+          </div>
+          {binaryEntries.length ? (
+            <div className="binary-match-list">
+              {binaryEntries.map(entry => {
+                const metadata = entry.metadata || {};
+                const matched = Number(metadata.matched_volume || 0);
+                const left = Number(metadata.left_volume || 0);
+                const right = Number(metadata.right_volume || 0);
+                return <article className="binary-match-row" key={entry.id}>
+                  <div><b>+{pointLabel(matched)} en match</b><span>{new Date(entry.created_at).toLocaleString("es-MX")} · Origen: {entry.source_username || "Usuario referido"}</span><small>Izquierda {pointLabel(left)} · Derecha {pointLabel(right)}</small></div>
+                  <strong>+{money(Number(entry.amount || 0))}</strong>
+                </article>;
+              })}
+            </div>
+          ) : <EmptyState text="Todavía no hay puntos emparejados. El historial aparecerá al existir volumen en ambas piernas." />}
+        </section>
         <section className="direct-referrals-card dash-card">
           <div className="dash-card-head">
             <div>
