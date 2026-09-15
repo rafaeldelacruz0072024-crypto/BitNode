@@ -153,7 +153,7 @@ function DailyTasksPanel({
         );
         if (progress.cycle_reset) {
           setMessage(
-            "El plazo de 24 horas venció: se reinició el ciclo y sus ganancias provisionales. Tu capital permanece intacto."
+            "El plazo de 24 horas venció y se reinició el progreso del ciclo. El ROI ya acreditado permanece en tu historial y balance; el capital sigue bloqueado hasta completar el plazo."
           );
         }
       })
@@ -216,17 +216,16 @@ function DailyTasksPanel({
         setCycleCelebration(true);
         const rewards = Array.isArray(result.rewards) ? result.rewards : [];
         setNodeRewards(rewards);
-        // El ledger remoto es la única fuente de balance: evita acreditar en
-        // pantalla ganancias provisionales de ciclos 7/14/21.
+        // Refresca el balance desde el ledger para mostrar solo ROI acreditado.
         onRewards([], undefined);
         const available = Number(result.available_reward || 0);
         const pending = Number(result.pending_reward || 0);
         const principal = Number(result.principal_returned || 0);
         setMessage(
           available || principal
-            ? `Acreditado al balance: ${money(available + principal)}. ${pending ? `${money(pending)} queda provisional hasta cerrar su ciclo.` : "Capital preservado."}`
+            ? `Acreditado al balance: ${money(available + principal)}. ${pending ? `${money(pending)} queda pendiente.` : "El capital se libera al completar el plazo del nodo; el ROI se retira los miércoles si alcanza el mínimo."}`
             : pending
-              ? `${money(pending)} queda provisional hasta completar el ciclo del nodo. Capital preservado.`
+              ? `${money(pending)} queda pendiente. El capital sigue bloqueado hasta completar el plazo del nodo.`
               : "Tareas registradas. Hoy no hay liquidación por no ser día laborable."
         );
       } else if (result.status === "already_completed") {
@@ -2217,7 +2216,7 @@ function WithdrawalForm({
         <p className="withdrawal-schedule-note">
           Comisión directa: disponible 24 horas después de acreditarse. Bonos
           binario y de rango: disponibles únicamente los miércoles, hora de
-          Santo Domingo. Capital y rendimientos conservan sus reglas actuales.
+          Santo Domingo. El ROI de nodos de 7, 14 y 21 días se acredita al completar las tareas y se puede retirar los miércoles si alcanza el mínimo de 10 USDT. El capital se libera al completar el plazo del nodo.
         </p>
         <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar la solicitud, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
         <div className="fee-summary">
