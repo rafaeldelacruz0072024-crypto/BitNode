@@ -1305,7 +1305,7 @@ function ConfigurationSection({
       const body = await response.json().catch(() => ({})) as { enabled?: boolean; error?: string };
       if (!response.ok) throw new Error(body.error || "No se pudo actualizar la ventana.");
       setWithdrawalWindow(body.enabled === true);
-      setWindowMessage(body.enabled ? "Ventana abierta: los usuarios pueden solicitar retiros." : "Ventana cerrada: las nuevas solicitudes están bloqueadas.");
+      setWindowMessage(body.enabled ? "Control global activo: comisión directa tras 24 horas; bonos y ROI de plazo fijo, miércoles 8:00–15:00 de Ciudad de México." : "Control global suspendido: las nuevas solicitudes están bloqueadas.");
     } catch (error) { setWindowMessage(error instanceof Error ? error.message : "No se pudo actualizar la ventana."); }
     finally { setWindowBusy(false); }
   }
@@ -1323,11 +1323,11 @@ function ConfigurationSection({
       </article>
       <article className="admin-card admin-card-full admin-withdrawal-window">
         <div className="card-heading">
-          <div><p className="admin-kicker">WITHDRAWAL TEST WINDOW</p><h2>Ventana de retiros</h2></div>
-          <span className={`card-status ${withdrawalWindow ? "is-open" : ""}`}><i className={`runtime-dot ${withdrawalWindow ? "ready" : "idle"}`} /> {withdrawalWindow ? "ABIERTA" : "CERRADA"}</span>
+          <div><p className="admin-kicker">WITHDRAWAL CONTROL</p><h2>Control global de retiros</h2></div>
+          <span className={`card-status ${withdrawalWindow ? "is-open" : ""}`}><i className={`runtime-dot ${withdrawalWindow ? "ready" : "idle"}`} /> {withdrawalWindow ? "ACTIVO" : "SUSPENDIDO"}</span>
         </div>
-        <p className="config-note">Controla cuándo se aceptan nuevas solicitudes de retiro USDT BEP20 para realizar pruebas. El pago continúa siendo manual y se procesa hasta en 48 horas.</p>
-        <button className="admin-user-save" type="button" onClick={() => void toggleWithdrawalWindow()} disabled={windowBusy}>{windowBusy ? "Actualizando…" : withdrawalWindow ? "Cerrar ventana de retiros" : "Abrir ventana de retiros"}</button>
+        <p className="config-note">Este control puede suspender todas las solicitudes. Con el control activo, comisión directa: tras 24 horas; bonos binario/rango y ROI de nodos de plazo fijo: miércoles 8:00–15:00 de Ciudad de México. El pago se procesa manualmente hasta en 48 horas.</p>
+        <button className="admin-user-save" type="button" onClick={() => void toggleWithdrawalWindow()} disabled={windowBusy}>{windowBusy ? "Actualizando…" : withdrawalWindow ? "Suspender retiros" : "Activar retiros"}</button>
         {windowMessage && <p className="config-note" role="status">{windowMessage}</p>}
       </article>
       <div className="admin-columns">

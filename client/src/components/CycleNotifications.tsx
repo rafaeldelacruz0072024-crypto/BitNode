@@ -3,7 +3,7 @@ import { Bell, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Notice = { id: string; created_at: string; read_at: string | null };
-const message = "El ciclo de tus nodos se reinició por no completar las tareas dentro del plazo de 24 horas. Se anularon las ganancias provisionales del ciclo. Tu capital y las ganancias ya liberadas permanecen intactos. Retoma las tareas para iniciar un nuevo ciclo.";
+const message = "El ciclo de tus nodos se reinició por no completar las tareas dentro del plazo de 24 horas. El ROI ya acreditado permanece en tu balance e historial; el progreso de días volvió a cero y el capital sigue bloqueado hasta completar el plazo. Retoma las tareas para iniciar un nuevo ciclo.";
 
 export function useCycleNotifications(userId: string | undefined) {
   const [notices, setNotices] = useState<Notice[]>([]);

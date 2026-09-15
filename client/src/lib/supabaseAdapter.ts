@@ -90,8 +90,18 @@ type AccountSummary = { movements: Movement[]; contracts: Contract[]; ledger: { 
 
 export type WithdrawalAvailability = {
   lockedDirect: number;
+  directUnspent: number;
+  directAvailable: number;
+  weeklyBonusUnspent: number;
+  finiteNodeRoiUnspent: number;
+  dailyNodeRoiCredited: number;
+  unrestricted: number;
   withdrawableBalance: number;
   nextDirectAvailableAt: string | null;
+  weeklyWindowOpen: boolean;
+  nextWeeklyWindowAt: string | null;
+  weeklyWindowClosesAt: string | null;
+  globalWindowEnabled: boolean;
 };
 
 export async function fetchWithdrawalAvailability(): Promise<WithdrawalAvailability> {
@@ -102,9 +112,13 @@ export async function fetchWithdrawalAvailability(): Promise<WithdrawalAvailabil
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(payload.error || "No se pudo cargar el contador."));
-  if (!Number.isFinite(payload.lockedDirect) || !Number.isFinite(payload.withdrawableBalance) ||
-    (payload.nextDirectAvailableAt !== null &&
-      (typeof payload.nextDirectAvailableAt !== "string" || !Number.isFinite(Date.parse(payload.nextDirectAvailableAt))))) {
+  const amounts = [payload.lockedDirect, payload.directUnspent, payload.directAvailable,
+    payload.weeklyBonusUnspent, payload.finiteNodeRoiUnspent, payload.dailyNodeRoiCredited,
+    payload.unrestricted, payload.withdrawableBalance];
+  const dates = [payload.nextDirectAvailableAt, payload.nextWeeklyWindowAt, payload.weeklyWindowClosesAt];
+  if (amounts.some(value => !Number.isFinite(value)) ||
+    dates.some(value => value !== null && (typeof value !== "string" || !Number.isFinite(Date.parse(value)))) ||
+    typeof payload.weeklyWindowOpen !== "boolean" || typeof payload.globalWindowEnabled !== "boolean") {
     throw new Error("El servidor devolvió un contador inválido.");
   }
   return payload as WithdrawalAvailability;

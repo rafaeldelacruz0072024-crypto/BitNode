@@ -2136,6 +2136,10 @@ function WithdrawalForm({
   const nextDirectAt = availability?.nextDirectAvailableAt ? Date.parse(availability.nextDirectAvailableAt) : null;
   const directSecondsLeft = nextDirectAt === null ? 0 : Math.max(0, Math.ceil((nextDirectAt - countdownNow) / 1000));
   const directCountdown = `${String(Math.floor(directSecondsLeft / 3600)).padStart(2, "0")}:${String(Math.floor((directSecondsLeft % 3600) / 60)).padStart(2, "0")}:${String(directSecondsLeft % 60).padStart(2, "0")}`;
+  const weeklyTarget = availability?.weeklyWindowOpen ? availability.weeklyWindowClosesAt : availability?.nextWeeklyWindowAt;
+  const weeklyTargetAt = weeklyTarget ? Date.parse(weeklyTarget) : null;
+  const weeklySecondsLeft = weeklyTargetAt === null ? 0 : Math.max(0, Math.ceil((weeklyTargetAt - countdownNow) / 1000));
+  const weeklyCountdown = `${String(Math.floor(weeklySecondsLeft / 3600)).padStart(2, "0")}:${String(Math.floor((weeklySecondsLeft % 3600) / 60)).padStart(2, "0")}:${String(weeklySecondsLeft % 60).padStart(2, "0")}`;
   useEffect(() => {
     let active = true;
     fetchPrivateUserDetails()
@@ -2168,6 +2172,10 @@ function WithdrawalForm({
       return "El monto debe tener hasta dos decimales.";
     if (amount > user.balance)
       return `No puedes retirar más de ${money(user.balance)} disponibles.`;
+    if (availability && !availability.globalWindowEnabled)
+      return "La ventana global de retiros está cerrada por administración.";
+    if (availability && amount > availability.withdrawableBalance)
+      return `Solo ${money(availability.withdrawableBalance)} está disponible para retiro ahora. Revisa las comisiones y el contador semanal.`;
     if (usedToday + amount > WITHDRAW_DAILY_LIMIT)
       return `Superas el límite diario de ${money(WITHDRAW_DAILY_LIMIT)}. Ya solicitaste ${money(usedToday)} hoy.`;
     if (!wallet.trim()) return "Introduce la dirección de la wallet.";
@@ -2234,18 +2242,25 @@ function WithdrawalForm({
           {money(WITHDRAW_DAILY_LIMIT)} · Usado: {money(usedToday)}
         </small>
         {availability && <div className="withdrawal-schedule-note" role="timer">
-          <strong>Comisión directa retenida: {money(availability.lockedDirect)}</strong>
+          <strong>Comisión directa</strong>
+          <div>Disponible tras 24 horas: {money(availability.directAvailable)} · Retenida: {money(availability.lockedDirect)}</div>
           {availability.lockedDirect > 0 && nextDirectAt !== null ? (
-            <span> · {directSecondsLeft > 0 ? `Próxima liberación en ${directCountdown}` : "Plazo cumplido; actualizando disponibilidad…"} · <time dateTime={availability.nextDirectAvailableAt!}>{new Date(nextDirectAt).toLocaleString("es-DO", { timeZone: "America/Santo_Domingo", dateStyle: "short", timeStyle: "short" })} (Santo Domingo)</time></span>
-          ) : <span> · Sin comisión directa pendiente de las 24 horas.</span>}
-          <div>Disponible para retiro ahora: {money(availability.withdrawableBalance)}</div>
+            <div>{directSecondsLeft > 0 ? `Próxima comisión disponible en ${directCountdown}` : "Plazo cumplido; actualizando disponibilidad…"}</div>
+          ) : <div>Sin comisión directa pendiente de las 24 horas.</div>}
+          <strong>Ventana de bonos y ROI · miércoles 8:00–15:00 (Ciudad de México)</strong>
+          <div>{availability.weeklyWindowOpen ? "ABIERTA" : "CERRADA"} · {weeklySecondsLeft > 0 ? `${availability.weeklyWindowOpen ? "Cierra" : "Abre"} en ${weeklyCountdown}` : "Actualizando horario…"}</div>
+          <div>Bono binario/rango: {money(availability.weeklyBonusUnspent)} · ROI nodos 7/14/21: {money(availability.finiteNodeRoiUnspent)}</div>
+          <div>ROI Nodo Diario acreditado históricamente: {money(availability.dailyNodeRoiCredited)} · No exige miércoles.</div>
+          {!availability.globalWindowEnabled && <div>Retiro global suspendido por administración.</div>}
+          <div>Disponible para retiro ahora: {money(availability.globalWindowEnabled ? availability.withdrawableBalance : 0)}</div>
         </div>}
         {!availability && !availabilityError && <small className="withdrawal-schedule-note">Consultando la comisión directa…</small>}
         {!availability && availabilityError && <small className="withdrawal-schedule-note">{availabilityError}</small>}
         <p className="withdrawal-schedule-note">
-          Comisión directa: disponible 24 horas después de acreditarse. Bonos
-          binario y de rango: disponibles únicamente los miércoles, hora de
-          Santo Domingo. El ROI de nodos de 7, 14 y 21 días se acredita al completar las tareas y se puede retirar los miércoles si alcanza el mínimo de 10 USDT. El capital se libera al completar el plazo del nodo.
+          Comisión directa: disponible 24 horas después de acreditarse, sin esperar al miércoles.
+          Bonos binario/rango y ROI de nodos 7/14/21: miércoles de 8:00 a 15:00, hora de Ciudad de México.
+          El ROI del Nodo Diario se puede retirar al acreditarse. Retiro mínimo: 10 USDT.
+          El capital de los nodos de plazo fijo se libera al completar sus días.
         </p>
         <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar la solicitud, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
         <div className="fee-summary">

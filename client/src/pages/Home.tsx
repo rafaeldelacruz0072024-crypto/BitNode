@@ -31,14 +31,14 @@ const rules = [
   { icon: CalendarDays, title: "Lunes a viernes", text: "Los rendimientos se generan en días laborables." },
   { icon: Clock3, title: "4 tareas cada 24 h", text: "La continuidad mantiene el progreso del ciclo." },
   { icon: RefreshCcw, title: "Reinicio por inactividad", text: "Si faltan tareas, avance y días vuelven a cero; el capital del nodo se conserva." },
-  { icon: BadgePercent, title: "Retiro con 5%", text: "Ventana: miércoles de 8:00 AM a 2:00 PM, hora de México (GMT-6)." },
+  { icon: BadgePercent, title: "Retiro con 5%", text: "Bonos y ROI de nodos de plazo fijo: miércoles de 8:00 AM a 3:00 PM, hora de Ciudad de México." },
   { icon: ShieldCheck, title: "Registro verificable", text: "Cada bono guarda nodo, usuario origen, rama, tasa y monto." },
 ];
 
 const faqs = [
   ["¿Cómo se elige el rendimiento?", "El porcentaje se selecciona dentro del rango del nodo cuando concluye cada ciclo."],
   ["¿Qué pasa si no completo las tareas?", "El avance y los días procesados reinician a cero. El capital colocado en el nodo se mantiene."],
-  ["¿Cuándo puedo solicitar un retiro?", "Los miércoles, de 8:00 AM a 2:00 PM, hora de México (GMT-6). El retiro aplica un fee de 5%."],
+  ["¿Cuándo puedo solicitar un retiro?", "Bonos binario/rango y ROI de nodos de 7, 14 y 21 días: miércoles de 8:00 AM a 3:00 PM, hora de Ciudad de México. La comisión directa madura a las 24 horas y el ROI del Nodo Diario no espera al miércoles. El retiro aplica un fee de 5%."],
 ];
 
 function BrandMark() {

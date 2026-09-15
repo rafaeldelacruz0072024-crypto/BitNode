@@ -83,7 +83,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       const enabled = req.body?.enabled === true;
       const { error } = await admin.client.from("platform_settings").upsert({
         key: "withdrawal_window",
-        value: { enabled, mode: "manual_test", updated_by: (await admin.client.auth.getUser(token(req))).data.user?.id || null },
+        value: { enabled, mode: "scheduled_mexico", updated_by: (await admin.client.auth.getUser(token(req))).data.user?.id || null },
         updated_at: new Date().toISOString(),
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
