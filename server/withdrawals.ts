@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { withdrawalFee } from "../shared/withdrawalFee.js";
 
 const NETWORKS = new Set(["BNB Chain"]);
 const LIMIT = 1000;
@@ -15,6 +14,11 @@ function admin() {
 function token(req: Request) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
+}
+
+function challengeHash(challengeId: string, nonce: string) {
+  const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
+  return crypto.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
 }
 
 export function validWallet(network: string, wallet: string) {
@@ -31,50 +35,44 @@ export function validateWithdrawalInput(amount: number, network: string, wallet:
 
 export function registerWithdrawalRoutes(app: Express) {
   app.post("/api/withdrawals/request", async (req: Request, res: Response) => {
-    return res.status(409).json({ error: "Este retiro requiere confirmación con el código enviado a tu correo." });
-    /* legacy route retained below for audit history
     const client = admin();
     const accessToken = token(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesión Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesión Supabase inválida." });
 
-    const { data: windowSetting } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
-    const windowOpen = windowSetting?.value && typeof windowSetting.value === "object" && (windowSetting.value as { enabled?: boolean }).enabled === true;
-    if (!windowOpen) return res.status(423).json({ error: "La ventana de retiros está cerrada temporalmente. Intenta nuevamente cuando el administrador la habilite." });
-
     const amount = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
-    const fee = withdrawalFee(amount);
     const basicError = validateWithdrawalInput(amount, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
 
-    const start = new Date();
-    start.setUTCHours(0, 0, 0, 0);
-    const { data: today, error: historyError } = await client.from("transactions").select("amount,type").eq("user_id", data.user.id).eq("type", "withdraw").gte("created_at", start.toISOString());
-    if (historyError) return res.status(500).json({ error: "No se pudo verificar el límite diario." });
-    const used = (today || []).reduce((sum, row) => sum + Math.abs(Number(row.amount) || 0), 0);
-    const limitError = validateWithdrawalInput(amount, network, wallet, used);
-    if (limitError) return res.status(400).json({ error: limitError });
-
-    const id = `WDR-${crypto.randomUUID()}`;
-    const { error: insertError } = await client.from("transactions").insert({
-      id,
-      user_id: data.user.id,
-      username: data.user.user_metadata?.username || data.user.email?.split("@")[0] || null,
-      type: "withdraw",
-      label: `Solicitud de retiro · ${network}`,
-      amount: -amount,
-      status: "pending",
-      network,
-      wallet,
-      fee,
-      net_amount: amount - fee,
-      created_at: new Date().toISOString(),
-      provider_status: "manual_review",
+    const { error: validationError } = await client.rpc("validate_withdrawal_request", {
+      p_user_id: data.user.id, p_amount: amount,
     });
-    if (insertError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
-    return res.status(201).json({ id, status: "pending", fee, netAmount: amount - fee, message: "Solicitud registrada. El retiro se procesa manualmente hasta en 48 horas." }); */
+    if (validationError) {
+      if (validationError.code === "P0001") return res.status(400).json({ error: validationError.message });
+      return res.status(500).json({ error: "No se pudo validar la solicitud de retiro." });
+    }
+
+    const challengeId = crypto.randomUUID();
+    const nonce = crypto.randomBytes(32).toString("hex");
+    const codeHash = challengeHash(challengeId, nonce);
+    const { error: challengeError } = await client.from("email_security_challenges").insert({
+      id: challengeId, user_id: data.user.id, purpose: "withdrawal", code_hash: codeHash,
+      payload: { amount, network, wallet }, expires_at: new Date(Date.now() + 2 * 60_000).toISOString(),
+    });
+    if (challengeError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
+
+    const { data: result, error } = await client.rpc("confirm_verified_withdrawal", {
+      p_user_id: data.user.id, p_challenge_id: challengeId, p_code_hash: codeHash,
+    });
+    if (error) {
+      await client.from("email_security_challenges").delete().eq("id", challengeId).is("consumed_at", null);
+      if (error.code === "P0001") return res.status(400).json({ error: error.message });
+      return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
+    }
+    await client.from("transactions").update({ provider_status: "session_verified" }).eq("id", result.id).eq("status", "pending");
+    return res.status(201).json(result);
   });
 }

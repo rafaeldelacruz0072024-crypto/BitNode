@@ -46,7 +46,7 @@ import {
 import { displayAuthName, supabase } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { createNowPaymentsPayment } from "@/lib/nowpaymentsClient";
-import { confirmWithdrawal, requestWithdrawal } from "@/lib/withdrawalClient";
+import { requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
 import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
@@ -2050,8 +2050,6 @@ function WithdrawalForm({
   const [wallet, setWallet] = useState("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
-  const [challenge, setChallenge] = useState<{ id: string; email: string } | null>(null);
-  const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const last24Hours = Date.now() - 24 * 60 * 60 * 1000;
   const usedToday = user.movements
@@ -2143,7 +2141,7 @@ function WithdrawalForm({
           binario y de rango: disponibles únicamente los miércoles, hora de
           Santo Domingo. Capital y rendimientos conservan sus reglas actuales.
         </p>
-        <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar por correo, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
+        <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar la solicitud, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
         <div className="fee-summary">
           <span>
             Comisión ({(WITHDRAW_FEE_RATE * 100).toFixed(0)}% · mínimo 1 USDT){" "}
@@ -2175,7 +2173,7 @@ function WithdrawalForm({
             aria-labelledby="withdraw-confirm-title"
           >
             <span className="dash-eyebrow">CONFIRMACIÓN REQUERIDA</span>
-            <h3 id="withdraw-confirm-title">{challenge ? "Código de confirmación" : "¿Confirmar retiro?"}</h3>
+            <h3 id="withdraw-confirm-title">¿Confirmar retiro?</h3>
             <p>
               Red: <strong>{network === "BNB Chain" ? "USDT BEP20" : network}</strong>
               <br />
@@ -2187,21 +2185,20 @@ function WithdrawalForm({
               <br />
               Recibirás: <strong>{money(net)} USDT</strong>
             </p>
-            {challenge && <><p>Enviado a <strong>{challenge.email}</strong>. Caduca en 10 minutos.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,""));setError("");}} placeholder="000000" /></>}
             {error && <div className="form-error" role="alert">{error}</div>}
             <div className="confirm-actions">
               <button
                 className="confirm-cancel"
-                onClick={() => { setConfirming(false); setChallenge(null); setCode(""); }}
+                onClick={() => setConfirming(false)}
               >
                 Cancelar
               </button>
               <button
                 className="dash-primary"
-                disabled={verifying || Boolean(challenge && code.length !== 6)}
-                onClick={async () => { setVerifying(true); setError(""); try { if (!challenge) { const sent=await requestWithdrawal(amount,network,wallet.trim()); setChallenge({id:sent.challengeId,email:sent.maskedEmail}); return; } const result=await confirmWithdrawal(challenge.id,code); setConfirming(false); setChallenge(null); setCode(""); onSubmit(amount, network, wallet.trim(), fee, result); } catch(cause) { setError(cause instanceof Error?cause.message:"No se pudo confirmar el retiro."); } finally { setVerifying(false); } }}
+                disabled={verifying}
+                onClick={async () => { setVerifying(true); setError(""); try { const result=await requestWithdrawal(amount,network,wallet.trim()); setConfirming(false); onSubmit(amount, network, wallet.trim(), fee, result); } catch(cause) { setError(cause instanceof Error?cause.message:"No se pudo confirmar el retiro."); } finally { setVerifying(false); } }}
               >
-                {verifying ? "Procesando…" : challenge ? "Validar y retirar" : "Enviar código"} <Zap size={15} />
+                {verifying ? "Procesando…" : "Confirmar retiro"} <Zap size={15} />
               </button>
             </div>
           </section>

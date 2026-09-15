@@ -177,8 +177,8 @@ var OAuthService = class {
     });
     return data;
   }
-  async getUserInfoByToken(token3) {
-    const { data } = await this.client.post(GET_USER_INFO_PATH, { accessToken: token3.accessToken });
+  async getUserInfoByToken(token4) {
+    const { data } = await this.client.post(GET_USER_INFO_PATH, { accessToken: token4.accessToken });
     return data;
   }
 };
@@ -620,10 +620,10 @@ function registerNowPaymentsRoutes(app2) {
   app2.post("/api/payments/nowpayments/payment", async (req, res) => {
     try {
       const apiKey = process.env.NOWPAYMENTS_API_KEY;
-      const admin3 = adminClient();
-      const token3 = bearer(req);
-      if (!apiKey || !admin3 || !token3) return res.status(401).json({ error: "Supabase Auth requerida." });
-      const { data: authData, error: authError } = await admin3.auth.getUser(token3);
+      const admin4 = adminClient();
+      const token4 = bearer(req);
+      if (!apiKey || !admin4 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
+      const { data: authData, error: authError } = await admin4.auth.getUser(token4);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
       const amount = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
@@ -648,7 +648,7 @@ function registerNowPaymentsRoutes(app2) {
       if (!response.ok) return res.status(502).json({ error: "NOWPayments rechaz\xF3 la creaci\xF3n del pago.", details: payment });
       if (!payment.payment_id || !payment.pay_address || !payment.pay_amount || !payment.pay_currency)
         return res.status(502).json({ error: "NOWPayments no devolvi\xF3 los datos de dep\xF3sito esperados.", details: payment });
-      const { error: insertError } = await admin3.from("transactions").insert({
+      const { error: insertError } = await admin4.from("transactions").insert({
         id: transactionId,
         user_id: authData.user.id,
         username: authData.user.user_metadata?.username || authData.user.email?.split("@")[0] || null,
@@ -677,29 +677,29 @@ function registerNowPaymentsRoutes(app2) {
   });
   app2.post("/api/payments/nowpayments/ipn", async (req, res) => {
     if (!validIpnSignature(req.body, req.header("x-nowpayments-sig"))) return res.status(401).json({ error: "Firma IPN inv\xE1lida." });
-    const admin3 = adminClient();
-    if (!admin3) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
+    const admin4 = adminClient();
+    if (!admin4) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
     const body = req.body;
     const orderId = body.order_id ? String(body.order_id) : "";
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
     const status = ["finished", "confirmed"].includes(providerStatus) ? "completed" : ["failed", "expired", "refunded"].includes(providerStatus) ? "failed" : "pending";
     if (orderId) {
-      const { data: deposit, error: lookupError } = await admin3.from("transactions").select("id,user_id,username,amount,network,created_at,provider_payment_id").eq("id", orderId).eq("type", "deposit").maybeSingle();
+      const { data: deposit, error: lookupError } = await admin4.from("transactions").select("id,user_id,username,amount,network,created_at,provider_payment_id").eq("id", orderId).eq("type", "deposit").maybeSingle();
       if (lookupError) return res.status(500).json({ error: "No se pudo consultar la transacci\xF3n." });
       if (!deposit) return res.status(404).json({ error: "Dep\xF3sito no encontrado." });
       const paymentId = body.payment_id ? String(body.payment_id) : "";
       if (paymentId && deposit.provider_payment_id && paymentId !== String(deposit.provider_payment_id)) return res.status(409).json({ error: "El pago no corresponde al dep\xF3sito." });
-      const { error } = await admin3.from("transactions").update({ status, provider_status: providerStatus, provider_payment_id: paymentId || void 0 }).eq("id", orderId).eq("type", "deposit");
+      const { error } = await admin4.from("transactions").update({ status, provider_status: providerStatus, provider_payment_id: paymentId || void 0 }).eq("id", orderId).eq("type", "deposit");
       if (error) return res.status(500).json({ error: "No se pudo actualizar la transacci\xF3n." });
       const cashbackId = depositCashbackTransactionId(orderId);
       if (status === "completed") {
         const cashback = depositCashbackEntry({ ...deposit, amount: Number(deposit.amount), created_at: String(deposit.created_at) });
         if (cashback) {
-          const { error: cashbackError } = await admin3.from("transactions").upsert({ ...cashback, created_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "id" });
+          const { error: cashbackError } = await admin4.from("transactions").upsert({ ...cashback, created_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "id" });
           if (cashbackError) return res.status(500).json({ error: "No se pudo acreditar el cashback." });
         }
       } else if (status === "failed") {
-        const { error: reversalError } = await admin3.from("transactions").update({ status: "reversed", provider_status: `promo_cashback:reversed:${orderId}` }).eq("id", cashbackId).like("provider_status", "promo_cashback:%");
+        const { error: reversalError } = await admin4.from("transactions").update({ status: "reversed", provider_status: `promo_cashback:reversed:${orderId}` }).eq("id", cashbackId).like("provider_status", "promo_cashback:%");
         if (reversalError) return res.status(500).json({ error: "No se pudo revertir el cashback." });
       }
     }
@@ -708,9 +708,23 @@ function registerNowPaymentsRoutes(app2) {
 }
 
 // server/withdrawals.ts
+import crypto2 from "node:crypto";
 import { createClient as createClient2 } from "@supabase/supabase-js";
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
+function admin() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key ? createClient2(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+}
+function token(req) {
+  const value = req.header("authorization") || "";
+  return value.startsWith("Bearer ") ? value.slice(7) : null;
+}
+function challengeHash(challengeId, nonce) {
+  const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
+  return crypto2.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
+}
 function validWallet(network, wallet) {
   return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
@@ -723,7 +737,48 @@ function validateWithdrawalInput(amount, network, wallet, usedToday) {
 }
 function registerWithdrawalRoutes(app2) {
   app2.post("/api/withdrawals/request", async (req, res) => {
-    return res.status(409).json({ error: "Este retiro requiere confirmaci\xF3n con el c\xF3digo enviado a tu correo." });
+    const client = admin();
+    const accessToken = token(req);
+    if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    const { data, error: authError } = await client.auth.getUser(accessToken);
+    if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
+    const amount = Number(req.body?.amount);
+    const network = String(req.body?.network || "");
+    const wallet = String(req.body?.wallet || "").trim();
+    const basicError = validateWithdrawalInput(amount, network, wallet, 0);
+    if (basicError) return res.status(400).json({ error: basicError });
+    const { error: validationError } = await client.rpc("validate_withdrawal_request", {
+      p_user_id: data.user.id,
+      p_amount: amount
+    });
+    if (validationError) {
+      if (validationError.code === "P0001") return res.status(400).json({ error: validationError.message });
+      return res.status(500).json({ error: "No se pudo validar la solicitud de retiro." });
+    }
+    const challengeId = crypto2.randomUUID();
+    const nonce = crypto2.randomBytes(32).toString("hex");
+    const codeHash = challengeHash(challengeId, nonce);
+    const { error: challengeError } = await client.from("email_security_challenges").insert({
+      id: challengeId,
+      user_id: data.user.id,
+      purpose: "withdrawal",
+      code_hash: codeHash,
+      payload: { amount, network, wallet },
+      expires_at: new Date(Date.now() + 2 * 6e4).toISOString()
+    });
+    if (challengeError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
+    const { data: result, error } = await client.rpc("confirm_verified_withdrawal", {
+      p_user_id: data.user.id,
+      p_challenge_id: challengeId,
+      p_code_hash: codeHash
+    });
+    if (error) {
+      await client.from("email_security_challenges").delete().eq("id", challengeId).is("consumed_at", null);
+      if (error.code === "P0001") return res.status(400).json({ error: error.message });
+      return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
+    }
+    await client.from("transactions").update({ provider_status: "session_verified" }).eq("id", result.id).eq("status", "pending");
+    return res.status(201).json(result);
   });
 }
 
@@ -1025,14 +1080,14 @@ function registerSecureCommissionRoutes(app2) {
 }
 
 // server/deposits.ts
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import { createClient as createClient5 } from "@supabase/supabase-js";
-function admin() {
+function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return url && key ? createClient5(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function token(req) {
+function token2(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -1042,15 +1097,15 @@ function validateManualDeposit(amount) {
 }
 function registerDepositRoutes(app2) {
   app2.post("/api/deposits/request", async (req, res) => {
-    const client = admin();
-    const accessToken = token(req);
+    const client = admin2();
+    const accessToken = token2(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const amount = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount);
     if (validationError) return res.status(400).json({ error: validationError });
-    const id = `DEP-${crypto2.randomUUID()}`;
+    const id = `DEP-${crypto3.randomUUID()}`;
     const { error } = await client.from("transactions").insert({
       id,
       user_id: data.user.id,
@@ -1075,13 +1130,13 @@ function serviceClient() {
   if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
   return createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-function token2(req) {
+function token3(req) {
   const header = req.header("authorization") || "";
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 async function authenticatedAdmin(req) {
   const client = serviceClient();
-  const accessToken = token2(req);
+  const accessToken = token3(req);
   if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
@@ -1099,9 +1154,9 @@ var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9.
 function registerAdminWithdrawalRoutes(app2) {
   app2.get("/api/admin/withdrawal-window", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
-      return res.status(200).json({ enabled: await withdrawalWindow(admin3.client) });
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      return res.status(200).json({ enabled: await withdrawalWindow(admin4.client) });
     } catch (error) {
       console.error("[admin-withdrawal-window]", error);
       return res.status(503).json({ error: "No se pudo consultar la ventana de retiros." });
@@ -1109,12 +1164,12 @@ function registerAdminWithdrawalRoutes(app2) {
   });
   app2.patch("/api/admin/withdrawal-window", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
       const enabled = req.body?.enabled === true;
-      const { error } = await admin3.client.from("platform_settings").upsert({
+      const { error } = await admin4.client.from("platform_settings").upsert({
         key: "withdrawal_window",
-        value: { enabled, mode: "manual_test", updated_by: (await admin3.client.auth.getUser(token2(req))).data.user?.id || null },
+        value: { enabled, mode: "manual_test", updated_by: (await admin4.client.auth.getUser(token3(req))).data.user?.id || null },
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
@@ -1126,9 +1181,9 @@ function registerAdminWithdrawalRoutes(app2) {
   });
   app2.get("/api/admin/withdrawals", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
-      const { data, error } = await admin3.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
       if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
       return res.status(200).json({ withdrawals: data || [] });
     } catch (error) {
@@ -1138,12 +1193,12 @@ function registerAdminWithdrawalRoutes(app2) {
   });
   app2.post("/api/admin/withdrawals", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
       const id = String(req.body?.id || "").trim().slice(0, 160);
       const action = String(req.body?.action || "").trim();
       if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
-      const { data: withdrawal, error: lookupError } = await admin3.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
+      const { data: withdrawal, error: lookupError } = await admin4.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
       if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
       const status = String(withdrawal.status);
       const ref = cleanReference(req.body?.reference);
@@ -1154,7 +1209,7 @@ function registerAdminWithdrawalRoutes(app2) {
       };
       const transition = transitions[action];
       if (!transition.from.includes(status)) return res.status(409).json({ error: "La solicitud no permite esta acci\xF3n en su estado actual." });
-      const { data: updated, error: updateError } = await admin3.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
+      const { data: updated, error: updateError } = await admin4.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
       if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
       if (!updated) return res.status(409).json({ error: "El retiro cambi\xF3 de estado. Actualiza la lista." });
       return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
@@ -1188,11 +1243,11 @@ var monthlyRoiInput = z2.object({
 function registerAdminMonthlyRoiRoutes(app2) {
   app2.get("/api/admin/monthly-roi", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
       const month = roiMonthSchema.safeParse(req.query.month);
       if (!month.success) return res.status(400).json({ error: "Selecciona un mes v\xE1lido." });
-      const { data, error } = await admin3.client.from("monthly_node_roi").select("rates, version, updated_at").eq("month", `${month.data}-01`).maybeSingle();
+      const { data, error } = await admin4.client.from("monthly_node_roi").select("rates, version, updated_at").eq("month", `${month.data}-01`).maybeSingle();
       if (error) return res.status(503).json({ error: "La configuraci\xF3n mensual no est\xE1 disponible. Verifica la migraci\xF3n de ROI." });
       return res.json({ month: month.data, rates: data?.rates ?? null, version: data?.version ?? 0, updatedAt: data?.updated_at ?? null });
     } catch {
@@ -1201,16 +1256,16 @@ function registerAdminMonthlyRoiRoutes(app2) {
   });
   app2.put("/api/admin/monthly-roi", async (req, res) => {
     try {
-      const admin3 = await authenticatedAdmin(req);
-      if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
       const input = monthlyRoiInput.safeParse(req.body);
       if (!input.success) return res.status(400).json({ error: "Completa los cuatro porcentajes entre 0 y 1000, con hasta dos decimales, y un mes v\xE1lido." });
       const { month, rates, version } = input.data;
-      const { data, error } = await admin3.client.rpc("save_monthly_node_roi", {
+      const { data, error } = await admin4.client.rpc("save_monthly_node_roi", {
         p_month: `${month}-01`,
         p_rates: rates,
         p_expected_version: version,
-        p_actor: admin3.userId
+        p_actor: admin4.userId
       });
       if (error) return res.status(error.code === "40001" ? 409 : 503).json({
         error: error.code === "40001" ? "Otro administrador cambi\xF3 este mes. Recarga el mes antes de guardar." : "No se guardaron los porcentajes. Verifica la migraci\xF3n y vuelve a intentarlo."
@@ -1225,14 +1280,14 @@ function registerAdminMonthlyRoiRoutes(app2) {
 // server/adminNodeControl.ts
 function registerAdminNodeControlRoutes(app2) {
   app2.get("/api/admin/node-control", async (req, res) => {
-    const admin3 = await authenticatedAdmin(req);
-    if ("error" in admin3) return res.status(admin3.status ?? 500).json({ error: admin3.error });
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
     const [contractsResult, cyclesResult, resetsResult, profilesResult, plansResult] = await Promise.all([
-      admin3.client.from("contracts").select("id,user_id,plan_id,amount,status,starts_at,ends_at,created_at").order("created_at", { ascending: false }).limit(1e3),
-      admin3.client.from("daily_task_cycles").select("user_id,cycle_day,completed_tasks,window_started_at,deadline_at,last_completed_at"),
-      admin3.client.from("node_task_reset_log").select("id,user_id,contract_id,reason,reset_at,cycle_day_before,completed_tasks_before").order("reset_at", { ascending: false }).limit(500),
-      admin3.client.from("profiles").select("id,username"),
-      admin3.client.from("plans").select("id,name")
+      admin4.client.from("contracts").select("id,user_id,plan_id,amount,status,starts_at,ends_at,created_at").order("created_at", { ascending: false }).limit(1e3),
+      admin4.client.from("daily_task_cycles").select("user_id,cycle_day,completed_tasks,window_started_at,deadline_at,last_completed_at"),
+      admin4.client.from("node_task_reset_log").select("id,user_id,contract_id,reason,reset_at,cycle_day_before,completed_tasks_before").order("reset_at", { ascending: false }).limit(500),
+      admin4.client.from("profiles").select("id,username"),
+      admin4.client.from("plans").select("id,name")
     ]);
     const error = contractsResult.error || cyclesResult.error || resetsResult.error || profilesResult.error || plansResult.error;
     if (error) return res.status(500).json({ error: "No se pudo cargar el control de nodos.", details: error.message });
@@ -1278,10 +1333,10 @@ function createFinancialRateLimiter(overrides = {}) {
 }
 
 // server/emailSecurity.ts
-import crypto3 from "node:crypto";
+import crypto4 from "node:crypto";
 import { createClient as createClient7 } from "@supabase/supabase-js";
 var CODE_TTL_MS = 10 * 60 * 1e3;
-function admin2() {
+function admin3() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return url && key ? createClient7(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
@@ -1292,12 +1347,12 @@ function bearer4(req) {
 }
 function digest(challengeId, code) {
   const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
-  return crypto3.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
+  return crypto4.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
 }
 function safeEqual(a, b) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
-  return left.length === right.length && crypto3.timingSafeEqual(left, right);
+  return left.length === right.length && crypto4.timingSafeEqual(left, right);
 }
 function escapeHtml(value) {
   return value.replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c] || c);
@@ -1316,10 +1371,10 @@ async function sendEmail(to, subject, html, idempotencyKey) {
   return body.id || null;
 }
 async function authenticated(req) {
-  const client = admin2();
-  const token3 = bearer4(req);
-  if (!client || !token3) return null;
-  const { data, error } = await client.auth.getUser(token3);
+  const client = admin3();
+  const token4 = bearer4(req);
+  if (!client || !token4) return null;
+  const { data, error } = await client.auth.getUser(token4);
   return error || !data.user?.email ? null : { client, user: data.user };
 }
 function normalizedPayload(purpose, input) {
@@ -1358,8 +1413,8 @@ function registerEmailSecurityRoutes(app2) {
       const recentSince = new Date(Date.now() - 6e4).toISOString();
       const { count } = await auth.client.from("email_security_challenges").select("id", { count: "exact", head: true }).eq("user_id", auth.user.id).gte("created_at", recentSince);
       if ((count || 0) > 0) return res.status(429).json({ error: "Espera un minuto antes de solicitar otro c\xF3digo." });
-      const id = crypto3.randomUUID();
-      const code = crypto3.randomInt(1e5, 1e6).toString();
+      const id = crypto4.randomUUID();
+      const code = crypto4.randomInt(1e5, 1e6).toString();
       const { error } = await auth.client.from("email_security_challenges").insert({ id, user_id: auth.user.id, purpose, code_hash: digest(id, code), payload, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() });
       if (error) throw error;
       const action = purpose === "withdrawal" ? "confirmar tu retiro" : "confirmar tu wallet de retiro";
