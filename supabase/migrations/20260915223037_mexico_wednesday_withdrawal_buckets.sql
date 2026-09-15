@@ -1,6 +1,7 @@
 -- Direct commission: 24-hour maturity, independent of the weekly window.
 -- Binary/rank and finite-node ROI: Wednesday 08:00-15:00 Mexico City.
 -- Flexible daily-node ROI stays in the unrestricted balance.
+begin;
 alter table public.transactions add column if not exists direct_commission_spent numeric(18,2) not null default 0;
 alter table public.transactions add column if not exists weekly_bonus_spent numeric(18,2) not null default 0;
 alter table public.transactions drop constraint if exists transactions_withdrawal_source_spent_check;
@@ -220,3 +221,4 @@ end;
 $patch_guard$;
 
 notify pgrst, 'reload schema';
+commit;
