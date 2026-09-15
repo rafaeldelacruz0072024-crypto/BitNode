@@ -2113,9 +2113,24 @@ function WithdrawalForm({
   const [amount, setAmount] = useState(10);
   const [network, setNetwork] = useState("BNB Chain");
   const [wallet, setWallet] = useState("");
+  const [walletLoading, setWalletLoading] = useState(true);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetchPrivateUserDetails()
+      .then(details => {
+        if (active) setWallet(details.wallet_bep20.trim());
+      })
+      .catch(cause => {
+        if (active) setError(cause instanceof Error ? cause.message : "No se pudo cargar la wallet registrada.");
+      })
+      .finally(() => {
+        if (active) setWalletLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
   const last24Hours = Date.now() - 24 * 60 * 60 * 1000;
   const usedToday = user.movements
     .filter(
@@ -2188,13 +2203,11 @@ function WithdrawalForm({
             <input
               type="text"
               value={wallet}
-              placeholder={WALLET_RULES[network].placeholder}
+              placeholder={walletLoading ? "Cargando wallet registrada…" : "Registra tu wallet en Perfil"}
               aria-invalid={Boolean(error && wallet)}
-              onChange={event => {
-                setWallet(event.target.value);
-                setError("");
-              }}
+              disabled
             />
+            <small className="withdrawal-wallet-lock">{walletLoading ? "Consultando la wallet de tu perfil…" : wallet ? "Wallet registrada y bloqueada. Solo soporte puede cambiarla." : "No tienes una wallet registrada. Guárdala primero en Perfil."}</small>
           </label>
         </div>
         <small>
@@ -2223,7 +2236,7 @@ function WithdrawalForm({
         )}
         <button
           className="dash-primary"
-          disabled={Boolean(error)}
+          disabled={walletLoading || !wallet || Boolean(error)}
           onClick={requestConfirmation}
         >
           Revisar retiro <Zap size={15} />
