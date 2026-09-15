@@ -34,6 +34,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const settingResponse = await fetch(`${url}/rest/v1/platform_settings?select=value&key=eq.withdrawal_window&limit=1`, { headers });
     if (!settingResponse.ok) throw new Error("No se pudo consultar la ventana global.");
     const settings = await settingResponse.json() as Array<{ value?: { enabled?: boolean } }>;
+    const migrationReady = typeof availability.weeklyWindowOpen === "boolean";
+    if (!migrationReady) {
+      const lockedDirect = Number(availability.lockedDirect);
+      const withdrawableBalance = Number(availability.withdrawableBalance);
+      const nextDirectAvailableAt = availability.nextDirectAvailableAt;
+      if (!Number.isFinite(lockedDirect) || !Number.isFinite(withdrawableBalance) ||
+        (nextDirectAvailableAt !== null && nextDirectAvailableAt !== undefined &&
+          (typeof nextDirectAvailableAt !== "string" || !Number.isFinite(Date.parse(nextDirectAvailableAt))))) {
+        throw new Error("Disponibilidad anterior inválida.");
+      }
+      return res.status(200).json({
+        migrationReady: false, lockedDirect: Math.max(0, lockedDirect),
+        directUnspent: 0, directAvailable: 0, weeklyBonusUnspent: 0,
+        finiteNodeRoiUnspent: 0, dailyNodeRoiCredited: 0, unrestricted: 0,
+        withdrawableBalance: Math.max(0, withdrawableBalance),
+        nextDirectAvailableAt: nextDirectAvailableAt || null,
+        weeklyWindowOpen: false, nextWeeklyWindowAt: null, weeklyWindowClosesAt: null,
+        globalWindowEnabled: settings[0]?.value?.enabled === true,
+      });
+    }
     const amounts = ["lockedDirect", "directUnspent", "directAvailable", "weeklyBonusUnspent",
       "finiteNodeRoiUnspent", "dailyNodeRoiCredited", "unrestricted", "withdrawableBalance"];
     const dates = ["nextDirectAvailableAt", "nextWeeklyWindowAt", "weeklyWindowClosesAt"];
@@ -44,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error("Disponibilidad inválida.");
     }
     return res.status(200).json({
+      migrationReady: true,
       lockedDirect: Math.max(0, Number(availability.lockedDirect)),
       directUnspent: Math.max(0, Number(availability.directUnspent)),
       directAvailable: Math.max(0, Number(availability.directAvailable)),

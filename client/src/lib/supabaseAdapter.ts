@@ -89,6 +89,7 @@ export function summarizeCompletedLedger(movements: Movement[]) {
 type AccountSummary = { movements: Movement[]; contracts: Contract[]; ledger: { balance: number; totalInvested: number; totalYield: number } };
 
 export type WithdrawalAvailability = {
+  migrationReady: boolean;
   lockedDirect: number;
   directUnspent: number;
   directAvailable: number;
@@ -118,7 +119,8 @@ export async function fetchWithdrawalAvailability(): Promise<WithdrawalAvailabil
   const dates = [payload.nextDirectAvailableAt, payload.nextWeeklyWindowAt, payload.weeklyWindowClosesAt];
   if (amounts.some(value => !Number.isFinite(value)) ||
     dates.some(value => value !== null && (typeof value !== "string" || !Number.isFinite(Date.parse(value)))) ||
-    typeof payload.weeklyWindowOpen !== "boolean" || typeof payload.globalWindowEnabled !== "boolean") {
+    typeof payload.weeklyWindowOpen !== "boolean" || typeof payload.globalWindowEnabled !== "boolean" ||
+    typeof payload.migrationReady !== "boolean") {
     throw new Error("El servidor devolvió un contador inválido.");
   }
   return payload as WithdrawalAvailability;
