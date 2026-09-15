@@ -10,6 +10,7 @@ import {
   BarChart3,
   CheckCircle2,
   CircleDollarSign,
+  Copy,
   FileClock,
   LayoutDashboard,
   LockKeyhole,
@@ -833,6 +834,27 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
   const [actingId, setActingId] = useState("");
   const [message, setMessage] = useState("");
   const [reference, setReference] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState("");
+
+  async function copyWallet(row: AdminWithdrawal) {
+    const wallet = String(row.wallet || "").trim();
+    if (!wallet) return;
+    try {
+      await navigator.clipboard.writeText(wallet);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = wallet;
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      field.remove();
+    }
+    setCopiedId(row.id);
+    setMessage("Wallet copiada completa. Verifica los últimos caracteres antes de enviar.");
+    window.setTimeout(() => setCopiedId(current => current === row.id ? "" : current), 2500);
+  }
 
   async function load() {
     setLoading(true);
@@ -905,7 +927,11 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
             return <tr key={row.id}>
               <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small></td>
               <td><strong>{money(net)}</strong><small>Solicitado {money(amount)} · Fee {money(Number(row.fee) || 0)}</small></td>
-              <td><span>{row.network || "—"}</span><small className="mono-cell admin-wallet">{row.wallet || "Wallet no registrada"}</small></td>
+              <td>
+                <span>{row.network || "—"}</span>
+                <small className="mono-cell admin-wallet" title={row.wallet || undefined}>{row.wallet || "Wallet no registrada"}</small>
+                {row.wallet && <button type="button" className="admin-copy-wallet" onClick={() => void copyWallet(row)}><Copy size={13} /> {copiedId === row.id ? "Copiada" : "Copiar wallet"}</button>}
+              </td>
               <td><StatusPill value={row.status} /><small>{row.provider_status || "manual_review"}</small></td>
               <td className="admin-withdrawal-actions">
                 {(row.status === "pending" || row.status === "approved") && <input value={reference[row.id] || ""} onChange={event => setReference(current => ({ ...current, [row.id]: event.target.value }))} placeholder={row.status === "approved" ? "TXID / referencia" : "Nota opcional"} aria-label={`Referencia para ${row.id}`} />}
