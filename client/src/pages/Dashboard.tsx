@@ -513,7 +513,14 @@ export default function Dashboard() {
   const [networkSummary, setNetworkSummary] = useState<NetworkSummary | null>(null);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [supportWhatsapp, setSupportWhatsapp] = useState("");
   const section = useMemo(() => location.split("/")[2] || "home", [location]);
+  useEffect(() => {
+    fetch("/api/support/whatsapp")
+      .then(response => response.ok ? response.json() : { number: "" })
+      .then(body => setSupportWhatsapp(String(body.number || "").replace(/\D/g, "")))
+      .catch(() => setSupportWhatsapp(""));
+  }, []);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
@@ -2370,10 +2377,3 @@ function CommissionEntryDetails({
     </div>
   );
 }
-  const [supportWhatsapp, setSupportWhatsapp] = useState("");
-  useEffect(() => {
-    fetch("/api/support/whatsapp")
-      .then(response => response.ok ? response.json() : { number: "" })
-      .then(body => setSupportWhatsapp(String(body.number || "").replace(/\D/g, "")))
-      .catch(() => setSupportWhatsapp(""));
-  }, []);
