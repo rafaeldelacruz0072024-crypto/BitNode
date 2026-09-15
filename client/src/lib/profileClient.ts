@@ -47,15 +47,9 @@ async function token() {
   if (!session?.access_token) throw new Error("Inicia sesión para modificar tu wallet.");
   return session.access_token;
 }
-export async function requestWalletVerification(wallet: string) {
-  const response = await fetch("/api/security/email-code/request", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` }, body: JSON.stringify({ purpose: "wallet_change", payload: { wallet } }) });
+export async function saveWithdrawalWallet(wallet: string) {
+  const response = await fetch("/api/security/wallet", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` }, body: JSON.stringify({ wallet }) });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(body.error || "No se pudo enviar el código."));
-  return body as { challengeId: string; maskedEmail: string };
-}
-export async function confirmWalletVerification(challengeId: string, code: string) {
-  const response = await fetch("/api/security/email-code/verify", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` }, body: JSON.stringify({ challengeId, code }) });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(body.error || "No se pudo confirmar la wallet."));
+  if (!response.ok) throw new Error(String(body.error || "No se pudo guardar la wallet."));
   return body as { message: string };
 }

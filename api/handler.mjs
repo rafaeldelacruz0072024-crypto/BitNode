@@ -1396,6 +1396,17 @@ function withdrawalError(res, error) {
   return res.status(error.message.includes("ventana") ? 423 : 400).json({ error: error.message });
 }
 function registerEmailSecurityRoutes(app2) {
+  app2.post("/api/security/wallet", async (req, res) => {
+    const auth = await authenticated(req);
+    if (!auth) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
+    const wallet = String(req.body?.wallet || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "La wallet BEP20 no es v\xE1lida." });
+    const { error } = await auth.client.auth.admin.updateUserById(auth.user.id, {
+      user_metadata: { ...auth.user.user_metadata, wallet_bep20: wallet }
+    });
+    if (error) return res.status(500).json({ error: "No se pudo guardar la wallet." });
+    return res.json({ status: "saved", message: "Wallet guardada correctamente." });
+  });
   app2.post("/api/security/email-code/request", async (req, res) => {
     const auth = await authenticated(req);
     if (!auth) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });

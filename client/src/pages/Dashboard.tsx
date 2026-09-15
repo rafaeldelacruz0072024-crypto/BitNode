@@ -55,8 +55,7 @@ import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
   savePrivateUserDetails,
-  requestWalletVerification,
-  confirmWalletVerification,
+  saveWithdrawalWallet,
   type PrivateUserDetails,
 } from "@/lib/profileClient";
 import {
@@ -1708,8 +1707,6 @@ function ProfilePanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [originalWallet, setOriginalWallet] = useState("");
-  const [walletChallenge, setWalletChallenge] = useState<{ id: string; email: string } | null>(null);
-  const [walletCode, setWalletCode] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -1746,9 +1743,9 @@ function ProfilePanel({
     try {
       await savePrivateUserDetails(details);
       if (bep20 !== originalWallet) {
-        const challenge = await requestWalletVerification(bep20);
-        setWalletChallenge({ id: challenge.challengeId, email: challenge.maskedEmail });
-        showNotice("Enviamos un código para confirmar la wallet.");
+        await saveWithdrawalWallet(bep20);
+        setOriginalWallet(bep20);
+        showNotice("Wallet guardada correctamente.");
       } else showNotice("Perfil guardado correctamente.");
     } catch (cause) {
       setError(
@@ -1867,7 +1864,6 @@ function ProfilePanel({
           {saving ? "Guardando…" : "Guardar cambios"} <Zap size={15} />
         </button>
       </form>
-      {walletChallenge && <div className="confirm-backdrop"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="wallet-code-title"><span className="dash-eyebrow">2FA POR CORREO</span><h3 id="wallet-code-title">Confirma tu wallet</h3><p>Introduce el código de 6 dígitos enviado a <strong>{walletChallenge.email}</strong>.</p><input className="email-code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={walletCode} onChange={e => setWalletCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />{error && <div className="form-error" role="alert">{error}</div>}<div className="confirm-actions"><button className="confirm-cancel" onClick={() => setWalletChallenge(null)}>Cancelar</button><button className="dash-primary" disabled={walletCode.length !== 6 || saving} onClick={async()=>{setSaving(true);setError("");try{await confirmWalletVerification(walletChallenge.id,walletCode);setOriginalWallet(details.wallet_bep20.trim());setWalletChallenge(null);setWalletCode("");showNotice("Wallet confirmada y guardada.");}catch(cause){setError(cause instanceof Error?cause.message:"Código inválido.");}finally{setSaving(false);}}}>Confirmar wallet</button></div></section></div>}
     </div>
   );
 }

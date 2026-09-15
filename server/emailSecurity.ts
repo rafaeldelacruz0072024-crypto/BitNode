@@ -64,6 +64,18 @@ function withdrawalError(res: Response, error: { code?: string; message: string 
 }
 
 export function registerEmailSecurityRoutes(app: Express) {
+  app.post("/api/security/wallet", async (req: Request, res: Response) => {
+    const auth = await authenticated(req);
+    if (!auth) return res.status(401).json({ error: "Sesión Supabase requerida." });
+    const wallet = String(req.body?.wallet || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "La wallet BEP20 no es válida." });
+    const { error } = await auth.client.auth.admin.updateUserById(auth.user.id, {
+      user_metadata: { ...auth.user.user_metadata, wallet_bep20: wallet },
+    });
+    if (error) return res.status(500).json({ error: "No se pudo guardar la wallet." });
+    return res.json({ status: "saved", message: "Wallet guardada correctamente." });
+  });
+
   app.post("/api/security/email-code/request", async (req: Request, res: Response) => {
     const auth = await authenticated(req);
     if (!auth) return res.status(401).json({ error: "Sesión Supabase requerida." });
