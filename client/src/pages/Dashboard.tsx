@@ -114,6 +114,9 @@ function DailyTasksPanel({
   const [cycleCelebration, setCycleCelebration] = useState(false);
   const [tasksAvailable, setTasksAvailable] = useState(true);
   const [tasksAvailableAt, setTasksAvailableAt] = useState<number | null>(null);
+  const [isWeekend, setIsWeekend] = useState(() => ["Sat", "Sun"].includes(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/Santo_Domingo", weekday: "short" }).format(new Date())
+  ));
   const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
   );
@@ -165,6 +168,9 @@ function DailyTasksPanel({
 
   useEffect(() => {
     const tick = () => {
+      setIsWeekend(["Sat", "Sun"].includes(
+        new Intl.DateTimeFormat("en-US", { timeZone: "America/Santo_Domingo", weekday: "short" }).format(new Date())
+      ));
       const target = !tasksAvailable && tasksAvailableAt ? tasksAvailableAt : deadline;
       if (!target) return setTimeLeft("Listo para iniciar");
       const remaining = Math.max(0, target - Date.now());
@@ -199,6 +205,10 @@ function DailyTasksPanel({
   }, [cycleCelebration]);
 
   async function complete(taskKey: string) {
+    if (isWeekend) {
+      setMessage("Las tareas de los nodos solo están disponibles de lunes a viernes (hora de Santo Domingo).");
+      return;
+    }
     if (!tasksAvailable) {
       setMessage("Las tareas se habilitan 24 horas después del registro de la cuenta.");
       return;
@@ -288,10 +298,11 @@ function DailyTasksPanel({
       <span className="dash-eyebrow">ACTIVACIÓN DIARIA · DÍA {cycleDay}</span>
       <h2>Activa tu nodo hoy</h2>
       <p>
-        Completa las cuatro tareas una vez cada 24 horas. La primera inicia el
-        contador y la cuarta acredita automáticamente el pasivo variable del
-        ciclo.
+        Completa las cuatro tareas de lunes a viernes, hora de Santo Domingo.
+        El plazo que caiga en sábado o domingo continúa el lunes; la cuarta
+        tarea acredita el rendimiento del ciclo.
       </p>
+      {isWeekend && <p role="status">Hoy es día de descanso. Las tareas vuelven el lunes.</p>}
       <div className="dash-card" style={{ marginBottom: 18 }}>
         <div className="task-cycle-head">
           <span className="dash-eyebrow">TIEMPO RESTANTE DEL CICLO</span>
@@ -327,7 +338,7 @@ function DailyTasksPanel({
               <p>{description}</p>
               <button
                 className={`dash-primary task-button${processing ? " is-processing" : ""}`}
-                disabled={!tasksAvailable || done || busy !== null}
+                disabled={isWeekend || !tasksAvailable || done || busy !== null}
                 aria-busy={processing}
                 onClick={() => complete(key)}
               >
