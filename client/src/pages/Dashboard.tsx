@@ -450,6 +450,9 @@ const catalog = [
   },
 ];
 const WITHDRAW_DAILY_LIMIT = 1000;
+const withdrawalDay = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit",
+});
 const NETWORKS = ["BNB Chain"];
 const WALLET_RULES: Record<string, { placeholder: string; test: RegExp }> = {
   "BNB Chain": {
@@ -2190,9 +2193,16 @@ function WithdrawalForm({
         new Date(movement.date).getTime() >= last24Hours
     )
     .reduce((sum, movement) => sum + Math.abs(movement.amount), 0);
+  const todayInMexico = withdrawalDay.format(new Date());
+  const hasWithdrawalToday = user.movements.some(movement =>
+    movement.type === "withdraw" && Number.isFinite(Date.parse(movement.date)) &&
+    withdrawalDay.format(new Date(movement.date)) === todayInMexico
+  );
   const fee = withdrawalFee(amount);
   const net = Math.max(0, amount - fee);
   const validate = () => {
+    if (hasWithdrawalToday)
+      return "Solo puedes solicitar 1 retiro por día (hora de Ciudad de México). Intenta de nuevo mañana.";
     if (!Number.isFinite(amount) || amount < 10)
       return "El monto mínimo de retiro es de $10.00 USDT.";
     if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-8)
@@ -2268,6 +2278,7 @@ function WithdrawalForm({
           Balance total: {money(user.balance)} · Límite por 24 horas:{" "}
           {money(WITHDRAW_DAILY_LIMIT)} · Usado: {money(usedToday)}
         </small>
+        <small>Máximo 1 solicitud de retiro por día, según la hora de Ciudad de México. La solicitud cuenta aunque luego sea rechazada.</small>
         {availability && <div className="withdrawal-schedule-note" role="timer">
           <strong>Comisión directa</strong>
           <div>{availability.migrationReady ? `Disponible tras 24 horas: ${money(availability.directAvailable)} · ` : ""}Retenida: {money(availability.lockedDirect)}</div>
