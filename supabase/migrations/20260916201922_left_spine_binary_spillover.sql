@@ -50,6 +50,10 @@ declare
 
   $body$;
 begin
+  if position('lock table public.network_nodes in share row exclusive mode' in v_source) > 0
+     and position('v_leg := p_preferred_leg' in v_source) > 0 then
+    return;
+  end if;
   v_start := position('if p_preferred_leg is not null then' in v_source);
   v_finish := position('if v_parent_id is null then raise exception' in v_source);
   if v_start = 0 or v_finish <= v_start
@@ -95,6 +99,12 @@ begin
   select id into strict v_levi from public.profiles where lower(username) = 'leviduran';
   select id into strict v_duck from public.profiles where lower(username) = 'ducktail';
   select id into strict v_cod from public.profiles where lower(username) = 'codder';
+
+  if exists (select 1 from public.network_nodes where user_id=v_duck and sponsor_id=v_master and parent_id=v_levi and leg='left')
+     and exists (select 1 from public.network_nodes where user_id=v_cod and sponsor_id=v_master and parent_id=v_duck and leg='left')
+     and (select count(*) from binary_repair_private.left_spine_backup where user_id in (v_duck,v_cod)) = 2 then
+    return;
+  end if;
 
   if not exists (select 1 from public.network_nodes where user_id=v_yaz and sponsor_id=v_master and parent_id=v_master and leg='left')
      or not exists (select 1 from public.network_nodes where user_id=v_levi and parent_id=v_yaz and leg='left')
