@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Notice = { id: string; created_at: string; read_at: string | null };
+type Notice = { id: string; created_at: string; read_at: string | null; kind: string; withdrawal_id: string | null };
 const message = "El ciclo de tus nodos se reinició por no completar las tareas dentro del plazo de 24 horas. El ROI ya acreditado permanece en tu balance e historial; el progreso de días volvió a cero y el capital sigue bloqueado hasta completar el plazo. Retoma las tareas para iniciar un nuevo ciclo.";
 
 export function useCycleNotifications(userId: string | undefined) {
@@ -25,7 +25,7 @@ export function useCycleNotifications(userId: string | undefined) {
         const cycle = await client.rpc("get_daily_task_cycle");
         if (cycle.error) throw cycle.error;
         const result = await client.from("user_notifications")
-          .select("id,created_at,read_at").eq("user_id", userId!)
+          .select("id,created_at,read_at,kind,withdrawal_id").eq("user_id", userId!)
           .is("read_at", null).order("created_at", { ascending: false });
         if (result.error) throw result.error;
         if (!disposed) { setNotices(result.data || []); setError(""); }
@@ -58,14 +58,14 @@ export function useCycleNotifications(userId: string | undefined) {
     bell: <button onClick={() => setOpen(value => !value)} aria-label={`Notificaciones${notices.length ? `: ${notices.length} sin leer` : ""}`} aria-expanded={open} aria-controls="cycle-notifications" style={{ position: "relative" }}>
       <Bell size={19} />{notices.length > 0 && <span className="cycle-notification-dot" />}
     </button>,
-    panel: (open || notices.length > 0) && <section id="cycle-notifications" className="cycle-notifications" aria-label="Notificaciones del ciclo">
-      <div className="cycle-notification-heading"><strong>{notices.length ? "Reinicio del ciclo de tus nodos" : "Notificaciones"}</strong>
+    panel: (open || notices.length > 0) && <section id="cycle-notifications" className="cycle-notifications" aria-label="Notificaciones">
+      <div className="cycle-notification-heading"><strong>Notificaciones</strong>
         {open && <button aria-label="Cerrar notificaciones" onClick={() => setOpen(false)}><X size={18} /></button>}
       </div>
       {error && <p role="alert">{error}</p>}
       {!notices.length && !error && <p>{loading ? "Cargando notificaciones…" : "No tienes notificaciones pendientes."}</p>}
       {notices.map(notice => <article key={notice.id}>
-        <p>{message}</p><time dateTime={notice.created_at}>{new Date(notice.created_at).toLocaleString("es-DO")}</time>
+        <p>{notice.kind === "withdrawal_paid" ? `Tu retiro ${notice.withdrawal_id || ""} fue marcado como pagado. Ya aparece como completado en tu historial de retiros.` : message}</p><time dateTime={notice.created_at}>{new Date(notice.created_at).toLocaleString("es-DO")}</time>
         <button disabled={saving} onClick={() => void markRead(notice.id)}>Marcar como leído</button>
       </article>)}
     </section>,

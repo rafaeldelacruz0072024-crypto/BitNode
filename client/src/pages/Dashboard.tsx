@@ -36,6 +36,7 @@ import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
   LocalUserState,
+  type Movement,
   loadLocalUser,
   money,
   newId,
@@ -2111,6 +2112,32 @@ function WithdrawalForm({
     result: { id: string; fee: number; netAmount: number; balance: number }
   ) => void;
 }) {
+  const [withdrawals, setWithdrawals] = useState<Movement[]>(() => user.movements.filter(item => item.type === "withdraw"));
+  const [historyError, setHistoryError] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  useEffect(() => {
+    setWithdrawals(user.movements.filter(item => item.type === "withdraw"));
+  }, [user.movements]);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const summary = await fetchAccountSummary();
+        if (active && summary) {
+          setWithdrawals(summary.movements.filter(item => item.type === "withdraw"));
+          setHistoryError("");
+        }
+      } catch (cause) {
+        if (active) setHistoryError(cause instanceof Error ? cause.message : "No se pudo actualizar el historial.");
+      } finally { if (active) setHistoryLoading(false); }
+    };
+    setHistoryLoading(true);
+    void refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+    const focus = () => { void refresh(); };
+    window.addEventListener("focus", focus);
+    return () => { active = false; clearInterval(timer); window.removeEventListener("focus", focus); };
+  }, []);
   const [amount, setAmount] = useState(10);
   const [network, setNetwork] = useState("BNB Chain");
   const [wallet, setWallet] = useState("");
@@ -2285,6 +2312,18 @@ function WithdrawalForm({
         >
           Revisar retiro <Zap size={15} />
         </button>
+      </section>
+      <section className="dash-card withdrawal-history" aria-label="Historial de retiros">
+        <h3>Historial de retiros</h3>
+        {historyError && <p role="alert">{historyError}</p>}
+        {historyLoading && !withdrawals.length && <p>Cargando retiros…</p>}
+        {!historyLoading && !withdrawals.length && <p>Aún no has solicitado retiros.</p>}
+        {[...withdrawals].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map(item => (
+          <article className="withdrawal-history-row" key={item.id}>
+            <div><strong>{money(Math.abs(item.amount))} USDT</strong><small>{new Date(item.date).toLocaleString("es-DO")} · {item.network === "BNB Chain" ? "USDT BEP20" : item.network || "USDT BEP20"}</small></div>
+            <span className={`withdrawal-history-status status-${item.status}`}>{({ pending: "Pendiente", approved: "Aprobado", completed: "Completado", rejected: "Rechazado", failed: "Fallido", reversed: "Reversado" } as Record<string, string>)[item.status] || item.status}</span>
+          </article>
+        ))}
       </section>
       {confirming && (
         <div className="confirm-backdrop">
