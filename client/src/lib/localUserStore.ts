@@ -13,6 +13,8 @@ export type Contract = {
     | "reversed";
   createdAt: string;
   duration: string;
+  capitalChoice?: { action: "claim" | "reinvest"; status: string; payableAt?: string | null };
+  capitalChoiceReady?: boolean;
 };
 export type Movement = {
   id: string;

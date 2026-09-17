@@ -921,6 +921,7 @@ type AdminWithdrawal = {
   net_amount: number | string | null;
   provider_status: string | null;
   created_at: string | null;
+  payable_at?: string | null;
 };
 
 function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> }) {
@@ -1002,7 +1003,7 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
       <div className="card-heading">
         <div>
           <p className="admin-kicker">MANUAL PAYOUT QUEUE</p>
-          <h2>Retiros de comisiones</h2>
+          <h2>Retiros y capital de nodos</h2>
         </div>
         <button className="admin-refresh" type="button" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={14} className={loading ? "spin" : ""} /> Actualizar
@@ -1027,12 +1028,12 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
                 <small className="mono-cell admin-wallet" title={row.wallet || undefined}>{row.wallet || "Wallet no registrada"}</small>
                 {row.wallet && <button type="button" className="admin-copy-wallet" onClick={() => void copyWallet(row)}><Copy size={13} /> {copiedId === row.id ? "Copiada" : "Copiar wallet"}</button>}
               </td>
-              <td><StatusPill value={row.status} /><small>{row.provider_status || "manual_review"}</small></td>
+              <td><StatusPill value={row.status} /><small>{row.provider_status || "manual_review"}</small>{row.payable_at && <small>Pago desde {dateLabel(row.payable_at)}</small>}</td>
               <td className="admin-withdrawal-actions">
                 {(row.status === "pending" || row.status === "approved") && <input value={reference[row.id] || ""} onChange={event => setReference(current => ({ ...current, [row.id]: event.target.value }))} placeholder={row.status === "approved" ? "TXID / referencia" : "Nota opcional"} aria-label={`Referencia para ${row.id}`} />}
                 <div>
                   {row.status === "pending" && <button type="button" className="withdrawal-approve" disabled={busy} onClick={() => void act(row, "approve")}>Aprobar</button>}
-                  {row.status === "approved" && <button type="button" className="withdrawal-paid" disabled={busy} onClick={() => void act(row, "mark_paid")}>{busy ? "Guardando…" : "Marcar pagado"}</button>}
+                  {row.status === "approved" && <button type="button" className="withdrawal-paid" disabled={busy || !!(row.payable_at && Date.parse(row.payable_at) > Date.now())} onClick={() => void act(row, "mark_paid")}>{busy ? "Guardando…" : "Marcar pagado"}</button>}
                   {(row.status === "pending" || row.status === "approved") && <button type="button" className="withdrawal-reject" disabled={busy} onClick={() => void act(row, "reject")}>Rechazar</button>}
                 </div>
               </td>

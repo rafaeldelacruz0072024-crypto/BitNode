@@ -1218,7 +1218,27 @@ function registerAdminWithdrawalRoutes(app2) {
       if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
       const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
       if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
-      return res.status(200).json({ withdrawals: data || [] });
+      const { data: capitalClaims, error: claimsError } = await admin4.client.from("finite_node_capital_choices").select("contract_id,user_id,amount,fee,net_amount,wallet,status,requested_at,payable_at").eq("action", "claim").order("requested_at", { ascending: false }).limit(200);
+      if (claimsError && claimsError.code !== "PGRST205") return res.status(500).json({ error: "No se pudo cargar la cola de retiros de capital." });
+      const userIds = Array.from(new Set((capitalClaims || []).map((row) => row.user_id)));
+      const { data: owners } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
+      const names = new Map((owners || []).map((row) => [row.id, row.username]));
+      const claims = (capitalClaims || []).map((row) => ({
+        id: `CAPITAL-CLAIM-${row.contract_id}`,
+        user_id: row.user_id,
+        username: names.get(row.user_id) || null,
+        label: `Capital del nodo ${row.contract_id}`,
+        amount: -Number(row.amount),
+        fee: row.fee,
+        net_amount: row.net_amount,
+        status: row.status,
+        network: "BNB Chain",
+        wallet: row.wallet,
+        provider_status: "retiro_capital_nodo",
+        created_at: row.requested_at,
+        payable_at: row.payable_at
+      }));
+      return res.status(200).json({ withdrawals: [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at))) });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
       return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
@@ -1231,6 +1251,17 @@ function registerAdminWithdrawalRoutes(app2) {
       const id = String(req.body?.id || "").trim().slice(0, 160);
       const action = String(req.body?.action || "").trim();
       if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
+      if (id.startsWith("CAPITAL-CLAIM-")) {
+        const reference = cleanReference(req.body?.reference);
+        const { data, error } = await admin4.client.rpc("manage_finite_node_claim", {
+          p_contract_id: id.slice("CAPITAL-CLAIM-".length),
+          p_action: action,
+          p_admin_id: admin4.userId,
+          p_reference: reference || null
+        });
+        if (error) return res.status(error.code === "P0001" ? 409 : 500).json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
+        return res.status(200).json({ id, status: data.status });
+      }
       const { data: withdrawal, error: lookupError } = await admin4.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
       if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
       const status = String(withdrawal.status);
@@ -1604,7 +1635,7 @@ function buildDailyReconciliation(date, transactions, commissions, contracts) {
   const crypto5 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
   const manual = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("ADMIN-") && row.provider_status?.startsWith("admin_manual:"));
   const capital = daily.filter((row) => row.type === "deposit" && row.status === "completed" && (row.id.startsWith("DAILY-CAPITAL-") || row.id.startsWith("PRINCIPAL-")));
-  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && !crypto5.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:"));
+  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto5.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
   const credited = commissions.filter((row) => row.status === "credited" && mexicoDay(row.created_at) === date);
   const source = (field) => round(open.reduce((total, row) => total + amount(row[field]), 0));
   const pendingGross = round(open.reduce((total, row) => total + Math.abs(amount(row.amount)), 0));
@@ -1657,7 +1688,7 @@ function registerDailyReconciliationRoutes(app2) {
         }
       };
       const transactionSelect = "id,type,status,amount,net_amount,provider_status,provider_payment_id,created_at,direct_commission_spent,weekly_bonus_spent,node_roi_spent";
-      const [dailyTransactions, pendingTransactions, commissions, cancelledNodes] = await Promise.all([
+      const [dailyTransactions, pendingTransactions, commissions, cancelledNodes, capitalClaims] = await Promise.all([
         allRows("transactions", transactionSelect, (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString())),
         isRange ? Promise.resolve([]) : allRows("transactions", transactionSelect, (q) => q.eq("type", "withdraw").in("status", ["pending", "approved"])),
         allRows("commission_ledger", "commission_type,amount,status,created_at", (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString()).eq("status", "credited")),
@@ -1669,9 +1700,33 @@ function registerDailyReconciliationRoutes(app2) {
             rows.push(...data ?? []);
             if ((data ?? []).length < 1e3) return rows;
           }
+        })(),
+        (async () => {
+          const { data, error } = await admin4.client.from("finite_node_capital_choices").select("contract_id,amount,net_amount,status,requested_at").eq("action", "claim").gte("requested_at", earliest.toISOString()).lt("requested_at", latest.toISOString());
+          if (error && error.code !== "PGRST205") throw error;
+          const current = data || [];
+          if (!isRange) {
+            const { data: pending, error: pendingError } = await admin4.client.from("finite_node_capital_choices").select("contract_id,amount,net_amount,status,requested_at").eq("action", "claim").in("status", ["pending", "approved"]);
+            if (pendingError && pendingError.code !== "PGRST205") throw pendingError;
+            for (const item of pending || []) if (!current.some((row) => row.contract_id === item.contract_id)) current.push(item);
+          }
+          return current.map((row) => ({
+            id: `CAPITAL-CLAIM-${row.contract_id}`,
+            type: "withdraw",
+            status: row.status,
+            amount: -Number(row.amount),
+            net_amount: row.net_amount,
+            provider_status: "finite_capital_claim",
+            provider_payment_id: null,
+            created_at: row.requested_at,
+            direct_commission_spent: 0,
+            weekly_bonus_spent: 0,
+            node_roi_spent: 0
+          }));
         })()
       ]);
-      const transactions = [...dailyTransactions, ...pendingTransactions.filter((row) => !dailyTransactions.some((day) => day.id === row.id))];
+      dailyTransactions.push(...capitalClaims.filter((row) => mexicoDay(row.created_at) >= from && mexicoDay(row.created_at) <= to));
+      const transactions = [...dailyTransactions, ...pendingTransactions.filter((row) => !dailyTransactions.some((day) => day.id === row.id)), ...capitalClaims.filter((row) => !dailyTransactions.some((day) => day.id === row.id))];
       if (isRange) {
         const days = dates.map((day) => {
           const { outstanding: _snapshot, ...daily } = buildDailyReconciliation(day, dailyTransactions, commissions, cancelledNodes);
@@ -1683,6 +1738,39 @@ function registerDailyReconciliationRoutes(app2) {
     } catch (error) {
       console.error("[admin-daily-reconciliation]", error);
       return res.status(503).json({ error: "No se pudo cargar el cuadre diario." });
+    }
+  });
+}
+
+// server/finiteNodeCapital.ts
+import { createClient as createClient8 } from "@supabase/supabase-js";
+function registerFiniteNodeCapitalRoutes(app2) {
+  app2.post("/api/nodes/capital-choice", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return res.status(503).json({ error: "El servicio no est\xE1 configurado." });
+    const bearer5 = req.header("authorization") || "";
+    const token4 = bearer5.startsWith("Bearer ") ? bearer5.slice(7).trim() : "";
+    if (!token4) return res.status(401).json({ error: "Sesi\xF3n requerida." });
+    const contractId = String(req.body?.contractId || "").trim();
+    const action = String(req.body?.action || "");
+    if (!contractId || contractId.length > 120 || !["claim", "reinvest"].includes(action))
+      return res.status(400).json({ error: "Elecci\xF3n de capital inv\xE1lida." });
+    try {
+      const client = createClient8(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data: auth, error: authError } = await client.auth.getUser(token4);
+      if (authError || !auth.user) return res.status(401).json({ error: "Sesi\xF3n inv\xE1lida." });
+      const { data, error } = await client.rpc("choose_finite_node_capital", {
+        p_user_id: auth.user.id,
+        p_contract_id: contractId,
+        p_action: action
+      });
+      if (error) return res.status(error.code === "P0001" || error.code === "23505" ? 409 : 503).json({ error: error.code === "P0001" ? error.message : "No se pudo procesar la elecci\xF3n del capital." });
+      return res.status(200).json(data);
+    } catch (error) {
+      console.error("[finite-node-capital]", error);
+      return res.status(503).json({ error: "No se pudo procesar la elecci\xF3n del capital." });
     }
   });
 }
@@ -1704,6 +1792,7 @@ function createApp() {
   registerOAuthRoutes(app2);
   registerNowPaymentsRoutes(app2);
   registerWithdrawalRoutes(app2);
+  registerFiniteNodeCapitalRoutes(app2);
   registerCommissionRoutes(app2);
   registerSecureCommissionRoutes(app2);
   registerDepositRoutes(app2);

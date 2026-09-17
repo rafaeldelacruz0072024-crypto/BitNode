@@ -19,6 +19,7 @@ import { registerAdminMonthlyRoiRoutes } from "../adminMonthlyRoi";
 import { registerAdminNodeControlRoutes } from "../adminNodeControl";
 import { registerActivationReportRoutes } from "../activationReport";
 import { registerDailyReconciliationRoutes } from "../dailyReconciliation";
+import { registerFiniteNodeCapitalRoutes } from "../finiteNodeCapital";
 import { registerEmailSecurityRoutes } from "../emailSecurity";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -56,6 +57,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerNowPaymentsRoutes(app);
   registerWithdrawalRoutes(app);
+  registerFiniteNodeCapitalRoutes(app);
   registerCommissionRoutes(app);
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);

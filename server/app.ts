@@ -17,6 +17,7 @@ import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js"
 import { registerEmailSecurityRoutes } from "./emailSecurity.js";
 import { registerActivationReportRoutes } from "./activationReport.js";
 import { registerDailyReconciliationRoutes } from "./dailyReconciliation.js";
+import { registerFiniteNodeCapitalRoutes } from "./finiteNodeCapital.js";
 
 export function createApp(): Express {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp(): Express {
   registerOAuthRoutes(app);
   registerNowPaymentsRoutes(app);
   registerWithdrawalRoutes(app);
+  registerFiniteNodeCapitalRoutes(app);
   registerCommissionRoutes(app);
   registerSecureCommissionRoutes(app);
   registerDepositRoutes(app);

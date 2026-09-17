@@ -128,3 +128,13 @@
 .local-ledger .movement-row:is(.movement-direct, .movement-binary, .movement-yield) > strong.positive {
   color: var(--history-color);
 }
+.node-capital-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.node-capital-choice-actions .node-capital-withdraw {
+  white-space: nowrap;
+}

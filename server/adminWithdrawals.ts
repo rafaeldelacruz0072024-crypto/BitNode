@@ -102,7 +102,22 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         .select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at")
         .eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
       if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
-      return res.status(200).json({ withdrawals: data || [] });
+      const { data: capitalClaims, error: claimsError } = await admin.client.from("finite_node_capital_choices")
+        .select("contract_id,user_id,amount,fee,net_amount,wallet,status,requested_at,payable_at")
+        .eq("action", "claim").order("requested_at", { ascending: false }).limit(200);
+      if (claimsError && claimsError.code !== "PGRST205") return res.status(500).json({ error: "No se pudo cargar la cola de retiros de capital." });
+      const userIds = Array.from(new Set((capitalClaims || []).map(row => row.user_id)));
+      const { data: owners } = userIds.length ? await admin.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
+      const names = new Map((owners || []).map(row => [row.id, row.username]));
+      const claims = (capitalClaims || []).map(row => ({
+        id: `CAPITAL-CLAIM-${row.contract_id}`, user_id: row.user_id,
+        username: names.get(row.user_id) || null, label: `Capital del nodo ${row.contract_id}`,
+        amount: -Number(row.amount), fee: row.fee, net_amount: row.net_amount,
+        status: row.status, network: "BNB Chain", wallet: row.wallet,
+        provider_status: "retiro_capital_nodo", created_at: row.requested_at, payable_at: row.payable_at,
+      }));
+      return res.status(200).json({ withdrawals: [...(data || []), ...claims].sort((a, b) =>
+        Date.parse(String(b.created_at)) - Date.parse(String(a.created_at))) });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
       return res.status(503).json({ error: "El módulo de retiros no está disponible." });
@@ -116,6 +131,16 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       const id = String(req.body?.id || "").trim().slice(0, 160);
       const action = String(req.body?.action || "").trim();
       if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acción de retiro no es válida." });
+      if (id.startsWith("CAPITAL-CLAIM-")) {
+        const reference = cleanReference(req.body?.reference);
+        const { data, error } = await admin.client.rpc("manage_finite_node_claim", {
+          p_contract_id: id.slice("CAPITAL-CLAIM-".length), p_action: action,
+          p_admin_id: admin.userId, p_reference: reference || null,
+        });
+        if (error) return res.status(error.code === "P0001" ? 409 : 500)
+          .json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
+        return res.status(200).json({ id, status: data.status });
+      }
       const { data: withdrawal, error: lookupError } = await admin.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
       if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
       const status = String(withdrawal.status);

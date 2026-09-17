@@ -61,6 +61,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       }
     );
+    const choicesResponse = await fetch(
+      `${baseUrl}/rest/v1/finite_node_capital_choices?select=contract_id,action,status,amount,fee,net_amount,wallet,requested_at,payable_at&user_id=eq.${ownedUserFilter}&order=requested_at.desc&limit=200`,
+      { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+    );
     const summaryResponse = await fetch(`${baseUrl}/rest/v1/rpc/get_account_ledger_summary`, {
       method: "POST",
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
@@ -74,13 +78,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(
         `Contract lookup failed with ${contractsResponse.status}.`
       );
+    if (!choicesResponse.ok && choicesResponse.status !== 404)
+      throw new Error(`Capital choice lookup failed with ${choicesResponse.status}.`);
     const transactions = (await ledgerResponse.json()) as Array<
       Record<string, unknown>
     >;
     const contracts = (await contractsResponse.json()) as Array<
       Record<string, unknown>
     >;
-    return res.status(200).json({ transactions, contracts, ledger });
+    const capitalChoiceReady = choicesResponse.ok;
+    const capitalChoices = capitalChoiceReady ? await choicesResponse.json() : [];
+    return res.status(200).json({ transactions, contracts, capitalChoices, capitalChoiceReady, ledger });
   } catch (error) {
     console.error("[account-summary]", error);
     return res

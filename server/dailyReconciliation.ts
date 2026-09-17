@@ -30,7 +30,7 @@ export function buildDailyReconciliation(date: string, transactions: Transaction
   const crypto = daily.filter(row => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
   const manual = daily.filter(row => row.type === "deposit" && row.status === "completed" && row.id.startsWith("ADMIN-") && row.provider_status?.startsWith("admin_manual:"));
   const capital = daily.filter(row => row.type === "deposit" && row.status === "completed" && (row.id.startsWith("DAILY-CAPITAL-") || row.id.startsWith("PRINCIPAL-")));
-  const other = daily.filter(row => row.type === "deposit" && row.status === "completed" && !crypto.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:"));
+  const other = daily.filter(row => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
   const credited = commissions.filter(row => row.status === "credited" && mexicoDay(row.created_at) === date);
   const source = (field: "direct_commission_spent" | "weekly_bonus_spent" | "node_roi_spent") => round(open.reduce((total, row) => total + amount(row[field]), 0));
   const pendingGross = round(open.reduce((total, row) => total + Math.abs(amount(row.amount)), 0));
@@ -72,7 +72,7 @@ export function registerDailyReconciliationRoutes(app: Express) {
         }
       };
       const transactionSelect = "id,type,status,amount,net_amount,provider_status,provider_payment_id,created_at,direct_commission_spent,weekly_bonus_spent,node_roi_spent";
-      const [dailyTransactions, pendingTransactions, commissions, cancelledNodes] = await Promise.all([
+      const [dailyTransactions, pendingTransactions, commissions, cancelledNodes, capitalClaims] = await Promise.all([
         allRows<Transaction>("transactions", transactionSelect, q => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString())),
         isRange ? Promise.resolve([] as Transaction[]) : allRows<Transaction>("transactions", transactionSelect, q => q.eq("type", "withdraw").in("status", ["pending", "approved"])),
         allRows<Commission>("commission_ledger", "commission_type,amount,status,created_at", q => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString()).eq("status", "credited")),
@@ -85,8 +85,30 @@ export function registerDailyReconciliationRoutes(app: Express) {
             if ((data ?? []).length < 1000) return rows;
           }
         })(),
+        (async () => {
+          const { data, error } = await admin.client.from("finite_node_capital_choices")
+            .select("contract_id,amount,net_amount,status,requested_at")
+            .eq("action", "claim")
+            .gte("requested_at", earliest.toISOString()).lt("requested_at", latest.toISOString());
+          if (error && error.code !== "PGRST205") throw error;
+          const current = (data || []) as Array<{ contract_id: string; amount: number; net_amount: number; status: string; requested_at: string }>;
+          if (!isRange) {
+            const { data: pending, error: pendingError } = await admin.client.from("finite_node_capital_choices")
+              .select("contract_id,amount,net_amount,status,requested_at")
+              .eq("action", "claim").in("status", ["pending", "approved"]);
+            if (pendingError && pendingError.code !== "PGRST205") throw pendingError;
+            for (const item of (pending || []) as typeof current) if (!current.some(row => row.contract_id === item.contract_id)) current.push(item);
+          }
+          return current.map(row => ({
+            id: `CAPITAL-CLAIM-${row.contract_id}`, type: "withdraw", status: row.status,
+            amount: -Number(row.amount), net_amount: row.net_amount, provider_status: "finite_capital_claim",
+            provider_payment_id: null, created_at: row.requested_at,
+            direct_commission_spent: 0, weekly_bonus_spent: 0, node_roi_spent: 0,
+          } satisfies Transaction));
+        })(),
       ]);
-      const transactions = [...dailyTransactions, ...pendingTransactions.filter(row => !dailyTransactions.some(day => day.id === row.id))];
+      dailyTransactions.push(...capitalClaims.filter(row => mexicoDay(row.created_at) >= from && mexicoDay(row.created_at) <= to));
+      const transactions = [...dailyTransactions, ...pendingTransactions.filter(row => !dailyTransactions.some(day => day.id === row.id)), ...capitalClaims.filter(row => !dailyTransactions.some(day => day.id === row.id))];
       if (isRange) {
         const days = dates.map(day => {
           const { outstanding: _snapshot, ...daily } = buildDailyReconciliation(day, dailyTransactions, commissions, cancelledNodes);

@@ -143,7 +143,7 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
   if (!response.ok)
     throw new Error(String(payload.error || "No se pudo cargar el balance."));
   const rows = Array.isArray(payload.transactions) ? payload.transactions : [];
-  const movements = rows.map((row: Record<string, unknown>) => ({
+  const movements = rows.filter((row: Record<string, unknown>) => !String(row.id).startsWith("CAPITAL-RESERVE-")).map((row: Record<string, unknown>) => ({
     id: String(row.id),
     type: row.type,
     label: String(row.label),
@@ -155,6 +155,14 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
     fee: row.fee ? Number(row.fee) : undefined,
     netAmount: row.net_amount ? Number(row.net_amount) : undefined,
   })) as Movement[];
+  const choices = Array.isArray(payload.capitalChoices) ? payload.capitalChoices as Array<Record<string, unknown>> : [];
+  for (const choice of choices) if (choice.action === "claim") movements.push({
+    id: `CAPITAL-CLAIM-${choice.contract_id}`, type: "withdraw",
+    label: `Retiro de capital del nodo ${choice.contract_id}`,
+    amount: -Number(choice.amount), status: String(choice.status) as Movement["status"],
+    date: String(choice.requested_at), network: "BNB Chain", wallet: String(choice.wallet || ""),
+    fee: Number(choice.fee), netAmount: Number(choice.net_amount),
+  });
   const contractRows = Array.isArray(payload.contracts)
     ? payload.contracts
     : [];
@@ -175,6 +183,11 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
         Number.isFinite(durationDays) && durationDays > 0
           ? `${durationDays} días + capital de vuelta`
           : "Indefinida",
+      capitalChoice: (() => {
+        const choice = choices.find(item => item.contract_id === row.id);
+        return choice ? { action: String(choice.action) as "claim" | "reinvest", status: String(choice.status), payableAt: choice.payable_at ? String(choice.payable_at) : null } : undefined;
+      })(),
+      capitalChoiceReady: payload.capitalChoiceReady === true,
     };
   });
   const ledger = payload.ledger;
