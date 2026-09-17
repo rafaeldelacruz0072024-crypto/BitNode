@@ -60,3 +60,38 @@
 .admin-monthly-roi{margin-bottom:13px}.admin-month-selector{display:grid;gap:7px;max-width:250px;margin-top:20px;color:#98a1be;font:10px 'IBM Plex Mono';text-transform:uppercase}.admin-month-selector input,.admin-roi-input input{padding:10px 11px;border:1px solid rgba(149,157,205,.25);border-radius:6px;outline:0;color:#eef1fc;background:#070a15;font:13px 'IBM Plex Mono'}.admin-month-selector input:focus,.admin-roi-input input:focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(109,124,255,.12)}.admin-roi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:20px}.admin-roi-grid label{display:grid;gap:7px;color:#98a1be;font:10px 'IBM Plex Mono';text-transform:uppercase}.admin-roi-grid small{color:#6f7895;font:10px 'IBM Plex Mono';line-height:1.5;text-transform:none}.admin-roi-input{display:flex;align-items:center;gap:8px}.admin-roi-input input{width:100%}.admin-roi-input span{color:#b7c3ff;font:700 13px 'IBM Plex Mono'}.admin-monthly-preview{display:grid;gap:6px;margin-top:20px;padding:14px;border:1px solid rgba(183,255,60,.22);background:rgba(183,255,60,.04);color:#a8b0ca;font:10px 'IBM Plex Mono'}.admin-monthly-preview span{color:var(--acid)}.admin-monthly-preview strong{color:#e8ebf8;font:13px 'Space Grotesk'}.admin-monthly-preview small{line-height:1.5}@media(max-width:900px){.admin-roi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.admin-roi-grid{grid-template-columns:1fr}}
 .admin-account-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}.admin-account-metrics>div{display:grid;gap:8px;padding:14px;border:1px solid rgba(149,157,205,.22);border-radius:7px;background:#0b1020}.admin-account-metrics span{color:#8e98b7;font:10px 'IBM Plex Mono'}.admin-account-metrics strong{color:#eef2ff;font:700 20px 'Space Grotesk'}.admin-user-manager h3{margin:20px 0 10px;font-size:15px}@media(max-width:600px){.admin-account-metrics{grid-template-columns:1fr}}
 .admin-day-filters{flex-wrap:wrap}.admin-day-filters label{display:grid;gap:6px;color:#98a1be;font:10px 'IBM Plex Mono'}.admin-day-filters input,.admin-day-filters select{min-width:150px;padding:9px 11px;border:1px solid rgba(149,157,205,.28);border-radius:6px;color:#eef1fc;background:#070a15;font:12px 'IBM Plex Mono'}.admin-day-filters input:focus,.admin-day-filters select:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(109,124,255,.12)}
+
+/* Admin readability and touch navigation */
+.admin-shell{font-size:14px;line-height:1.5;overflow-x:clip}
+.admin-content,.admin-card,.admin-table-container{min-width:0}
+.admin-sidebar{overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+.admin-shell .admin-nav button{min-height:45px;font-size:15px}
+.admin-shell .admin-gate-form label,.admin-shell .admin-user-fields label,.admin-shell .admin-day-filters label,.admin-shell .admin-month-selector,.admin-shell .admin-roi-grid label{font-size:12px}
+.admin-shell .admin-gate-form input,.admin-shell .admin-gate-form button,.admin-shell .admin-user-fields input{font-size:15px}
+.admin-shell .admin-gate-form input,.admin-shell .admin-gate-form button{min-height:46px}
+.admin-shell .admin-auth-error{font-size:13px!important}
+.admin-shell .admin-kicker,.admin-shell .admin-metric p,.admin-shell .admin-metric small,.admin-shell .admin-toolbar-note,.admin-shell .card-status,.admin-shell .admin-side-note p,.admin-shell .admin-env,.admin-shell .api-badge,.admin-shell .admin-user,.admin-shell .admin-logout{font-size:11px}
+.admin-shell .admin-warning,.admin-shell .config-note,.admin-shell .admin-empty-state p,.admin-shell .admin-gate>p:not(.admin-kicker):not(.admin-auth-error){font-size:14px}
+.admin-shell .admin-data-table{font-size:13px}
+.admin-shell .admin-data-table th{font-size:11px}
+.admin-shell .admin-data-table td small,.admin-shell .data-status,.admin-shell .mono-cell{font-size:11px!important}
+.admin-shell .admin-withdrawal-actions input,.admin-shell .admin-withdrawal-actions button{font-size:12px}
+.admin-shell .admin-refresh,.admin-shell .admin-data-error button,.admin-shell .admin-user-save,.admin-shell .admin-day-filters input,.admin-shell .admin-day-filters select{min-height:42px;font-size:12px}
+.admin-table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+.admin-table-controls{display:none}
+.admin-sidebar-backdrop{display:none}
+@media(max-width:800px){
+  .admin-shell .admin-sidebar{z-index:51;height:100dvh;padding-bottom:max(22px,env(safe-area-inset-bottom))}
+  .admin-sidebar-backdrop{position:fixed;z-index:50;inset:0;display:block;width:100%;height:100dvh;border:0;background:rgba(2,4,13,.68);backdrop-filter:blur(2px)}
+  .admin-shell .admin-menu,.admin-shell .admin-close{display:grid;place-items:center;min-width:44px;min-height:44px}
+  .admin-shell .admin-content{padding:22px max(16px,env(safe-area-inset-left)) calc(45px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-right))}
+  .admin-shell .admin-header{min-width:0}.admin-shell .admin-header>div:nth-child(2){min-width:0}.admin-shell .admin-header h1{overflow-wrap:anywhere;font-size:26px}
+  .admin-shell .admin-card{padding:18px}
+  .admin-table-controls{display:flex;align-items:center;gap:8px;padding:9px 0;color:#aeb6d0;font:11px 'IBM Plex Mono'}
+  .admin-table-controls span{margin-right:auto}
+  .admin-table-controls button{display:grid;place-items:center;width:44px;height:44px;flex:none;border:1px solid rgba(149,157,205,.36);border-radius:7px;color:#eef1ff;background:#111831;font-size:20px}
+  .admin-table-controls button:active{background:#29346e}
+  .admin-table-wrap{scrollbar-width:thin;scrollbar-color:#7181ee #12182b}
+  .admin-refresh,.admin-data-error button,.admin-user-save,.admin-withdrawal-actions button,.admin-day-filters input,.admin-day-filters select{min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){.admin-table-wrap,.admin-sidebar{scroll-behavior:auto;transition:none}}

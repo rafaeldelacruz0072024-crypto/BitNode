@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, type FormEvent } from "react";
+import React, { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
@@ -254,14 +254,23 @@ function DataTable({
   children: React.ReactNode;
   label: string;
 }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const move = (direction: -1 | 1) => {
+    const region = viewport.current;
+    if (!region) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    region.scrollBy({ left: direction * Math.max(220, region.clientWidth * 0.75), behavior: reducedMotion ? "auto" : "smooth" });
+  };
   return (
-    <div
-      className="admin-table-wrap"
-      role="region"
-      aria-label={label}
-      tabIndex={0}
-    >
-      <table className="admin-data-table">{children}</table>
+    <div className="admin-table-container">
+      <div className="admin-table-controls" aria-label={`Desplazar ${label}`}>
+        <span>Desliza para ver más columnas</span>
+        <button type="button" aria-label={`Desplazar ${label} a la izquierda`} onClick={() => move(-1)}>←</button>
+        <button type="button" aria-label={`Desplazar ${label} a la derecha`} onClick={() => move(1)}>→</button>
+      </div>
+      <div ref={viewport} className="admin-table-wrap" role="region" aria-label={label} tabIndex={0}>
+        <table className="admin-data-table">{children}</table>
+      </div>
     </div>
   );
 }
@@ -1784,6 +1793,7 @@ export default function Admin() {
 
   return (
     <main className="admin-shell">
+      {open && <button type="button" className="admin-sidebar-backdrop" aria-label="Cerrar menú lateral" onClick={() => setOpen(false)} />}
       <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
         <div className="admin-brand-row">
           <BrandMark className="admin-official-logo" />
@@ -1811,6 +1821,7 @@ export default function Admin() {
                 onClick={() => {
                   setActiveSection(section);
                   setOpen(false);
+                  window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
                 }}
               >
                 <span>
