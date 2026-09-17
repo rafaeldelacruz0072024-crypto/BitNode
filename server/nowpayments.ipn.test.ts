@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { describe, expect, it, beforeEach } from "vitest";
 import { depositCashbackEntry, validDepositCurrency, validIpnSignature } from "./nowpayments";
+import { DEPOSIT_CASHBACK_END } from "@shared/depositCashback";
 
 function signature(body: Record<string, unknown>, secret: string) {
   const sorted = Object.keys(body).sort().reduce<Record<string, unknown>>((result, key) => {
@@ -39,15 +40,21 @@ describe("supported deposit networks", () => {
 
 describe("confirmed deposit cashback ledger entry", () => {
   const deposit = { id: "NP-1", user_id: "user-1", username: "cliente", amount: 500, network: "usdtbsc", created_at: "2026-09-11T04:00:00.000Z" };
+  const confirmedAt = Date.parse("2026-09-17T12:00:00-04:00");
 
   it("creates deterministic 10% and 20% credits", () => {
-    expect(depositCashbackEntry(deposit)).toMatchObject({ id: "CASHBACK-NP-1", amount: 50, status: "completed" });
-    expect(depositCashbackEntry({ ...deposit, amount: 1000 })).toMatchObject({ id: "CASHBACK-NP-1", amount: 200, label: "Cashback promocional 20%" });
+    expect(depositCashbackEntry(deposit, confirmedAt)).toMatchObject({ id: "CASHBACK-NP-1", amount: 50, status: "completed" });
+    expect(depositCashbackEntry({ ...deposit, amount: 1000 }, confirmedAt)).toMatchObject({ id: "CASHBACK-NP-1", amount: 200, label: "Cashback promocional 20%" });
   });
 
   it("does not credit deposits below the tier, before launch, or with invalid dates", () => {
-    expect(depositCashbackEntry({ ...deposit, amount: 499.99 })).toBeNull();
-    expect(depositCashbackEntry({ ...deposit, created_at: "2026-09-11T03:59:59.999Z" })).toBeNull();
-    expect(depositCashbackEntry({ ...deposit, created_at: "invalid" })).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, amount: 499.99 }, confirmedAt)).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, created_at: "2026-09-11T03:59:59.999Z" }, confirmedAt)).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, created_at: "invalid" }, confirmedAt)).toBeNull();
+  });
+  it("credits a confirmed deposit before the deadline and stops on expiry", () => {
+    expect(depositCashbackEntry(deposit, DEPOSIT_CASHBACK_END - 1)?.amount).toBe(50);
+    expect(depositCashbackEntry(deposit, DEPOSIT_CASHBACK_END)).toBeNull();
+    expect(depositCashbackEntry({ ...deposit, created_at: new Date(DEPOSIT_CASHBACK_END).toISOString() }, DEPOSIT_CASHBACK_END - 1)).toBeNull();
   });
 });

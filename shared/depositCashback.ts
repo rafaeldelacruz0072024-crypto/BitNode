@@ -4,6 +4,12 @@ export const DEPOSIT_CASHBACK_TIERS = [
 ] as const;
 
 export const DEPOSIT_CASHBACK_START = Date.parse("2026-09-11T00:00:00-04:00");
+// One promotional week beginning September 17 at 20:00 in Santo Domingo.
+export const DEPOSIT_CASHBACK_END = Date.parse("2026-09-24T20:00:00-04:00");
+
+export function isDepositCashbackActive(at: number = Date.now()) {
+  return Number.isFinite(at) && at >= DEPOSIT_CASHBACK_START && at < DEPOSIT_CASHBACK_END;
+}
 
 export function depositCashbackTransactionId(sourceTransactionId: string) {
   return `CASHBACK-${sourceTransactionId}`;

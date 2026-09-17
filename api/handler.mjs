@@ -562,6 +562,10 @@ var DEPOSIT_CASHBACK_TIERS = [
   { minimum: 500, rate: 0.1 }
 ];
 var DEPOSIT_CASHBACK_START = Date.parse("2026-09-11T00:00:00-04:00");
+var DEPOSIT_CASHBACK_END = Date.parse("2026-09-24T20:00:00-04:00");
+function isDepositCashbackActive(at = Date.now()) {
+  return Number.isFinite(at) && at >= DEPOSIT_CASHBACK_START && at < DEPOSIT_CASHBACK_END;
+}
 function depositCashbackTransactionId(sourceTransactionId) {
   return `CASHBACK-${sourceTransactionId}`;
 }
@@ -609,9 +613,9 @@ function validDepositCurrency(value) {
   const currency = String(value || "").toLowerCase();
   return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
 }
-function depositCashbackEntry(deposit) {
+function depositCashbackEntry(deposit, confirmedAt = Date.now()) {
   const createdAt = new Date(deposit.created_at).getTime();
-  if (!Number.isFinite(createdAt) || createdAt < DEPOSIT_CASHBACK_START) return null;
+  if (!isDepositCashbackActive(createdAt) || !isDepositCashbackActive(confirmedAt)) return null;
   const cashback = depositCashback(Number(deposit.amount));
   if (cashback.amount <= 0) return null;
   return { id: depositCashbackTransactionId(deposit.id), user_id: deposit.user_id, username: deposit.username, type: "deposit", label: `Cashback promocional ${cashback.rate * 100}%`, amount: cashback.amount, status: "completed", network: deposit.network, provider_status: `promo_cashback:${deposit.id}` };

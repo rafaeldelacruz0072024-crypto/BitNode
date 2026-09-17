@@ -54,7 +54,7 @@ import { requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
 import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
-import { depositCashback } from "@shared/depositCashback";
+import { DEPOSIT_CASHBACK_END, depositCashback, isDepositCashbackActive } from "@shared/depositCashback";
 import {
   emptyPrivateUserDetails,
   fetchPrivateUserDetails,
@@ -82,6 +82,28 @@ const DAILY_TASKS = [
 ] as const;
 
 const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
+
+function CashbackCountdown({ now }: { now: number }) {
+  const totalSeconds = Math.max(0, Math.ceil((DEPOSIT_CASHBACK_END - now) / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return <div className="cashback-countdown" role="timer" aria-label={totalSeconds ? `La promoción termina en ${days} días, ${hours} horas, ${minutes} minutos y ${seconds} segundos` : "Promoción finalizada"}>
+    <span>{totalSeconds ? "LA PROMOCIÓN TERMINA EN" : "PROMOCIÓN FINALIZADA"}</span>
+    <strong>{[days, hours, minutes, seconds].map(value => String(value).padStart(2, "0")).join(" : ")}</strong>
+    <small>{totalSeconds ? "DÍAS · HORAS · MINUTOS · SEGUNDOS · HASTA 24 SEP, 8:00 P. M. (SANTO DOMINGO)" : "El cashback ya no aplica a nuevos depósitos."}</small>
+  </div>;
+}
+
+function LiveCashbackCountdown() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <CashbackCountdown now={now} />;
+}
 
 function binaryReferralUrl(code: string, side: "izquierda" | "derecha") {
   const configuredUrl = import.meta.env.VITE_APP_URL as string | undefined;
@@ -544,12 +566,21 @@ export default function Dashboard() {
   const authUserId = authUser?.id;
   const cycleNotifications = useCycleNotifications(authUserId);
   useEffect(() => {
-    if (!authUserId) return;
+    if (!authUserId || !isDepositCashbackActive()) return;
     const key = `${CASHBACK_PROMO_SESSION_KEY}:${authUserId}`;
     if (window.sessionStorage.getItem(key) !== "1") {
       setCashbackPromoOpen(true);
     }
   }, [authUserId]);
+  useEffect(() => {
+    const remaining = DEPOSIT_CASHBACK_END - Date.now();
+    if (remaining <= 0) {
+      setCashbackPromoOpen(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setCashbackPromoOpen(false), remaining);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (!cashbackPromoOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -859,6 +890,7 @@ export default function Dashboard() {
               src="/deposit-cashback-giveaway.png"
               alt="Giveaway BitNode: cashback de 10% para depósitos de 500 USDT o más y 20% para depósitos de 1,000 USDT o más"
             />
+            <div className="cashback-login-timer"><LiveCashbackCountdown /></div>
           </div>
         </div>
       )}
@@ -1998,7 +2030,13 @@ export function DepositPanel({
     payCurrency: string;
   } | null>(null);
   const [qrImage, setQrImage] = useState("");
-  const cashback = depositCashback(amount);
+  const [promoNow, setPromoNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setPromoNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const promoActive = isDepositCashbackActive(promoNow);
+  const cashback = promoActive ? depositCashback(amount) : { rate: 0, amount: 0 };
   useEffect(() => {
     if (!payment?.payAddress) {
       setQrImage("");
@@ -2049,13 +2087,14 @@ export function DepositPanel({
       <span className="dash-eyebrow">BALANCE DE CUENTA</span>
       <h2>{title}</h2>
       <p>{copy}</p>
-      <section className="deposit-cashback-promo" aria-label="Promoción Giveaway Deposit Cashback">
+      <section className={`deposit-cashback-promo${promoActive ? "" : " is-expired"}`} aria-label="Promoción Giveaway Deposit Cashback">
         <div><span className="dash-eyebrow">PROMOCIÓN ESPECIAL · GIVEAWAY</span><h3>Deposit Cashback</h3><p>Más depósitos, más oportunidades.</p></div>
         <div className="cashback-tiers">
           <span><b>+500 USDT</b><strong>10%</strong><small>CASHBACK</small></span>
           <span><b>+1,000 USDT</b><strong>20%</strong><small>CASHBACK</small></span>
         </div>
-        <small>El cashback se acredita automáticamente después de confirmar el depósito. Una bonificación por transacción válida.</small>
+        <CashbackCountdown now={promoNow} />
+        <small>{promoActive ? "El depósito debe confirmarse antes de que termine el contador. Una bonificación por transacción válida." : "Los depósitos siguen disponibles sin cashback promocional."}</small>
       </section>
       <section className="dash-card money-form payment-form">
         <label>

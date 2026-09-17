@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   DEPOSIT_CASHBACK_START,
+  DEPOSIT_CASHBACK_END,
   depositCashback,
   depositCashbackTransactionId,
+  isDepositCashbackActive,
 } from "@shared/depositCashback";
 
 describe("deposit cashback promotion", () => {
@@ -20,5 +22,10 @@ describe("deposit cashback promotion", () => {
     expect(DEPOSIT_CASHBACK_START).toBe(
       Date.parse("2026-09-11T00:00:00-04:00")
     );
+  });
+  it("closes the promotion at the same instant shown by the countdown", () => {
+    expect(DEPOSIT_CASHBACK_END).toBe(Date.parse("2026-09-24T20:00:00-04:00"));
+    expect(isDepositCashbackActive(DEPOSIT_CASHBACK_END - 1)).toBe(true);
+    expect(isDepositCashbackActive(DEPOSIT_CASHBACK_END)).toBe(false);
   });
 });

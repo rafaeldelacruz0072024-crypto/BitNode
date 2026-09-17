@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { DEPOSIT_CASHBACK_START, depositCashback, depositCashbackTransactionId } from "@shared/depositCashback";
+import { depositCashback, depositCashbackTransactionId, isDepositCashbackActive } from "@shared/depositCashback";
 
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 export const SUPPORTED_DEPOSIT_CURRENCIES = new Set(["usdttrc20", "usdtbsc"]);
@@ -46,9 +46,9 @@ export function validDepositCurrency(value: unknown) {
   return SUPPORTED_DEPOSIT_CURRENCIES.has(currency) ? currency : null;
 }
 
-export function depositCashbackEntry(deposit: { id: string; user_id: string; username?: string | null; amount: number; network?: string | null; created_at: string }) {
+export function depositCashbackEntry(deposit: { id: string; user_id: string; username?: string | null; amount: number; network?: string | null; created_at: string }, confirmedAt: number = Date.now()) {
   const createdAt = new Date(deposit.created_at).getTime();
-  if (!Number.isFinite(createdAt) || createdAt < DEPOSIT_CASHBACK_START) return null;
+  if (!isDepositCashbackActive(createdAt) || !isDepositCashbackActive(confirmedAt)) return null;
   const cashback = depositCashback(Number(deposit.amount));
   if (cashback.amount <= 0) return null;
   return { id: depositCashbackTransactionId(deposit.id), user_id: deposit.user_id, username: deposit.username, type: "deposit", label: `Cashback promocional ${cashback.rate * 100}%`, amount: cashback.amount, status: "completed", network: deposit.network, provider_status: `promo_cashback:${deposit.id}` };

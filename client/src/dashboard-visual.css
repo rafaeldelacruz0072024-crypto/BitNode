@@ -138,3 +138,53 @@
 .node-capital-choice-actions .node-capital-withdraw {
   white-space: nowrap;
 }
+
+.cashback-countdown {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding: 16px;
+  border: 1px solid rgba(183, 255, 60, .38);
+  border-radius: 10px;
+  background: rgba(6, 14, 35, .86);
+  text-align: center;
+}
+.cashback-countdown span {
+  color: #d9ff99;
+  font: 700 11px 'IBM Plex Mono', monospace;
+  letter-spacing: .13em;
+}
+.cashback-countdown strong {
+  color: #b7ff3c;
+  font: 700 clamp(20px, 5vw, 32px) 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cashback-countdown small {
+  color: #a8b6d4;
+  font: 10px 'IBM Plex Mono', monospace;
+}
+.cashback-login-timer {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+}
+.cashback-login-timer .cashback-countdown {
+  padding: 10px;
+  background: rgba(3, 8, 23, .95);
+  backdrop-filter: blur(12px);
+}
+.cashback-login-timer .cashback-countdown strong {
+  font-size: clamp(17px, 4vw, 27px);
+}
+.deposit-cashback-promo.is-expired .cashback-tiers {
+  opacity: .48;
+}
+.deposit-cashback-promo.is-expired .cashback-countdown {
+  border-color: rgba(159, 175, 209, .3);
+}
+.deposit-cashback-promo.is-expired .cashback-countdown strong {
+  color: #a8b6d4;
+}
