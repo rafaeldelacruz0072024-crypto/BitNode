@@ -95,3 +95,25 @@
   .admin-refresh,.admin-data-error button,.admin-user-save,.admin-withdrawal-actions button,.admin-day-filters input,.admin-day-filters select{min-height:44px}
 }
 @media(prefers-reduced-motion:reduce){.admin-table-wrap,.admin-sidebar{scroll-behavior:auto;transition:none}}
+
+/* Account activation origin stays readable with or without color. */
+.activation-legend{display:flex;flex-wrap:wrap;gap:9px;margin-top:17px}
+.admin-shell .activation-origin-badge{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid currentColor;border-radius:999px;font:600 12px 'IBM Plex Mono';white-space:nowrap}
+.activation-origin-badge::before{content:"";width:7px;height:7px;flex:none;border-radius:50%;background:currentColor}
+.admin-shell .activation-origin-badge--crypto{color:#58e8bb;background:rgba(46,229,173,.11)}
+.admin-shell .activation-origin-badge--manual{color:#ffd27d;background:rgba(255,190,79,.11)}
+.admin-shell .activation-origin-badge--mixed{color:#c6a6ff;background:rgba(178,130,255,.12)}
+.admin-shell .activation-origin-badge--unverified{color:#b8c5dd;background:rgba(149,157,205,.1)}
+.admin-shell .activation-row--crypto{background:rgba(46,229,173,.035)}
+.admin-shell .activation-row--manual{background:rgba(255,190,79,.035)}
+.admin-shell .activation-row--mixed{background:rgba(178,130,255,.04)}
+.admin-shell .activation-row--unverified{background:rgba(149,157,205,.025)}
+.admin-shell .activation-row--crypto .activation-user{color:#58e8bb}
+.admin-shell .activation-row--manual .activation-user{color:#ffd27d}
+.admin-shell .activation-row--mixed .activation-user{color:#c6a6ff}
+.admin-shell .activation-row--unverified .activation-user{color:#b8c5dd}
+.admin-shell .activation-row td:first-child{box-shadow:inset 3px 0 currentColor}
+.admin-shell .activation-row--crypto td:first-child{color:#58e8bb}
+.admin-shell .activation-row--manual td:first-child{color:#ffd27d}
+.admin-shell .activation-row--mixed td:first-child{color:#c6a6ff}
+.admin-shell .activation-row--unverified td:first-child{color:#b8c5dd}
