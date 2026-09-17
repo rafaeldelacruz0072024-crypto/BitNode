@@ -15,6 +15,7 @@ import { registerAdminMonthlyRoiRoutes } from "./adminMonthlyRoi.js";
 import { registerAdminNodeControlRoutes } from "./adminNodeControl.js";
 import { createApiRateLimiter, createFinancialRateLimiter } from "./security.js";
 import { registerEmailSecurityRoutes } from "./emailSecurity.js";
+import { registerActivationReportRoutes } from "./activationReport.js";
 
 export function createApp(): Express {
   const app = express();
@@ -39,6 +40,7 @@ export function createApp(): Express {
   registerAdminWithdrawalRoutes(app);
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
+  registerActivationReportRoutes(app);
   registerEmailSecurityRoutes(app);
 
   app.use(

@@ -32,6 +32,7 @@ type SectionName =
   | "Operaciones"
   | "Retiros"
   | "Contratos"
+  | "Activaciones"
   | "Control de nodos"
   | "Transacciones"
   | "Comisiones"
@@ -148,6 +149,7 @@ const sections: SectionName[] = [
   "Operaciones",
   "Retiros",
   "Contratos",
+  "Activaciones",
   "Control de nodos",
   "Transacciones",
   "Comisiones",
@@ -159,6 +161,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Operaciones: CircleDollarSign,
   Retiros: WalletCards,
   Contratos: FileClock,
+  Activaciones: BarChart3,
   "Control de nodos": Server,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
@@ -1129,6 +1132,49 @@ function TransactionsSection({
   );
 }
 
+type ActivationAccount = {
+  userId: string; username: string | null; firstActivation: string;
+  contracts: number; activatedAmount: number; cryptoDeposits: number;
+  manualDeposits: number; otherDeposits: number;
+  origin: "crypto" | "manual" | "mixed" | "unverified";
+};
+
+function ActivationsSection() {
+  const [accounts, setAccounts] = useState<ActivationAccount[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    void (async () => {
+      try {
+        const session = (await supabase?.auth.getSession())?.data.session;
+        if (!session) throw new Error("Sesión administrativa requerida.");
+        const response = await fetch("/api/admin/activation-report", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const result = await response.json() as { accounts?: ActivationAccount[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "No se pudo consultar el reporte.");
+        if (active) { setAccounts(result.accounts ?? []); setError(""); }
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "No se pudo consultar el reporte.");
+      } finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [revision]);
+  const labels: Record<ActivationAccount["origin"], string> = {
+    crypto: "Cripto confirmado", manual: "Crédito manual", mixed: "Origen mixto", unverified: "Sin origen comprobable",
+  };
+  const visible = filter === "all" ? accounts : accounts.filter(account => account.origin === filter);
+  return <article className="admin-card admin-card-full">
+    <div className="card-heading"><div><p className="admin-kicker">ACTIVACIONES / SOLO LECTURA</p><h2>Origen de cuentas activadas</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar activaciones"><RefreshCw size={16} /></button></div>
+    <p>Se consideran cuentas con al menos un contrato completado. El origen muestra los depósitos registrados antes de la primera activación; el saldo también puede incluir ganancias o comisiones y no permite atribuir con certeza qué fondos pagaron cada nodo.</p>
+    <div className="admin-toolbar"><label>Mostrar: <select value={filter} onChange={event => setFilter(event.target.value)}><option value="all">Todas ({accounts.length})</option>{(Object.keys(labels) as ActivationAccount["origin"][]).map(key => <option key={key} value={key}>{labels[key]} ({accounts.filter(account => account.origin === key).length})</option>)}</select></label><span className="admin-toolbar-note">{visible.length} cuentas</span></div>
+    {error && <div className="admin-data-error" role="alert">{error}</div>}
+    {loading ? <LoadingState /> : !error && visible.length === 0 ? <EmptyState title="Sin activaciones" detail="No hay cuentas activadas para este filtro." /> : !error && <DataTable label="Origen de cuentas activadas"><thead><tr><th>Cuenta</th><th>Origen registrado</th><th>Primer nodo</th><th>Nodos</th><th>Total activado</th><th>Cripto confirmado</th><th>Crédito manual</th></tr></thead><tbody>{visible.map(account => <tr key={account.userId}><td>{account.username || account.userId.slice(0, 12)}</td><td>{labels[account.origin]}</td><td>{dateLabel(account.firstActivation)}</td><td>{account.contracts}</td><td>{money(account.activatedAmount)}</td><td>{money(account.cryptoDeposits)}</td><td>{money(account.manualDeposits)}</td></tr>)}</tbody></DataTable>}
+  </article>;
+}
+
 function CommissionsSection({ data }: { data: AdminData }) {
   return (
     <>
@@ -1731,6 +1777,7 @@ export default function Admin() {
           ) : (
             <LoadingState />
           ))}
+        {activeSection === "Activaciones" && <ActivationsSection />}
         {activeSection === "Control de nodos" && <NodeControlSection />}
         {activeSection === "Transacciones" &&
           (adminData ? (

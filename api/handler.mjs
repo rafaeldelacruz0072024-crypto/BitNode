@@ -1202,7 +1202,7 @@ function registerAdminWithdrawalRoutes(app2) {
       const enabled = req.body?.enabled === true;
       const { error } = await admin4.client.from("platform_settings").upsert({
         key: "withdrawal_window",
-        value: { enabled, mode: "manual_test", updated_by: (await admin4.client.auth.getUser(token3(req))).data.user?.id || null },
+        value: { enabled, mode: "scheduled_mexico", updated_by: (await admin4.client.auth.getUser(token3(req))).data.user?.id || null },
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
@@ -1527,6 +1527,61 @@ function registerEmailSecurityRoutes(app2) {
   });
 }
 
+// server/activationReport.ts
+function buildActivationReport(rows) {
+  const accounts = /* @__PURE__ */ new Map();
+  const deposits = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (row.user_id && row.type === "deposit" && row.status === "completed") {
+      const list = deposits.get(row.user_id) ?? [];
+      list.push(row);
+      deposits.set(row.user_id, list);
+    }
+  }
+  for (const row of rows.filter((item) => item.user_id && item.type === "contract" && item.status === "completed").sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const id = row.user_id;
+    const existing = accounts.get(id);
+    if (existing) {
+      existing.contracts++;
+      existing.activatedAmount += Math.abs(Number(row.amount) || 0);
+      continue;
+    }
+    const prior = (deposits.get(id) ?? []).filter((item) => item.created_at <= row.created_at);
+    let cryptoDeposits = 0, manualDeposits = 0, otherDeposits = 0;
+    for (const deposit of prior) {
+      if (deposit.provider_status?.startsWith("promo_cashback:")) continue;
+      const amount = Math.max(0, Number(deposit.amount) || 0);
+      if (deposit.id.startsWith("NP-") && deposit.provider_payment_id && ["finished", "confirmed"].includes(deposit.provider_status || "")) cryptoDeposits += amount;
+      else if (deposit.id.startsWith("ADMIN-") && deposit.provider_status?.startsWith("admin_manual:")) manualDeposits += amount;
+      else otherDeposits += amount;
+    }
+    const origin2 = cryptoDeposits && !manualDeposits && !otherDeposits ? "crypto" : manualDeposits && !cryptoDeposits && !otherDeposits ? "manual" : cryptoDeposits || manualDeposits ? "mixed" : "unverified";
+    accounts.set(id, { userId: id, username: row.username, firstActivation: row.created_at, contracts: 1, activatedAmount: Math.abs(Number(row.amount) || 0), cryptoDeposits, manualDeposits, otherDeposits, origin: origin2 });
+  }
+  return Array.from(accounts.values()).sort((a, b) => b.firstActivation.localeCompare(a.firstActivation));
+}
+function registerActivationReportRoutes(app2) {
+  app2.get("/api/admin/activation-report", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const rows = [];
+      const pageSize = 1e3;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,type,status,amount,created_at,provider_status,provider_payment_id").in("type", ["contract", "deposit"]).in("status", ["completed"]).order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, from + pageSize - 1);
+        if (error) throw error;
+        rows.push(...data ?? []);
+        if ((data ?? []).length < pageSize) break;
+      }
+      return res.status(200).json({ accounts: buildActivationReport(rows), updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    } catch (error) {
+      console.error("[admin-activation-report]", error);
+      return res.status(503).json({ error: "No se pudo cargar el reporte de activaciones." });
+    }
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -1550,6 +1605,7 @@ function createApp() {
   registerAdminWithdrawalRoutes(app2);
   registerAdminMonthlyRoiRoutes(app2);
   registerAdminNodeControlRoutes(app2);
+  registerActivationReportRoutes(app2);
   registerEmailSecurityRoutes(app2);
   app2.use(
     "/api/trpc",
