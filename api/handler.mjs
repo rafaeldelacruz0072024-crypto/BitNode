@@ -565,11 +565,11 @@ var DEPOSIT_CASHBACK_START = Date.parse("2026-09-11T00:00:00-04:00");
 function depositCashbackTransactionId(sourceTransactionId) {
   return `CASHBACK-${sourceTransactionId}`;
 }
-function depositCashback(amount) {
-  if (!Number.isFinite(amount) || amount <= 0) return { rate: 0, amount: 0 };
-  const tier = DEPOSIT_CASHBACK_TIERS.find((item) => amount >= item.minimum);
+function depositCashback(amount2) {
+  if (!Number.isFinite(amount2) || amount2 <= 0) return { rate: 0, amount: 0 };
+  const tier = DEPOSIT_CASHBACK_TIERS.find((item) => amount2 >= item.minimum);
   const rate = tier?.rate ?? 0;
-  return { rate, amount: Number((amount * rate).toFixed(2)) };
+  return { rate, amount: Number((amount2 * rate).toFixed(2)) };
 }
 
 // server/nowpayments.ts
@@ -625,9 +625,9 @@ function registerNowPaymentsRoutes(app2) {
       if (!apiKey || !admin4 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
       const { data: authData, error: authError } = await admin4.auth.getUser(token4);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
-      const amount = Number(req.body?.amount);
+      const amount2 = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
-      if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
+      if (!Number.isFinite(amount2) || amount2 < 10 || amount2 > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
       const transactionId = `NP-${crypto.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
@@ -635,7 +635,7 @@ function registerNowPaymentsRoutes(app2) {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
-          price_amount: amount,
+          price_amount: amount2,
           price_currency: "usd",
           pay_currency: payCurrency,
           order_id: transactionId,
@@ -654,7 +654,7 @@ function registerNowPaymentsRoutes(app2) {
         username: authData.user.user_metadata?.username || authData.user.email?.split("@")[0] || null,
         type: "deposit",
         label: "Dep\xF3sito NOWPayments",
-        amount,
+        amount: amount2,
         status: "pending",
         network: payCurrency,
         provider_payment_id: String(payment.payment_id),
@@ -728,11 +728,11 @@ function challengeHash(challengeId, nonce) {
 function validWallet(network, wallet) {
   return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
 }
-function validateWithdrawalInput(amount, network, wallet, usedToday) {
-  if (!Number.isFinite(amount) || amount < 10 || amount > LIMIT) return "El retiro debe estar entre $10 y $1,000 USDT.";
-  if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-8) return "El monto debe tener hasta dos decimales.";
+function validateWithdrawalInput(amount2, network, wallet, usedToday) {
+  if (!Number.isFinite(amount2) || amount2 < 10 || amount2 > LIMIT) return "El retiro debe estar entre $10 y $1,000 USDT.";
+  if (Math.abs(amount2 * 100 - Math.round(amount2 * 100)) > 1e-8) return "El monto debe tener hasta dos decimales.";
   if (!NETWORKS.has(network) || !validWallet(network, wallet)) return "La red o la wallet no son v\xE1lidas.";
-  if (usedToday + amount > LIMIT) return `L\xEDmite diario excedido. Ya solicitaste ${usedToday.toFixed(2)} USDT hoy.`;
+  if (usedToday + amount2 > LIMIT) return `L\xEDmite diario excedido. Ya solicitaste ${usedToday.toFixed(2)} USDT hoy.`;
   return null;
 }
 function registerWithdrawalRoutes(app2) {
@@ -742,17 +742,17 @@ function registerWithdrawalRoutes(app2) {
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
-    const amount = Number(req.body?.amount);
+    const amount2 = Number(req.body?.amount);
     const network = String(req.body?.network || "");
     const wallet = String(req.body?.wallet || "").trim();
     const lockedWallet = String(data.user.app_metadata?.withdrawal_wallet_bep20 || data.user.user_metadata?.wallet_bep20 || "").trim();
     if (!lockedWallet) return res.status(400).json({ error: "Guarda primero tu wallet de retiro en Perfil." });
     if (wallet.toLowerCase() !== lockedWallet.toLowerCase()) return res.status(409).json({ error: "Debes retirar hacia tu wallet registrada. Contacta a soporte para cambiarla." });
-    const basicError = validateWithdrawalInput(amount, network, wallet, 0);
+    const basicError = validateWithdrawalInput(amount2, network, wallet, 0);
     if (basicError) return res.status(400).json({ error: basicError });
     const { error: validationError } = await client.rpc("validate_withdrawal_request", {
       p_user_id: data.user.id,
-      p_amount: amount
+      p_amount: amount2
     });
     if (validationError) {
       if (validationError.code === "P0001") return res.status(400).json({ error: validationError.message });
@@ -766,7 +766,7 @@ function registerWithdrawalRoutes(app2) {
       user_id: data.user.id,
       purpose: "withdrawal",
       code_hash: codeHash,
-      payload: { amount, network, wallet },
+      payload: { amount: amount2, network, wallet },
       expires_at: new Date(Date.now() + 2 * 6e4).toISOString()
     });
     if (challengeError) return res.status(500).json({ error: "No se pudo registrar la solicitud de retiro." });
@@ -980,8 +980,8 @@ function registerCommissionRoutes(app2) {
       return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
     const contractId = String(req.body?.contractId || "").trim();
     const planId = String(req.body?.planId || "").trim();
-    const amount = Number(req.body?.amount);
-    if (!contractId || !planId || !Number.isFinite(amount))
+    const amount2 = Number(req.body?.amount);
+    if (!contractId || !planId || !Number.isFinite(amount2))
       return res.status(400).json({ error: "Datos de contrato incompletos." });
     try {
       const result = await activateContractAndCommissions(client, {
@@ -989,7 +989,7 @@ function registerCommissionRoutes(app2) {
         contractId,
         planId,
         username: data.user.user_metadata?.username || data.user.email?.split("@")[0],
-        amount
+        amount: amount2
       });
       return res.json(result);
     } catch (error2) {
@@ -1063,15 +1063,15 @@ function registerSecureCommissionRoutes(app2) {
     if (!contract || contract.status !== "active") {
       return res.status(400).json({ error: "Solo los contratos activos pueden liquidar comisiones." });
     }
-    const amount = Number(contract.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount2 = Number(contract.amount);
+    if (!Number.isFinite(amount2) || amount2 <= 0) {
       return res.status(400).json({ error: "El monto del contrato no es v\xE1lido." });
     }
     const { data, error } = await client.rpc("process_contract_commissions", {
       p_source_event_id: `contract:${contract.id}:confirmed`,
       p_contract_id: contract.id,
       p_user_id: authData.user.id,
-      p_amount: amount,
+      p_amount: amount2,
       p_event_type: "contract_confirmed"
     });
     if (error) {
@@ -1094,8 +1094,8 @@ function token2(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
-function validateManualDeposit(amount) {
-  if (!Number.isFinite(amount) || amount < 10 || amount > 1e5) return "El dep\xF3sito debe estar entre $10 y $100,000 USDT.";
+function validateManualDeposit(amount2) {
+  if (!Number.isFinite(amount2) || amount2 < 10 || amount2 > 1e5) return "El dep\xF3sito debe estar entre $10 y $100,000 USDT.";
   return null;
 }
 function registerDepositRoutes(app2) {
@@ -1105,8 +1105,8 @@ function registerDepositRoutes(app2) {
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
-    const amount = Number(req.body?.amount);
-    const validationError = validateManualDeposit(amount);
+    const amount2 = Number(req.body?.amount);
+    const validationError = validateManualDeposit(amount2);
     if (validationError) return res.status(400).json({ error: validationError });
     const id = `DEP-${crypto3.randomUUID()}`;
     const { error } = await client.from("transactions").insert({
@@ -1115,7 +1115,7 @@ function registerDepositRoutes(app2) {
       username: data.user.user_metadata?.username || data.user.email?.split("@")[0] || null,
       type: "deposit",
       label: "Dep\xF3sito manual \xB7 pendiente",
-      amount,
+      amount: amount2,
       status: "pending",
       provider_status: "manual_review",
       created_at: (/* @__PURE__ */ new Date()).toISOString()
@@ -1417,12 +1417,12 @@ function normalizedPayload(purpose, input) {
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet2)) throw new Error("La wallet BEP20 no es v\xE1lida.");
     return { wallet: wallet2 };
   }
-  const amount = Number(payload.amount);
+  const amount2 = Number(payload.amount);
   const network = String(payload.network || "");
   const wallet = String(payload.wallet || "").trim();
-  const error = validateWithdrawalInput(amount, network, wallet, 0);
+  const error = validateWithdrawalInput(amount2, network, wallet, 0);
   if (error) throw new Error(error);
-  return { amount, network, wallet };
+  return { amount: amount2, network, wallet };
 }
 function withdrawalError(res, error) {
   if (error.code !== "P0001") return res.status(503).json({ error: "No se pudo verificar el retiro. Intenta nuevamente." });
@@ -1550,10 +1550,10 @@ function buildActivationReport(rows) {
     let cryptoDeposits = 0, manualDeposits = 0, otherDeposits = 0;
     for (const deposit of prior) {
       if (deposit.provider_status?.startsWith("promo_cashback:")) continue;
-      const amount = Math.max(0, Number(deposit.amount) || 0);
-      if (deposit.id.startsWith("NP-") && deposit.provider_payment_id && ["finished", "confirmed"].includes(deposit.provider_status || "")) cryptoDeposits += amount;
-      else if (deposit.id.startsWith("ADMIN-") && deposit.provider_status?.startsWith("admin_manual:")) manualDeposits += amount;
-      else otherDeposits += amount;
+      const amount2 = Math.max(0, Number(deposit.amount) || 0);
+      if (deposit.id.startsWith("NP-") && deposit.provider_payment_id && ["finished", "confirmed"].includes(deposit.provider_status || "")) cryptoDeposits += amount2;
+      else if (deposit.id.startsWith("ADMIN-") && deposit.provider_status?.startsWith("admin_manual:")) manualDeposits += amount2;
+      else otherDeposits += amount2;
     }
     const origin2 = cryptoDeposits && !manualDeposits && !otherDeposits ? "crypto" : manualDeposits && !cryptoDeposits && !otherDeposits ? "manual" : cryptoDeposits || manualDeposits ? "mixed" : "unverified";
     accounts.set(id, { userId: id, username: row.username, firstActivation: row.created_at, contracts: 1, activatedAmount: Math.abs(Number(row.amount) || 0), cryptoDeposits, manualDeposits, otherDeposits, origin: origin2 });
@@ -1582,6 +1582,90 @@ function registerActivationReportRoutes(app2) {
   });
 }
 
+// server/dailyReconciliation.ts
+var mexicoDay = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+var amount = (value) => Number(value) || 0;
+var round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+function buildDailyReconciliation(date, transactions, commissions, contracts) {
+  const daily = transactions.filter((row) => mexicoDay(row.created_at) === date);
+  const open = transactions.filter((row) => row.type === "withdraw" && ["pending", "approved"].includes(row.status));
+  const dayWithdrawals = daily.filter((row) => row.type === "withdraw");
+  const crypto5 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
+  const manual = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("ADMIN-") && row.provider_status?.startsWith("admin_manual:"));
+  const capital = daily.filter((row) => row.type === "deposit" && row.status === "completed" && (row.id.startsWith("DAILY-CAPITAL-") || row.id.startsWith("PRINCIPAL-")));
+  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && !crypto5.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:"));
+  const credited = commissions.filter((row) => row.status === "credited" && mexicoDay(row.created_at) === date);
+  const source = (field) => round(open.reduce((total, row) => total + amount(row[field]), 0));
+  const pendingGross = round(open.reduce((total, row) => total + Math.abs(amount(row.amount)), 0));
+  const direct = source("direct_commission_spent"), weekly = source("weekly_bonus_spent"), nodeRoi = source("node_roi_spent");
+  return {
+    date,
+    timezone: "America/Mexico_City",
+    isWednesday: (/* @__PURE__ */ new Date(`${date}T12:00:00Z`)).getUTCDay() === 3,
+    incoming: {
+      crypto: round(crypto5.reduce((sum, row) => sum + amount(row.amount), 0)),
+      cryptoCount: crypto5.length,
+      manual: round(manual.reduce((sum, row) => sum + amount(row.amount), 0)),
+      manualCount: manual.length,
+      capitalReturned: round(capital.reduce((sum, row) => sum + amount(row.amount), 0)),
+      capitalCount: capital.length,
+      other: round(other.reduce((sum, row) => sum + amount(row.amount), 0)),
+      otherCount: other.length
+    },
+    withdrawalRequests: { count: dayWithdrawals.length, gross: round(dayWithdrawals.reduce((sum, row) => sum + Math.abs(amount(row.amount)), 0)) },
+    outstanding: { count: open.length, gross: pendingGross, net: round(open.reduce((sum, row) => sum + Math.max(0, amount(row.net_amount)), 0)), direct, weekly, nodeRoi, unallocated: round(Math.max(0, pendingGross - direct - weekly - nodeRoi)) },
+    commissions: {
+      direct: round(credited.filter((row) => row.commission_type === "direct").reduce((sum, row) => sum + amount(row.amount), 0)),
+      other: round(credited.filter((row) => row.commission_type !== "direct").reduce((sum, row) => sum + amount(row.amount), 0))
+    },
+    cancelledNodes: contracts.filter((row) => row.status === "cancelled" && mexicoDay(row.updated_at) === date).length
+  };
+}
+function registerDailyReconciliationRoutes(app2) {
+  app2.get("/api/admin/daily-reconciliation", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const date = String(req.query.date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN((/* @__PURE__ */ new Date(`${date}T12:00:00Z`)).getTime())) return res.status(400).json({ error: "Fecha inv\xE1lida." });
+      const earliest = /* @__PURE__ */ new Date(`${date}T00:00:00Z`);
+      earliest.setUTCDate(earliest.getUTCDate() - 1);
+      const latest = /* @__PURE__ */ new Date(`${date}T00:00:00Z`);
+      latest.setUTCDate(latest.getUTCDate() + 2);
+      const allRows = async (table, select, filters) => {
+        const rows = [];
+        for (let from = 0; ; from += 1e3) {
+          const { data, error } = await filters(admin4.client.from(table).select(select)).order("created_at", { ascending: true }).range(from, from + 999);
+          if (error) throw error;
+          rows.push(...data ?? []);
+          if ((data ?? []).length < 1e3) return rows;
+        }
+      };
+      const transactionSelect = "id,type,status,amount,net_amount,provider_status,provider_payment_id,created_at,direct_commission_spent,weekly_bonus_spent,node_roi_spent";
+      const [dailyTransactions, pendingTransactions, commissions, cancelledNodes] = await Promise.all([
+        allRows("transactions", transactionSelect, (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString())),
+        allRows("transactions", transactionSelect, (q) => q.eq("type", "withdraw").in("status", ["pending", "approved"])),
+        allRows("commission_ledger", "commission_type,amount,status,created_at", (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString()).eq("status", "credited")),
+        (async () => {
+          const rows = [];
+          for (let from = 0; ; from += 1e3) {
+            const { data, error } = await admin4.client.from("contracts").select("id,amount,status,updated_at").eq("status", "cancelled").gte("updated_at", earliest.toISOString()).lt("updated_at", latest.toISOString()).order("updated_at", { ascending: true }).range(from, from + 999);
+            if (error) throw error;
+            rows.push(...data ?? []);
+            if ((data ?? []).length < 1e3) return rows;
+          }
+        })()
+      ]);
+      const transactions = [...dailyTransactions, ...pendingTransactions.filter((row) => !dailyTransactions.some((day) => day.id === row.id))];
+      return res.status(200).json(buildDailyReconciliation(date, transactions, commissions, cancelledNodes));
+    } catch (error) {
+      console.error("[admin-daily-reconciliation]", error);
+      return res.status(503).json({ error: "No se pudo cargar el cuadre diario." });
+    }
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -1606,6 +1690,7 @@ function createApp() {
   registerAdminMonthlyRoiRoutes(app2);
   registerAdminNodeControlRoutes(app2);
   registerActivationReportRoutes(app2);
+  registerDailyReconciliationRoutes(app2);
   registerEmailSecurityRoutes(app2);
   app2.use(
     "/api/trpc",

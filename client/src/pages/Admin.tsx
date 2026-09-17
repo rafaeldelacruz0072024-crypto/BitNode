@@ -33,6 +33,7 @@ type SectionName =
   | "Retiros"
   | "Contratos"
   | "Activaciones"
+  | "Cuadre diario"
   | "Control de nodos"
   | "Transacciones"
   | "Comisiones"
@@ -150,6 +151,7 @@ const sections: SectionName[] = [
   "Retiros",
   "Contratos",
   "Activaciones",
+  "Cuadre diario",
   "Control de nodos",
   "Transacciones",
   "Comisiones",
@@ -162,6 +164,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Retiros: WalletCards,
   Contratos: FileClock,
   Activaciones: BarChart3,
+  "Cuadre diario": CircleDollarSign,
   "Control de nodos": Server,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
@@ -1175,6 +1178,56 @@ function ActivationsSection() {
   </article>;
 }
 
+type DailyReconciliation = {
+  date: string; isWednesday: boolean;
+  incoming: { crypto: number; cryptoCount: number; manual: number; manualCount: number; capitalReturned: number; capitalCount: number; other: number; otherCount: number };
+  withdrawalRequests: { count: number; gross: number };
+  outstanding: { count: number; gross: number; net: number; direct: number; weekly: number; nodeRoi: number; unallocated: number };
+  commissions: { direct: number; other: number }; cancelledNodes: number;
+};
+
+function DailyReconciliationSection() {
+  const [date, setDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+  const [report, setReport] = useState<DailyReconciliation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true; setLoading(true);
+    void (async () => {
+      try {
+        const session = (await supabase?.auth.getSession())?.data.session;
+        if (!session) throw new Error("Sesión administrativa requerida.");
+        const response = await fetch(`/api/admin/daily-reconciliation?date=${encodeURIComponent(date)}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const body = await response.json() as DailyReconciliation & { error?: string };
+        if (!response.ok) throw new Error(body.error || "No se pudo cargar el cuadre.");
+        if (active) { setReport(body); setError(""); }
+      } catch (cause) { if (active) { setReport(null); setError(cause instanceof Error ? cause.message : "No se pudo cargar el cuadre."); } }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [date, revision]);
+  return <article className="admin-card admin-card-full">
+    <div className="card-heading"><div><p className="admin-kicker">CONTABILIDAD / HORA DE CIUDAD DE MÉXICO</p><h2>Cuadre diario</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar cuadre"><RefreshCw size={16} /></button></div>
+    <div className="admin-toolbar"><label>Fecha <input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>{report?.isWednesday && <span className="card-status">Miércoles · ventana semanal 08:00–15:00</span>}</div>
+    <p>Entradas externas, créditos internos, comisiones y retiros se muestran separados para evitar sumar dos veces el mismo dinero.</p>
+    {error && <div className="admin-data-error" role="alert">{error}</div>}
+    {loading ? <LoadingState /> : report && <>
+      <div className="admin-grid">
+        <article className="admin-metric"><p>Entró por cripto confirmado</p><strong>{money(report.incoming.crypto)}</strong><small>{report.incoming.cryptoCount} depósitos</small></article>
+        <article className="admin-metric"><p>Créditos manuales</p><strong>{money(report.incoming.manual)}</strong><small>{report.incoming.manualCount} movimientos</small></article>
+        <article className="admin-metric"><p>Capital devuelto de nodos</p><strong>{money(report.incoming.capitalReturned)}</strong><small>{report.incoming.capitalCount} créditos internos · {report.cancelledNodes} nodos cancelados</small></article>
+        <article className="admin-metric"><p>Otros depósitos</p><strong>{money(report.incoming.other)}</strong><small>{report.incoming.otherCount} movimientos sin origen confirmado</small></article>
+        <article className="admin-metric"><p>Comisiones acreditadas</p><strong>{money(report.commissions.direct + report.commissions.other)}</strong><small>Directa {money(report.commissions.direct)} · demás {money(report.commissions.other)}</small></article>
+        <article className="admin-metric"><p>Retiros solicitados en la fecha</p><strong>{money(report.withdrawalRequests.gross)}</strong><small>{report.withdrawalRequests.count} solicitudes, cualquier estado actual</small></article>
+        <article className="admin-metric"><p>Retiros pendientes actuales</p><strong>{money(report.outstanding.gross)}</strong><small>{report.outstanding.count} pendientes o aprobados · neto {money(report.outstanding.net)}</small></article>
+      </div>
+      <div className="admin-binary-card"><div><p className="admin-kicker">DESGLOSE DE RETIROS PENDIENTES ACTUALES</p><h2>Reservas por origen</h2><p>La fecha de solicitud puede ser anterior al día consultado. Los retiros históricos sin atribución quedan en «Sin clasificar».</p></div><div className="binary-stats"><div><span>Comisión directa</span><strong>{money(report.outstanding.direct)}</strong></div><div><span>Bonos semanales</span><strong>{money(report.outstanding.weekly)}</strong></div><div><span>Rendimiento de nodos</span><strong>{money(report.outstanding.nodeRoi)}</strong></div><div><span>Sin clasificar</span><strong>{money(report.outstanding.unallocated)}</strong></div></div></div>
+      <p>Los retiros pagados no tienen una fecha de pago independiente en el registro actual; por eso este cuadre muestra solicitudes por fecha y reservas pendientes al momento de consultar.</p>
+    </>}
+  </article>;
+}
+
 function CommissionsSection({ data }: { data: AdminData }) {
   return (
     <>
@@ -1778,6 +1831,7 @@ export default function Admin() {
             <LoadingState />
           ))}
         {activeSection === "Activaciones" && <ActivationsSection />}
+        {activeSection === "Cuadre diario" && <DailyReconciliationSection />}
         {activeSection === "Control de nodos" && <NodeControlSection />}
         {activeSection === "Transacciones" &&
           (adminData ? (

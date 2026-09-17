@@ -18,6 +18,7 @@ import { registerAdminWithdrawalRoutes } from "../adminWithdrawals";
 import { registerAdminMonthlyRoiRoutes } from "../adminMonthlyRoi";
 import { registerAdminNodeControlRoutes } from "../adminNodeControl";
 import { registerActivationReportRoutes } from "../activationReport";
+import { registerDailyReconciliationRoutes } from "../dailyReconciliation";
 import { registerEmailSecurityRoutes } from "../emailSecurity";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -61,6 +62,7 @@ async function startServer() {
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
   registerActivationReportRoutes(app);
+  registerDailyReconciliationRoutes(app);
   registerEmailSecurityRoutes(app);
   // tRPC API
   app.use(
