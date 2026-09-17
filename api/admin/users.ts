@@ -26,8 +26,8 @@ function serverClient() {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
-  if (req.method !== "PATCH") {
-    res.setHeader("Allow", "PATCH");
+  if (req.method !== "PATCH" && req.method !== "POST") {
+    res.setHeader("Allow", "PATCH, POST");
     return res.status(405).json({ error: "Método no permitido." });
   }
 
@@ -51,6 +51,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = text(req.body?.userId, 36);
     if (!/^[0-9a-f-]{36}$/i.test(userId)) return res.status(400).json({ error: "Usuario inválido." });
+
+    if (req.method === "POST") {
+      const password = req.body?.password;
+      if (typeof password !== "string" || password.length < 12 || password.length > 128 || !password.trim()) {
+        return res.status(400).json({ error: "La contraseña debe tener entre 12 y 128 caracteres." });
+      }
+      const { data: target, error: targetError } = await client.auth.admin.getUserById(userId);
+      if (targetError || !target.user) return res.status(404).json({ error: "Usuario no encontrado." });
+      const { data: targetProfile, error: targetProfileError } = await client.from("profiles").select("role").eq("id", userId).maybeSingle();
+      if (targetProfileError) return res.status(503).json({ error: "No se pudo verificar el rol del usuario." });
+      if (targetProfile?.role === "admin" || target.user.app_metadata?.role === "admin") {
+        return res.status(403).json({ error: "Las contraseñas de administradores no se cambian desde este módulo." });
+      }
+      const { error: passwordError } = await client.auth.admin.updateUserById(userId, { password });
+      if (passwordError) return res.status(400).json({ error: "No se pudo cambiar la contraseña. Verifica los requisitos de seguridad del proyecto." });
+      return res.status(200).json({ status: "password_updated", userId });
+    }
 
     const username = text(req.body?.username, 48);
     const displayName = text(req.body?.displayName, 120);

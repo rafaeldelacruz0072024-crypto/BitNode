@@ -476,6 +476,10 @@ export function UsersSection({
   const [selectedId, setSelectedId] = useState("");
   const [monitorId, setMonitorId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
   const [message, setMessage] = useState("");
   const filtered = useMemo(
     () =>
@@ -497,6 +501,9 @@ export function UsersSection({
   function selectUser(user: AdminUser) {
     setSelectedId(user.id);
     setMessage("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordMessage("");
     setEditor({
       username: user.username || "",
       displayName: user.displayName || "",
@@ -535,6 +542,30 @@ export function UsersSection({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function changeUserPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    if (newPassword.length < 12 || newPassword.length > 128) { setPasswordMessage("La contraseña debe tener entre 12 y 128 caracteres."); return; }
+    if (newPassword !== confirmPassword) { setPasswordMessage("Las contraseñas no coinciden."); return; }
+    setPasswordSaving(true);
+    setPasswordMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selected.id, password: newPassword }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo cambiar la contraseña.");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMessage("Contraseña actualizada. Comunica la nueva clave al usuario por un medio privado.");
+    } catch (error) { setPasswordMessage(error instanceof Error ? error.message : "No se pudo cambiar la contraseña."); }
+    finally { setPasswordSaving(false); }
   }
 
   return (
@@ -678,6 +709,18 @@ export function UsersSection({
           {message && <p className="config-note" role="status">{message}</p>}
         </form>
       )}
+      {selected && selected.role !== "admin" && (
+        <form className="admin-user-manager" onSubmit={changeUserPassword}>
+          <div className="card-heading"><div><p className="admin-kicker">SEGURIDAD DE ACCESO</p><h2>Cambiar contraseña de {selected.username || selected.email}</h2></div></div>
+          <div className="admin-user-fields">
+            <label>Nueva contraseña<input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={newPassword} onChange={event => setNewPassword(event.target.value)} required /></label>
+            <label>Confirmar contraseña<input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required /></label>
+          </div>
+          <p className="config-note">Mínimo 12 caracteres. La contraseña no se mostrará de nuevo después de guardarla.</p>
+          <button className="admin-user-save" type="submit" disabled={passwordSaving}>{passwordSaving ? "Actualizando…" : "Cambiar contraseña"}</button>
+          {passwordMessage && <p className="config-note" role="status">{passwordMessage}</p>}
+        </form>
+      )}
     </article>
   );
 }
@@ -699,6 +742,7 @@ function NodeControlSection() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el control de nodos."); }
     finally { setLoading(false); }
   }
+
   useEffect(() => { void load(); }, []);
   if (loading) return <LoadingState />;
   if (error) return <div className="admin-data-error" role="alert">{error}<button onClick={() => void load()}>Reintentar</button></div>;
