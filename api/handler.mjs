@@ -1586,6 +1586,17 @@ function registerActivationReportRoutes(app2) {
 var mexicoDay = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
 var amount = (value) => Number(value) || 0;
 var round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+function reconciliationDates(from, to) {
+  const validDay = (day) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`)) && (/* @__PURE__ */ new Date(`${day}T12:00:00Z`)).toISOString().slice(0, 10) === day;
+  if (!validDay(from) || !validDay(to)) return null;
+  const span = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5);
+  if (span < 0 || span > 30) return null;
+  return Array.from({ length: span + 1 }, (_, index) => {
+    const day = /* @__PURE__ */ new Date(`${from}T12:00:00Z`);
+    day.setUTCDate(day.getUTCDate() + index);
+    return day.toISOString().slice(0, 10);
+  });
+}
 function buildDailyReconciliation(date, transactions, commissions, contracts) {
   const daily = transactions.filter((row) => mexicoDay(row.created_at) === date);
   const open = transactions.filter((row) => row.type === "withdraw" && ["pending", "approved"].includes(row.status));
@@ -1627,16 +1638,19 @@ function registerDailyReconciliationRoutes(app2) {
     try {
       const admin4 = await authenticatedAdmin(req);
       if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const date = String(req.query.date || "");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN((/* @__PURE__ */ new Date(`${date}T12:00:00Z`)).getTime())) return res.status(400).json({ error: "Fecha inv\xE1lida." });
-      const earliest = /* @__PURE__ */ new Date(`${date}T00:00:00Z`);
+      const isRange = req.query.from !== void 0 || req.query.to !== void 0;
+      const from = String(isRange ? req.query.from || "" : req.query.date || "");
+      const to = String(isRange ? req.query.to || "" : from);
+      const dates = reconciliationDates(from, to);
+      if (!dates) return res.status(400).json({ error: "Elige fechas v\xE1lidas en un per\xEDodo de hasta 31 d\xEDas." });
+      const earliest = /* @__PURE__ */ new Date(`${from}T00:00:00Z`);
       earliest.setUTCDate(earliest.getUTCDate() - 1);
-      const latest = /* @__PURE__ */ new Date(`${date}T00:00:00Z`);
+      const latest = /* @__PURE__ */ new Date(`${to}T00:00:00Z`);
       latest.setUTCDate(latest.getUTCDate() + 2);
       const allRows = async (table, select, filters) => {
         const rows = [];
-        for (let from = 0; ; from += 1e3) {
-          const { data, error } = await filters(admin4.client.from(table).select(select)).order("created_at", { ascending: true }).range(from, from + 999);
+        for (let from2 = 0; ; from2 += 1e3) {
+          const { data, error } = await filters(admin4.client.from(table).select(select)).order("created_at", { ascending: true }).range(from2, from2 + 999);
           if (error) throw error;
           rows.push(...data ?? []);
           if ((data ?? []).length < 1e3) return rows;
@@ -1645,12 +1659,12 @@ function registerDailyReconciliationRoutes(app2) {
       const transactionSelect = "id,type,status,amount,net_amount,provider_status,provider_payment_id,created_at,direct_commission_spent,weekly_bonus_spent,node_roi_spent";
       const [dailyTransactions, pendingTransactions, commissions, cancelledNodes] = await Promise.all([
         allRows("transactions", transactionSelect, (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString())),
-        allRows("transactions", transactionSelect, (q) => q.eq("type", "withdraw").in("status", ["pending", "approved"])),
+        isRange ? Promise.resolve([]) : allRows("transactions", transactionSelect, (q) => q.eq("type", "withdraw").in("status", ["pending", "approved"])),
         allRows("commission_ledger", "commission_type,amount,status,created_at", (q) => q.gte("created_at", earliest.toISOString()).lt("created_at", latest.toISOString()).eq("status", "credited")),
         (async () => {
           const rows = [];
-          for (let from = 0; ; from += 1e3) {
-            const { data, error } = await admin4.client.from("contracts").select("id,amount,status,updated_at").eq("status", "cancelled").gte("updated_at", earliest.toISOString()).lt("updated_at", latest.toISOString()).order("updated_at", { ascending: true }).range(from, from + 999);
+          for (let from2 = 0; ; from2 += 1e3) {
+            const { data, error } = await admin4.client.from("contracts").select("id,amount,status,updated_at").eq("status", "cancelled").gte("updated_at", earliest.toISOString()).lt("updated_at", latest.toISOString()).order("updated_at", { ascending: true }).range(from2, from2 + 999);
             if (error) throw error;
             rows.push(...data ?? []);
             if ((data ?? []).length < 1e3) return rows;
@@ -1658,7 +1672,14 @@ function registerDailyReconciliationRoutes(app2) {
         })()
       ]);
       const transactions = [...dailyTransactions, ...pendingTransactions.filter((row) => !dailyTransactions.some((day) => day.id === row.id))];
-      return res.status(200).json(buildDailyReconciliation(date, transactions, commissions, cancelledNodes));
+      if (isRange) {
+        const days = dates.map((day) => {
+          const { outstanding: _snapshot, ...daily } = buildDailyReconciliation(day, dailyTransactions, commissions, cancelledNodes);
+          return daily;
+        });
+        return res.status(200).json({ from, to, timezone: "America/Mexico_City", days });
+      }
+      return res.status(200).json(buildDailyReconciliation(from, transactions, commissions, cancelledNodes));
     } catch (error) {
       console.error("[admin-daily-reconciliation]", error);
       return res.status(503).json({ error: "No se pudo cargar el cuadre diario." });

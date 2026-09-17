@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { buildDailyReconciliation } from "./dailyReconciliation";
+import { buildDailyReconciliation, reconciliationDates } from "./dailyReconciliation";
 
 it("keeps external cash, returned capital, credits and pending source buckets separate", () => {
   const base = { type: "deposit", status: "completed", amount: 100, net_amount: null, provider_status: null, provider_payment_id: null, created_at: "2026-09-16T15:00:00Z", direct_commission_spent: 0, weekly_bonus_spent: 0, node_roi_spent: 0 };
@@ -15,4 +15,12 @@ it("keeps external cash, returned capital, credits and pending source buckets se
   expect(report.commissions.direct).toBe(7);
   expect(report.cancelledNodes).toBe(1);
   expect(report.isWednesday).toBe(true);
+});
+
+it("accepts up to 31 consecutive days and rejects invalid ranges", () => {
+  expect(reconciliationDates("2026-09-01", "2026-09-30")).toHaveLength(30);
+  expect(reconciliationDates("2026-09-01", "2026-10-01")).toHaveLength(31);
+  expect(reconciliationDates("2026-09-01", "2026-10-02")).toBeNull();
+  expect(reconciliationDates("2026-09-17", "2026-09-16")).toBeNull();
+  expect(reconciliationDates("2026-02-30", "2026-02-30")).toBeNull();
 });

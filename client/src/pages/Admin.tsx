@@ -1232,6 +1232,12 @@ type DailyReconciliation = {
 
 function DailyReconciliationSection() {
   const [date, setDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+  const [from, setFrom] = useState(() => { const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); const start = new Date(`${day}T12:00:00Z`); start.setUTCDate(start.getUTCDate() - 6); return start.toISOString().slice(0, 10); });
+  const [to, setTo] = useState(date);
+  const [weekday, setWeekday] = useState("all");
+  const [days, setDays] = useState<Array<Omit<DailyReconciliation, "outstanding">>>([]);
+  const [daysLoading, setDaysLoading] = useState(true);
+  const [daysError, setDaysError] = useState("");
   const [report, setReport] = useState<DailyReconciliation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1251,10 +1257,34 @@ function DailyReconciliationSection() {
     })();
     return () => { active = false; };
   }, [date, revision]);
+  useEffect(() => {
+    let active = true;
+    if (!from || !to || from > to) { setDaysError("La fecha inicial debe ser anterior o igual a la final."); setDays([]); setDaysLoading(false); return; }
+    const span = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000);
+    if (span > 30) { setDaysError("Selecciona un máximo de 31 días."); setDays([]); setDaysLoading(false); return; }
+    setDaysLoading(true);
+    void (async () => {
+      try {
+        const session = (await supabase?.auth.getSession())?.data.session;
+        if (!session) throw new Error("Sesión administrativa requerida.");
+        const response = await fetch(`/api/admin/daily-reconciliation?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const body = await response.json() as { days?: Array<Omit<DailyReconciliation, "outstanding">>; error?: string };
+        if (!response.ok) throw new Error(body.error || "No se pudieron cargar los días.");
+        if (active) { setDays(body.days ?? []); setDaysError(""); }
+      } catch (cause) { if (active) { setDays([]); setDaysError(cause instanceof Error ? cause.message : "No se pudieron cargar los días."); } }
+      finally { if (active) setDaysLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [from, to, revision]);
+  const weekdays = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const visibleDays = weekday === "all" ? days : days.filter(day => new Date(`${day.date}T12:00:00Z`).getUTCDay() === Number(weekday));
   return <article className="admin-card admin-card-full">
     <div className="card-heading"><div><p className="admin-kicker">CONTABILIDAD / HORA DE CIUDAD DE MÉXICO</p><h2>Cuadre diario</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar cuadre"><RefreshCw size={16} /></button></div>
     <div className="admin-toolbar"><label>Fecha <input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>{report?.isWednesday && <span className="card-status">Miércoles · ventana semanal 08:00–15:00</span>}</div>
     <p>Entradas externas, créditos internos, comisiones y retiros se muestran separados para evitar sumar dos veces el mismo dinero.</p>
+    <div className="admin-toolbar admin-day-filters"><label>Desde <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label><label>Hasta <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label><label>Día <select value={weekday} onChange={event => setWeekday(event.target.value)}><option value="all">Todos los días</option>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label></div>
+    {daysError && <div className="admin-data-error" role="alert">{daysError}</div>}
+    {daysLoading ? <p className="config-note">Cargando días…</p> : !daysError && <><p className="config-note">{visibleDays.length} días mostrados · selecciona una fecha para ver su detalle.</p><DataTable label="Cuadre por día"><thead><tr><th>Fecha</th><th>Cripto</th><th>Manual</th><th>Capital devuelto</th><th>Comisiones</th><th>Retiros solicitados</th><th>Nodos cancelados</th><th /></tr></thead><tbody>{visibleDays.map(day => <tr key={day.date}><td>{day.date} · {weekdays[new Date(`${day.date}T12:00:00Z`).getUTCDay()]}</td><td>{money(day.incoming.crypto)}</td><td>{money(day.incoming.manual)}</td><td>{money(day.incoming.capitalReturned)}</td><td>{money(day.commissions.direct + day.commissions.other)}</td><td>{money(day.withdrawalRequests.gross)}</td><td>{day.cancelledNodes}</td><td><button className="admin-refresh" type="button" onClick={() => setDate(day.date)}>Ver detalle</button></td></tr>)}</tbody></DataTable></>}
     {error && <div className="admin-data-error" role="alert">{error}</div>}
     {loading ? <LoadingState /> : report && <>
       <div className="admin-grid">
