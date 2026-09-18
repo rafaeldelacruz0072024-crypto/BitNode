@@ -1,0 +1,41 @@
+.bn-login-mobile {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .bn-nav {
+    gap: 8px;
+  }
+
+  .bn-login-mobile {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    margin-left: auto;
+    padding: 10px 12px;
+    border: 1px solid rgba(134, 151, 255, .55);
+    border-radius: 8px;
+    color: #fff;
+    background: rgba(77, 94, 211, .24);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .bn-login-mobile:focus-visible {
+    outline: 2px solid #16d8ff;
+    outline-offset: 2px;
+  }
+
+  .bn-navlinks .bn-login {
+    display: none;
+  }
+
+  .bn-menu {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+}

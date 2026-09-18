@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import "@/home-mobile.css";
 import {
   ArrowRight, BadgePercent, BarChart3, Bot, BrainCircuit, CalendarDays, Check,
   ChevronDown, Clock3, GitBranch, Globe2, LineChart, Menu, Megaphone,
@@ -60,6 +61,7 @@ export default function Home() {
             <a href="#beneficios" onClick={closeMenu}>Beneficios</a><a href="#reglas" onClick={closeMenu}>Reglas</a>
             <Link href="/auth" className="bn-login" onClick={closeMenu}>Ingresar <ArrowRight size={16} /></Link>
           </nav>
+          <Link href="/auth" className="bn-login-mobile" onClick={closeMenu}>Ingresar</Link>
           <button className="bn-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}>{menuOpen ? <X /> : <Menu />}</button>
         </div>
       </header>
