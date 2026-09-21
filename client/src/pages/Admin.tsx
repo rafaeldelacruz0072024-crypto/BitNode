@@ -45,6 +45,7 @@ type AdminUser = {
   displayName: string | null;
   email: string | null;
   role: string;
+  corporate: boolean;
   sponsorId: string | null;
   createdAt: string | null;
   lastSignInAt: string | null;
@@ -494,7 +495,7 @@ export function UsersSection({
     () =>
       users.filter(user =>
         matchesAdminSearch(
-          [user.username, user.displayName, user.email, user.role, user.status],
+          [user.username, user.displayName, user.email, user.role, user.status, user.corporate ? "corporativa" : ""],
           query
         )
       ),
@@ -628,10 +629,11 @@ export function UsersSection({
           </thead>
           <tbody>
             {filtered.map(user => (
-              <tr key={user.id}>
+              <tr key={user.id} className={user.corporate ? "admin-corporate-row" : undefined}>
                 <td>
                   <strong>{user.username || "Sin username"}</strong>
                   <small>{user.displayName || user.id.slice(0, 12)}</small>
+                  {user.corporate && <span className="admin-corporate-badge">CUENTA CORPORATIVA</span>}
                 </td>
                 <td>{user.email || "—"}</td>
                 <td>
@@ -784,6 +786,7 @@ function OperationsSection({
 }) {
   const [userId, setUserId] = useState("");
   const [amount, setAmount] = useState(10);
+  const [corporate, setCorporate] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -797,6 +800,8 @@ function OperationsSection({
   useEffect(() => {
     if (userId && !filteredUsers.some(user => user.id === userId)) setUserId("");
   }, [filteredUsers, userId]);
+  const selectedUser = users.find(user => user.id === userId);
+  useEffect(() => { setCorporate(Boolean(selectedUser?.corporate)); }, [selectedUser?.corporate, userId]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -813,6 +818,7 @@ function OperationsSection({
         body: JSON.stringify({
           userId,
           amount,
+          corporate,
           reason: "Depósito administrativo para activar nodo",
           requestId: crypto.randomUUID(),
         }),
@@ -823,7 +829,7 @@ function OperationsSection({
       };
       if (!response.ok)
         throw new Error(body.error || "No se pudo acreditar el balance.");
-      setMessage(`Depósito acreditado: ${body.id}`);
+      setMessage(`Depósito acreditado: ${body.id}${corporate ? " · Cuenta corporativa" : ""}`);
       await onCompleted();
     } catch (error) {
       setMessage(
@@ -896,6 +902,12 @@ function OperationsSection({
             required
           />
         </label>
+        <label className="admin-corporate-choice">
+          <input type="checkbox" checked={corporate} disabled={Boolean(selectedUser?.corporate)}
+            onChange={event => setCorporate(event.target.checked)} />
+          <span>Cuenta corporativa: sin comisión directa ni binaria para los patrocinadores por las futuras activaciones de este usuario.</span>
+        </label>
+        {selectedUser?.corporate && <p className="config-note">Esta cuenta ya es corporativa.</p>}
         <button type="submit" disabled={loading || !userId}>
           {loading ? "Procesando…" : "Depositar balance"}
         </button>
@@ -1196,7 +1208,7 @@ type ActivationAccount = {
   origin: "crypto" | "manual" | "mixed" | "unverified";
 };
 
-function ActivationsSection() {
+function ActivationsSection({ users }: { users: AdminUser[] }) {
   const [accounts, setAccounts] = useState<ActivationAccount[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1223,13 +1235,14 @@ function ActivationsSection() {
     crypto: "Cripto confirmado", manual: "Crédito manual", mixed: "Origen mixto", unverified: "Sin origen comprobable",
   };
   const visible = filter === "all" ? accounts : accounts.filter(account => account.origin === filter);
+  const corporateIds = new Set(users.filter(user => user.corporate).map(user => user.id));
   return <article className="admin-card admin-card-full">
     <div className="card-heading"><div><p className="admin-kicker">ACTIVACIONES / SOLO LECTURA</p><h2>Origen de cuentas activadas</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar activaciones"><RefreshCw size={16} /></button></div>
     <p>Se consideran cuentas con al menos un contrato completado. El origen muestra los depósitos registrados antes de la primera activación; el saldo también puede incluir ganancias o comisiones y no permite atribuir con certeza qué fondos pagaron cada nodo.</p>
     <div className="activation-legend" aria-label="Colores del origen registrado">{(Object.keys(labels) as ActivationAccount["origin"][]).map(origin => <span key={origin} className={`activation-origin-badge activation-origin-badge--${origin}`}>{labels[origin]}</span>)}</div>
     <div className="admin-toolbar"><label>Mostrar: <select value={filter} onChange={event => setFilter(event.target.value)}><option value="all">Todas ({accounts.length})</option>{(Object.keys(labels) as ActivationAccount["origin"][]).map(key => <option key={key} value={key}>{labels[key]} ({accounts.filter(account => account.origin === key).length})</option>)}</select></label><span className="admin-toolbar-note">{visible.length} cuentas</span></div>
     {error && <div className="admin-data-error" role="alert">{error}</div>}
-    {loading ? <LoadingState /> : !error && visible.length === 0 ? <EmptyState title="Sin activaciones" detail="No hay cuentas activadas para este filtro." /> : !error && <DataTable label="Origen de cuentas activadas"><thead><tr><th>Cuenta</th><th>Origen registrado</th><th>Primer nodo</th><th>Nodos</th><th>Total activado</th><th>Cripto confirmado</th><th>Crédito manual</th></tr></thead><tbody>{visible.map(account => <tr key={account.userId} className={`activation-row activation-row--${account.origin}`}><td><strong className="activation-user">{account.username || account.userId.slice(0, 12)}</strong></td><td><span className={`activation-origin-badge activation-origin-badge--${account.origin}`}>{labels[account.origin]}</span></td><td>{dateLabel(account.firstActivation)}</td><td>{account.contracts}</td><td>{money(account.activatedAmount)}</td><td>{money(account.cryptoDeposits)}</td><td>{money(account.manualDeposits)}</td></tr>)}</tbody></DataTable>}
+    {loading ? <LoadingState /> : !error && visible.length === 0 ? <EmptyState title="Sin activaciones" detail="No hay cuentas activadas para este filtro." /> : !error && <DataTable label="Origen de cuentas activadas"><thead><tr><th>Cuenta</th><th>Origen registrado</th><th>Primer nodo</th><th>Nodos</th><th>Total activado</th><th>Cripto confirmado</th><th>Crédito manual</th></tr></thead><tbody>{visible.map(account => <tr key={account.userId} className={`activation-row activation-row--${account.origin}${corporateIds.has(account.userId) ? " admin-corporate-row" : ""}`}><td><strong className="activation-user">{account.username || account.userId.slice(0, 12)}</strong>{corporateIds.has(account.userId) && <span className="admin-corporate-badge">CUENTA CORPORATIVA</span>}</td><td><span className={`activation-origin-badge activation-origin-badge--${account.origin}`}>{labels[account.origin]}</span></td><td>{dateLabel(account.firstActivation)}</td><td>{account.contracts}</td><td>{money(account.activatedAmount)}</td><td>{money(account.cryptoDeposits)}</td><td>{money(account.manualDeposits)}</td></tr>)}</tbody></DataTable>}
   </article>;
 }
 
@@ -1917,7 +1930,7 @@ export default function Admin() {
           ) : (
             <LoadingState />
           ))}
-        {activeSection === "Activaciones" && <ActivationsSection />}
+        {activeSection === "Activaciones" && <ActivationsSection users={adminData?.users ?? []} />}
         {activeSection === "Cuadre diario" && <DailyReconciliationSection />}
         {activeSection === "Control de nodos" && <NodeControlSection />}
         {activeSection === "Transacciones" &&

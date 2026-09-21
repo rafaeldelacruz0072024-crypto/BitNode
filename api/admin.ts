@@ -45,20 +45,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const amount = Number(req.body?.amount);
     const reason = String(req.body?.reason || "Depósito administrativo").trim().slice(0, 160);
     const requestId = String(req.body?.requestId || "").trim();
+    const corporate = req.body?.corporate === true;
     if (!/^[0-9a-f-]{36}$/i.test(targetUserId)) return res.status(400).json({ error: "Usuario destino inválido." });
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) return res.status(400).json({ error: "El monto debe estar entre 0.01 y 1,000,000 USDT." });
     if (!/^[0-9a-f-]{36}$/i.test(requestId)) return res.status(400).json({ error: "Identificador de operación inválido." });
 
     const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "return=representation,resolution=ignore-duplicates" };
-    const targetResponse = await fetch(`${baseUrl}/rest/v1/profiles?select=id,username&id=eq.${encodeURIComponent(targetUserId)}&limit=1`, { headers });
-    const targets = targetResponse.ok ? await targetResponse.json() as Array<{ id: string; username: string }> : [];
-    if (!targets[0]) return res.status(404).json({ error: "Usuario destino no encontrado." });
-    const transactionId = `ADMIN-${requestId}`;
-    const insertResponse = await fetch(`${baseUrl}/rest/v1/transactions`, { method: "POST", headers, body: JSON.stringify({ id: transactionId, user_id: targetUserId, username: targets[0].username, type: "deposit", label: reason || "Depósito administrativo", amount, status: "completed", provider_status: `admin_manual:${user.id}`, created_at: new Date().toISOString() }) });
-    if (!insertResponse.ok) return res.status(500).json({ error: "No se pudo registrar el depósito administrativo." });
-    return res.status(201).json({ status: "completed", id: transactionId, userId: targetUserId, amount });
+    const depositResponse = await fetch(`${baseUrl}/rest/v1/rpc/admin_credit_deposit`, {
+      method: "POST",
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_user_id: targetUserId, p_amount: amount, p_reason: reason,
+        p_request_id: requestId, p_admin_id: user.id, p_corporate: corporate }),
+    });
+    if (!depositResponse.ok) {
+      const detail = await depositResponse.json().catch(() => ({})) as { message?: string };
+      console.error("[admin-deposit]", depositResponse.status, detail.message);
+      if (!corporate && (depositResponse.status === 404 || detail.message?.includes("admin_credit_deposit"))) {
+        const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "return=representation,resolution=ignore-duplicates" };
+        const targetResponse = await fetch(`${baseUrl}/rest/v1/profiles?select=id,username&id=eq.${encodeURIComponent(targetUserId)}&limit=1`, { headers });
+        const targets = targetResponse.ok ? await targetResponse.json() as Array<{ id: string; username: string }> : [];
+        if (!targets[0]) return res.status(404).json({ error: "Usuario destino no encontrado." });
+        const transactionId = `ADMIN-${requestId}`;
+        const insertResponse = await fetch(`${baseUrl}/rest/v1/transactions`, { method: "POST", headers,
+          body: JSON.stringify({ id: transactionId, user_id: targetUserId, username: targets[0].username,
+            type: "deposit", label: reason || "Depósito administrativo", amount, status: "completed",
+            provider_status: `admin_manual:${user.id}`, created_at: new Date().toISOString() }) });
+        if (insertResponse.ok) return res.status(201).json({ status: "completed", id: transactionId, userId: targetUserId, amount, corporate: false });
+      }
+      return res.status(500).json({ error: "No se pudo registrar el depósito. Verifica que la migración corporativa esté aplicada." });
+    }
+    const result = await depositResponse.json() as { id: string; status: string; corporate: boolean };
+    return res.status(result.status === "duplicate" ? 200 : 201).json({ ...result, userId: targetUserId, amount });
   } catch (error) {
     console.error("[admin-auth]", error);
     return res.status(503).json({ error: "La validación administrativa no está disponible.", status: "unavailable" });

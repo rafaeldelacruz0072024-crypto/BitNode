@@ -117,3 +117,8 @@
 .admin-shell .activation-row--manual td:first-child{color:#ffd27d}
 .admin-shell .activation-row--mixed td:first-child{color:#c6a6ff}
 .admin-shell .activation-row--unverified td:first-child{color:#b8c5dd}
+.admin-corporate-row { background: rgba(168, 85, 247, .09); }
+.admin-corporate-row:hover { background: rgba(168, 85, 247, .16); }
+.admin-corporate-badge { display: inline-block; margin: 5px 0 0; padding: 4px 8px; border: 1px solid #bb86fc; border-radius: 999px; color: #e4c5ff; background: #48266d; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.admin-corporate-choice { display: flex !important; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid #8056ac; border-radius: 10px; color: #e4c5ff; background: rgba(168, 85, 247, .09); }
+.admin-corporate-choice input { width: 18px; height: 18px; flex: none; margin-top: 2px; accent-color: #a855f7; }
