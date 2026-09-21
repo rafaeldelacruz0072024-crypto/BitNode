@@ -786,7 +786,6 @@ function OperationsSection({
 }) {
   const [userId, setUserId] = useState("");
   const [amount, setAmount] = useState(10);
-  const [corporate, setCorporate] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -801,9 +800,10 @@ function OperationsSection({
     if (userId && !filteredUsers.some(user => user.id === userId)) setUserId("");
   }, [filteredUsers, userId]);
   const selectedUser = users.find(user => user.id === userId);
-  useEffect(() => { setCorporate(Boolean(selectedUser?.corporate)); }, [selectedUser?.corporate, userId]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const corporateDeposit = Boolean(selectedUser?.corporate) || submitter?.value === "corporate";
     setLoading(true);
     setMessage("");
     try {
@@ -818,7 +818,7 @@ function OperationsSection({
         body: JSON.stringify({
           userId,
           amount,
-          corporate,
+          corporate: corporateDeposit,
           reason: "Depósito administrativo para activar nodo",
           requestId: crypto.randomUUID(),
         }),
@@ -826,10 +826,11 @@ function OperationsSection({
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         id?: string;
+        corporate?: boolean;
       };
       if (!response.ok)
         throw new Error(body.error || "No se pudo acreditar el balance.");
-      setMessage(`Depósito acreditado: ${body.id}${corporate ? " · Cuenta corporativa" : ""}`);
+      setMessage(`Depósito acreditado: ${body.id}${body.corporate ? " · Cuenta corporativa sin comisiones de patrocinio" : ""}`);
       await onCompleted();
     } catch (error) {
       setMessage(
@@ -902,15 +903,17 @@ function OperationsSection({
             required
           />
         </label>
-        <label className="admin-corporate-choice">
-          <input type="checkbox" checked={corporate} disabled={Boolean(selectedUser?.corporate)}
-            onChange={event => setCorporate(event.target.checked)} />
-          <span>Cuenta corporativa: sin comisión directa ni binaria para los patrocinadores por las futuras activaciones de este usuario.</span>
-        </label>
-        {selectedUser?.corporate && <p className="config-note">Esta cuenta ya es corporativa.</p>}
-        <button type="submit" disabled={loading || !userId}>
-          {loading ? "Procesando…" : "Depositar balance"}
-        </button>
+        {selectedUser?.corporate && <p className="admin-corporate-choice">Esta cuenta ya es corporativa. Sus activaciones no generan comisión directa ni binaria.</p>}
+        <div className="admin-deposit-actions">
+          <button type="submit" name="activationMode" value="normal" disabled={loading || !userId}>
+            {loading ? "Procesando…" : "Depositar normal"}
+          </button>
+          <button className="admin-corporate-activation" type="submit" name="activationMode" value="corporate"
+            disabled={loading || !userId || Boolean(selectedUser?.corporate)}>
+            {selectedUser?.corporate ? "Cuenta corporativa activa" : "Activar sin subir comisiones"}
+          </button>
+        </div>
+        <p className="config-note">El segundo botón clasifica la cuenta como corporativa. Sus futuras activaciones no sumarán comisión directa ni volumen binario a los patrocinadores.</p>
       </form>
       {message && (
         <p className="config-note" role="status">
