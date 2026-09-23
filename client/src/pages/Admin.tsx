@@ -810,6 +810,7 @@ function OperationsSection({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [userQuery, setUserQuery] = useState("");
+  const [reason, setReason] = useState("Ajuste manual de balance");
   const filteredUsers = useMemo(
     () => users.filter(user => matchesAdminSearch(
       [user.email, user.username, user.displayName, user.details.fullName],
@@ -824,7 +825,9 @@ function OperationsSection({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    const corporateDeposit = Boolean(selectedUser?.corporate) || submitter?.value === "corporate";
+    const action = submitter?.value || "add";
+    const corporateDeposit = action === "corporate";
+    const operation = action === "remove" ? "remove" : "add";
     setLoading(true);
     setMessage("");
     try {
@@ -839,8 +842,9 @@ function OperationsSection({
         body: JSON.stringify({
           userId,
           amount,
+          operation,
           corporate: corporateDeposit,
-          reason: "Depósito administrativo para activar nodo",
+          reason,
           requestId: crypto.randomUUID(),
         }),
       });
@@ -848,10 +852,11 @@ function OperationsSection({
         error?: string;
         id?: string;
         corporate?: boolean;
+        balance?: number;
       };
       if (!response.ok)
         throw new Error(body.error || "No se pudo acreditar el balance.");
-      setMessage(`Depósito acreditado: ${body.id}${body.corporate ? " · Cuenta corporativa sin comisiones de patrocinio" : ""}`);
+      setMessage(`${operation === "remove" ? "Balance debitado" : "Balance acreditado"}: ${body.id}${Number.isFinite(body.balance) ? ` · Nuevo balance ${money(body.balance)}` : ""}${body.corporate ? " · Cuenta corporativa sin comisiones de patrocinio" : ""}`);
       await onCompleted();
     } catch (error) {
       setMessage(
@@ -868,7 +873,7 @@ function OperationsSection({
       <div className="card-heading">
         <div>
           <p className="admin-kicker">BALANCE / OPERACIÓN REAL</p>
-          <h2>Depositar balance al usuario</h2>
+          <h2>Agregar y quitar balance al usuario</h2>
         </div>
         <span className="card-status">
           <ShieldCheck size={15} /> Admin protegido
@@ -924,17 +929,24 @@ function OperationsSection({
             required
           />
         </label>
+        <label>
+          Motivo del ajuste
+          <input value={reason} maxLength={160} onChange={event => setReason(event.target.value)} required placeholder="Motivo visible en el historial" />
+        </label>
         {selectedUser?.corporate && <p className="admin-corporate-choice">Esta cuenta ya es corporativa. Sus activaciones no generan comisión directa ni binaria.</p>}
         <div className="admin-deposit-actions">
-          <button type="submit" name="activationMode" value="normal" disabled={loading || !userId}>
-            {loading ? "Procesando…" : "Depositar normal"}
+          <button type="submit" name="balanceAction" value="add" disabled={loading || !userId}>
+            {loading ? "Procesando…" : "Agregar balance"}
           </button>
-          <button className="admin-corporate-activation" type="submit" name="activationMode" value="corporate"
+          <button className="admin-balance-remove" type="submit" name="balanceAction" value="remove" disabled={loading || !userId}>
+            {loading ? "Procesando…" : "Quitar balance"}
+          </button>
+          <button className="admin-corporate-activation" type="submit" name="balanceAction" value="corporate"
             disabled={loading || !userId || Boolean(selectedUser?.corporate)}>
             {selectedUser?.corporate ? "Cuenta corporativa activa" : "Activar sin subir comisiones"}
           </button>
         </div>
-        <p className="config-note">El segundo botón clasifica la cuenta como corporativa. Sus futuras activaciones no sumarán comisión directa ni volumen binario a los patrocinadores.</p>
+        <p className="config-note">Quitar balance nunca puede dejar la cuenta en negativo. La activación corporativa agrega el monto y evita que sus futuras activaciones generen comisión directa o volumen binario.</p>
       </form>
       {message && (
         <p className="config-note" role="status">
@@ -1361,6 +1373,28 @@ function DailyReconciliationSection() {
 }
 
 function CommissionsSection({ data }: { data: AdminData }) {
+  const [userId, setUserId] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [query, setQuery] = useState("");
+  const usersById = useMemo(() => new Map(data.users.map(user => [user.id, user])), [data.users]);
+  const filtered = useMemo(() => data.commissions.entries.filter(row => {
+    const beneficiary = row.beneficiaryId ? usersById.get(row.beneficiaryId) : undefined;
+    const source = row.sourceUserId ? usersById.get(row.sourceUserId) : undefined;
+    const haystack = [beneficiary?.username, beneficiary?.email, source?.username, source?.email, row.sourceEventId]
+      .filter(Boolean).join(" ").toLocaleLowerCase();
+    const created = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+    return (!userId || row.beneficiaryId === userId)
+      && (!type || row.type === type)
+      && (!status || row.status === status)
+      && (!from || created >= new Date(`${from}T00:00:00`).getTime())
+      && (!to || created <= new Date(`${to}T23:59:59.999`).getTime())
+      && (!query.trim() || haystack.includes(query.trim().toLocaleLowerCase()));
+  }), [data.commissions.entries, from, query, status, to, type, userId, usersById]);
+  const filteredTotal = filtered.reduce((sum, row) => sum + row.amount, 0);
+  const clearFilters = () => { setUserId(""); setType(""); setStatus(""); setFrom(""); setTo(""); setQuery(""); };
   return (
     <>
       <div className="admin-grid">
@@ -1438,10 +1472,23 @@ function CommissionsSection({ data }: { data: AdminData }) {
             <CheckCircle2 size={15} /> Sin acciones de crédito
           </span>
         </div>
-        {data.commissions.entries.length === 0 ? (
+        <div className="commission-filter-summary">
+          <strong>{filtered.length} comisiones</strong>
+          <span>{money(filteredTotal)} en el resultado filtrado</span>
+        </div>
+        <div className="admin-commission-filters">
+          <label>Buscar<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Usuario, correo o evento" /></label>
+          <label>Beneficiario<select value={userId} onChange={event => setUserId(event.target.value)}><option value="">Todos</option>{data.users.map(user => <option key={user.id} value={user.id}>{user.username || user.email || user.id.slice(0, 8)}</option>)}</select></label>
+          <label>Tipo<select value={type} onChange={event => setType(event.target.value)}><option value="">Todos</option><option value="direct">Directa</option><option value="binary">Binaria</option></select></label>
+          <label>Estado<select value={status} onChange={event => setStatus(event.target.value)}><option value="">Todos</option><option value="credited">Acreditada</option><option value="pending">Pendiente</option></select></label>
+          <label>Desde<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
+          <label>Hasta<input type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
+          <button type="button" className="admin-refresh" onClick={clearFilters}>Limpiar filtros</button>
+        </div>
+        {filtered.length === 0 ? (
           <EmptyState
             title="Sin comisiones"
-            detail="No hay entradas de ledger para mostrar."
+            detail="No hay entradas que coincidan con los filtros seleccionados."
           />
         ) : (
           <DataTable label="Detalle de comisiones">
@@ -1449,6 +1496,7 @@ function CommissionsSection({ data }: { data: AdminData }) {
               <tr>
                 <th>Tipo</th>
                 <th>Beneficiario</th>
+                <th>Usuario origen</th>
                 <th>Monto</th>
                 <th>Pierna</th>
                 <th>Estado</th>
@@ -1456,12 +1504,14 @@ function CommissionsSection({ data }: { data: AdminData }) {
               </tr>
             </thead>
             <tbody>
-              {data.commissions.entries.map(row => (
+              {filtered.map(row => {
+                const beneficiary = row.beneficiaryId ? usersById.get(row.beneficiaryId) : undefined;
+                const source = row.sourceUserId ? usersById.get(row.sourceUserId) : undefined;
+                return (
                 <tr key={row.id || row.sourceEventId}>
                   <td>{statusLabel(row.type)}</td>
-                  <td className="mono-cell">
-                    {row.beneficiaryId?.slice(0, 12) || "—"}
-                  </td>
+                  <td><strong>{beneficiary?.username || "Sin usuario"}</strong><small>{beneficiary?.email || row.beneficiaryId?.slice(0, 12) || "—"}</small></td>
+                  <td><strong>{source?.username || "Sin usuario"}</strong><small>{source?.email || row.sourceUserId?.slice(0, 12) || "—"}</small></td>
                   <td>
                     <strong>{money(row.amount)}</strong>
                     <small>
@@ -1474,7 +1524,7 @@ function CommissionsSection({ data }: { data: AdminData }) {
                   </td>
                   <td>{dateLabel(row.createdAt)}</td>
                 </tr>
-              ))}
+              );})}
             </tbody>
           </DataTable>
         )}
