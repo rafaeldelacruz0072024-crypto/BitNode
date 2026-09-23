@@ -1346,6 +1346,11 @@ function registerAdminMonthlyRoiRoutes(app2) {
 }
 
 // server/adminNodeControl.ts
+function isMissingResetLogError(error) {
+  if (!error) return false;
+  const message2 = String(error.message || "").toLowerCase();
+  return error.code === "42P01" || error.code === "PGRST205" || message2.includes("node_task_reset_log") && (message2.includes("does not exist") || message2.includes("schema cache") || message2.includes("could not find"));
+}
 function classifyNodeTaskCycles(contracts, cycleRows, nowMs = Date.now()) {
   const cycles = new Map(cycleRows.map((row) => [row.user_id, row]));
   const pendingReset = contracts.filter((contract) => {
@@ -1377,7 +1382,8 @@ function registerAdminNodeControlRoutes(app2) {
       admin4.client.from("profiles").select("id,username"),
       admin4.client.from("plans").select("id,name")
     ]);
-    const error = contractsResult.error || cyclesResult.error || resetsResult.error || profilesResult.error || plansResult.error;
+    const resetHistoryUnavailable = isMissingResetLogError(resetsResult.error);
+    const error = contractsResult.error || cyclesResult.error || (!resetHistoryUnavailable ? resetsResult.error : null) || profilesResult.error || plansResult.error;
     if (error) return res.status(500).json({ error: "No se pudo cargar el control de nodos.", details: error.message });
     const contracts = contractsResult.data || [];
     const classified = classifyNodeTaskCycles(contracts, cyclesResult.data || []);
@@ -1398,7 +1404,7 @@ function registerAdminNodeControlRoutes(app2) {
     const pendingReset = classified.pendingReset.map(format);
     const complying = classified.complying.map(format);
     const completed = classified.completed.map(format);
-    const resetRows = (resetsResult.data || []).map((row) => ({
+    const resetRows = (resetHistoryUnavailable ? [] : resetsResult.data || []).map((row) => ({
       ...row,
       username: usernames.get(row.user_id) || row.user_id.slice(0, 8),
       plan_name: plans.get(contracts.find((contract) => contract.id === row.contract_id)?.plan_id || "") || "Nodo"
@@ -1409,6 +1415,7 @@ function registerAdminNodeControlRoutes(app2) {
       complying,
       completed,
       period: { days: 7, started_at: weekStartedAt, ended_at: (/* @__PURE__ */ new Date()).toISOString() },
+      historyAvailable: !resetHistoryUnavailable,
       totals: {
         pendingReset: pendingReset.length,
         resetLastWeek: resetRows.length,

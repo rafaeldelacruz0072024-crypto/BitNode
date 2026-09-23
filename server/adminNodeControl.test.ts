@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyNodeTaskCycles } from "./adminNodeControl";
+import { classifyNodeTaskCycles, isMissingResetLogError } from "./adminNodeControl";
 
 const contract = (id: string, user_id: string, status = "active") => ({
   id, user_id, status, plan_id: "plan-1", amount: 100,
@@ -41,5 +41,17 @@ describe("classifyNodeTaskCycles", () => {
       now,
     );
     expect(result.pendingReset).toHaveLength(0);
+  });
+});
+
+describe("isMissingResetLogError", () => {
+  it("recognizes missing-table and schema-cache responses", () => {
+    expect(isMissingResetLogError({ code: "42P01", message: "relation does not exist" })).toBe(true);
+    expect(isMissingResetLogError({ code: "PGRST205", message: "Could not find public.node_task_reset_log in the schema cache" })).toBe(true);
+  });
+
+  it("does not hide unrelated database errors", () => {
+    expect(isMissingResetLogError({ code: "42501", message: "permission denied" })).toBe(false);
+    expect(isMissingResetLogError(null)).toBe(false);
   });
 });

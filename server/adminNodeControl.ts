@@ -5,6 +5,20 @@ type ContractRow = { id: string; user_id: string; plan_id: string; amount: numbe
 type CycleRow = { user_id: string; cycle_day: number; completed_tasks: string[] | null; window_started_at: string | null; deadline_at: string | null; last_completed_at: string | null };
 type ResetRow = { id: string; user_id: string; contract_id: string; reason: string; reset_at: string; cycle_day_before: number; completed_tasks_before: string[] | null };
 
+type SupabaseQueryError = { code?: string; message?: string } | null;
+
+export function isMissingResetLogError(error: SupabaseQueryError) {
+  if (!error) return false;
+  const message = String(error.message || "").toLowerCase();
+  return error.code === "42P01"
+    || error.code === "PGRST205"
+    || (message.includes("node_task_reset_log") && (
+      message.includes("does not exist")
+      || message.includes("schema cache")
+      || message.includes("could not find")
+    ));
+}
+
 export function classifyNodeTaskCycles(contracts: ContractRow[], cycleRows: CycleRow[], nowMs = Date.now()) {
   const cycles = new Map(cycleRows.map(row => [row.user_id, row]));
   const pendingReset = contracts.filter(contract => {
@@ -43,7 +57,10 @@ export function registerAdminNodeControlRoutes(app: Express) {
       admin.client.from("profiles").select("id,username"),
       admin.client.from("plans").select("id,name"),
     ]);
-    const error = contractsResult.error || cyclesResult.error || resetsResult.error || profilesResult.error || plansResult.error;
+    const resetHistoryUnavailable = isMissingResetLogError(resetsResult.error);
+    const error = contractsResult.error || cyclesResult.error
+      || (!resetHistoryUnavailable ? resetsResult.error : null)
+      || profilesResult.error || plansResult.error;
     if (error) return res.status(500).json({ error: "No se pudo cargar el control de nodos.", details: error.message });
 
     const contracts = (contractsResult.data as ContractRow[] || []);
@@ -65,7 +82,7 @@ export function registerAdminNodeControlRoutes(app: Express) {
     const pendingReset = classified.pendingReset.map(format);
     const complying = classified.complying.map(format);
     const completed = classified.completed.map(format);
-    const resetRows = (resetsResult.data as ResetRow[] || []).map(row => ({
+    const resetRows = (resetHistoryUnavailable ? [] : resetsResult.data as ResetRow[] || []).map(row => ({
       ...row,
       username: usernames.get(row.user_id) || row.user_id.slice(0, 8),
       plan_name: plans.get(contracts.find(contract => contract.id === row.contract_id)?.plan_id || "") || "Nodo",
@@ -76,6 +93,7 @@ export function registerAdminNodeControlRoutes(app: Express) {
       complying,
       completed,
       period: { days: 7, started_at: weekStartedAt, ended_at: new Date().toISOString() },
+      historyAvailable: !resetHistoryUnavailable,
       totals: {
         pendingReset: pendingReset.length,
         resetLastWeek: resetRows.length,

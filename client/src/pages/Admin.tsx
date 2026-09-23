@@ -116,6 +116,7 @@ type NodeControlData = {
   complying: NodeControlRow[];
   completed: NodeControlRow[];
   period: { days: number; started_at: string; ended_at: string };
+  historyAvailable: boolean;
   totals: { pendingReset: number; resetLastWeek: number; complying: number; completed: number };
 };
 
@@ -781,6 +782,7 @@ function NodeControlSection() {
         <div><p className="admin-kicker">ÚLTIMOS 7 DÍAS</p><h2>Reinicios por tareas diarias incumplidas</h2><p className="config-note">Vista semanal del historial real y de los ciclos vencidos que esperan reinicio.</p></div>
         <button className="admin-refresh" type="button" onClick={() => void load()}>Actualizar</button>
       </div>
+      {!data.historyAvailable && <p className="admin-warning" role="status">El historial semanal todavía no está habilitado en Supabase. Los ciclos pendientes, en cumplimiento y completados sí se muestran con datos actuales.</p>}
     </article>
     <div className="node-control-metrics">
       <article className="node-control-metric-alert"><span>PENDIENTES DE REINICIO</span><strong>{data.totals.pendingReset}</strong></article>
