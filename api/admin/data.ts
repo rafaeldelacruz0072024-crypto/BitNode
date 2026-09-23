@@ -66,6 +66,7 @@ type Volume = {
   updated_at?: string | null;
 };
 type CorporateAccount = { user_id: string };
+type WithdrawalRestriction = { user_id: string; reason?: string | null; blocked_at?: string | null };
 
 type Dataset<T> = { rows: T[]; count: number };
 
@@ -137,12 +138,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if ("forbidden" in admin) return respond(res, 403, { error: "El usuario no tiene rol administrativo.", status: "forbidden" });
 
     const { baseUrl, serviceHeaders, user, profile } = admin;
-    const [profiles, transactions, commissions, volumes, corporateAccounts, authResponse] = await Promise.all([
+    const [profiles, transactions, commissions, volumes, corporateAccounts, withdrawalRestrictions, authResponse] = await Promise.all([
       fetchDataset<Profile>(`${baseUrl}/rest/v1/profiles?select=id,username,display_name,sponsor_id,role,created_at,updated_at&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<Transaction>(`${baseUrl}/rest/v1/transactions?select=id,user_id,username,type,label,amount,status,network,wallet,fee,net_amount,created_at,provider_status&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<Commission>(`${baseUrl}/rest/v1/commission_ledger?select=id,beneficiary_id,source_user_id,source_event_id,commission_type,amount,rate,leg,status,created_at&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<Volume>(`${baseUrl}/rest/v1/network_volume?select=user_id,leg,volume,matched_volume,updated_at&order=updated_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<CorporateAccount>(`${baseUrl}/rest/v1/corporate_accounts?select=user_id&limit=${MAX_ROWS}`, serviceHeaders)
+        .catch(() => ({ rows: [], count: 0 })),
+      fetchDataset<WithdrawalRestriction>(`${baseUrl}/rest/v1/withdrawal_restrictions?select=user_id,reason,blocked_at&limit=${MAX_ROWS}`, serviceHeaders)
         .catch(() => ({ rows: [], count: 0 })),
       fetch(`${baseUrl}/auth/v1/admin/users?per_page=${MAX_ROWS}&page=1`, { headers: serviceHeaders }),
     ]);
@@ -151,6 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authById = new Map(authUsers.map((authUser) => [authUser.id, authUser]));
     const profileById = new Map(profiles.rows.map((row) => [row.id, row]));
     const corporateIds = new Set(corporateAccounts.rows.map(row => row.user_id));
+    const withdrawalRestrictionByUser = new Map(withdrawalRestrictions.rows.map(row => [row.user_id, row]));
     const credited = commissions.rows.filter((row) => row.status === "credited");
     const pending = commissions.rows.filter((row) => row.status === "pending");
     const direct = credited.filter((row) => row.commission_type === "direct").reduce((sum, row) => sum + numberValue(row.amount), 0);
@@ -165,6 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const users = profiles.rows.map((row) => {
       const authUser = authById.get(row.id);
+      const withdrawalRestriction = withdrawalRestrictionByUser.get(row.id);
       return {
         id: row.id,
         username: row.username ?? null,
@@ -172,6 +177,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: authUser?.email ?? null,
         role: row.role ?? "user",
         corporate: corporateIds.has(row.id),
+        withdrawalBlocked: Boolean(withdrawalRestriction),
+        withdrawalBlockReason: withdrawalRestriction?.reason ?? null,
+        withdrawalBlockedAt: withdrawalRestriction?.blocked_at ?? null,
         sponsorId: row.sponsor_id ?? null,
         createdAt: row.created_at ?? authUser?.created_at ?? null,
         lastSignInAt: authUser?.last_sign_in_at ?? null,

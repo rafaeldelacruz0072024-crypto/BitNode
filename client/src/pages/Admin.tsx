@@ -47,6 +47,9 @@ type AdminUser = {
   email: string | null;
   role: string;
   corporate: boolean;
+  withdrawalBlocked: boolean;
+  withdrawalBlockReason: string | null;
+  withdrawalBlockedAt: string | null;
   sponsorId: string | null;
   createdAt: string | null;
   lastSignInAt: string | null;
@@ -503,11 +506,14 @@ export function UsersSection({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [message, setMessage] = useState("");
+  const [withdrawalBusy, setWithdrawalBusy] = useState(false);
+  const [withdrawalReason, setWithdrawalReason] = useState("Bloqueado por administración");
+  const [withdrawalMessage, setWithdrawalMessage] = useState("");
   const filtered = useMemo(
     () =>
       users.filter(user =>
         matchesAdminSearch(
-          [user.username, user.displayName, user.email, user.role, user.status, user.corporate ? "corporativa" : ""],
+          [user.username, user.displayName, user.email, user.role, user.status, user.corporate ? "corporativa" : "", user.withdrawalBlocked ? "retiros bloqueados" : ""],
           query
         )
       ),
@@ -526,6 +532,8 @@ export function UsersSection({
     setNewPassword("");
     setConfirmPassword("");
     setPasswordMessage("");
+    setWithdrawalMessage("");
+    setWithdrawalReason(user.withdrawalBlockReason || "Bloqueado por administración");
     setEditor({
       username: user.username || "",
       displayName: user.displayName || "",
@@ -590,6 +598,27 @@ export function UsersSection({
     finally { setPasswordSaving(false); }
   }
 
+  async function toggleUserWithdrawals() {
+    if (!selected || selected.role === "admin") return;
+    setWithdrawalBusy(true);
+    setWithdrawalMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selected.id, withdrawalBlocked: !selected.withdrawalBlocked, reason: withdrawalReason }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo actualizar el bloqueo de retiros.");
+      setWithdrawalMessage(selected.withdrawalBlocked ? "Retiros habilitados para este usuario." : "Retiros bloqueados para este usuario.");
+      await onUpdated();
+    } catch (error) {
+      setWithdrawalMessage(error instanceof Error ? error.message : "No se pudo actualizar el bloqueo de retiros.");
+    } finally { setWithdrawalBusy(false); }
+  }
+
   return (
     <article className="admin-card admin-card-full">
       <div className="card-heading">
@@ -646,6 +675,7 @@ export function UsersSection({
                   <strong>{user.username || "Sin username"}</strong>
                   <small>{user.displayName || user.id.slice(0, 12)}</small>
                   {user.corporate && <span className="admin-corporate-badge">CUENTA CORPORATIVA</span>}
+                  {user.withdrawalBlocked && <span className="admin-withdrawal-blocked-badge">RETIROS BLOQUEADOS</span>}
                 </td>
                 <td>{user.email || "—"}</td>
                 <td>
@@ -731,6 +761,21 @@ export function UsersSection({
           </button>
           {message && <p className="config-note" role="status">{message}</p>}
         </form>
+      )}
+      {selected && selected.role !== "admin" && (
+        <section className="admin-user-manager admin-withdrawal-restriction" aria-label={`Control de retiros de ${selected.username || selected.email}`}>
+          <div className="card-heading">
+            <div><p className="admin-kicker">CONTROL DE RETIROS</p><h2>{selected.withdrawalBlocked ? "Retiros bloqueados" : "Retiros habilitados"}</h2></div>
+            <span className={`card-status ${selected.withdrawalBlocked ? "is-blocked" : "is-open"}`}>{selected.withdrawalBlocked ? "BLOQUEADO" : "HABILITADO"}</span>
+          </div>
+          <p className="config-note">Este control bloquea nuevas solicitudes normales y reclamaciones de capital. No modifica solicitudes ya creadas.</p>
+          <label className="admin-withdrawal-reason">Motivo<input value={withdrawalReason} maxLength={160} onChange={event => setWithdrawalReason(event.target.value)} disabled={selected.withdrawalBlocked} placeholder="Motivo que verá el usuario al intentar retirar" /></label>
+          {selected.withdrawalBlocked && <p className="config-note">Motivo actual: {selected.withdrawalBlockReason || "Bloqueado por administración"} · Desde: {dateLabel(selected.withdrawalBlockedAt)}</p>}
+          <button className={selected.withdrawalBlocked ? "admin-user-save" : "admin-block-withdrawals"} type="button" onClick={() => void toggleUserWithdrawals()} disabled={withdrawalBusy || (!selected.withdrawalBlocked && !withdrawalReason.trim())}>
+            {withdrawalBusy ? "Actualizando…" : selected.withdrawalBlocked ? "Desbloquear retiros" : "Bloquear retiros"}
+          </button>
+          {withdrawalMessage && <p className="config-note" role="status">{withdrawalMessage}</p>}
+        </section>
       )}
       {selected && selected.role !== "admin" && (
         <form className="admin-user-manager" onSubmit={changeUserPassword}>

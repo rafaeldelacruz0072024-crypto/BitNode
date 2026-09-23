@@ -26,8 +26,8 @@ function serverClient() {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
-  if (req.method !== "PATCH" && req.method !== "POST") {
-    res.setHeader("Allow", "PATCH, POST");
+  if (req.method !== "PATCH" && req.method !== "POST" && req.method !== "PUT") {
+    res.setHeader("Allow", "PATCH, POST, PUT");
     return res.status(405).json({ error: "Método no permitido." });
   }
 
@@ -51,6 +51,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = text(req.body?.userId, 36);
     if (!/^[0-9a-f-]{36}$/i.test(userId)) return res.status(400).json({ error: "Usuario inválido." });
+
+    if (req.method === "PUT") {
+      const blocked = req.body?.withdrawalBlocked === true;
+      const reason = text(req.body?.reason || "Bloqueado por administración", 160);
+      const { data: targetProfile, error: targetProfileError } = await client.from("profiles").select("role").eq("id", userId).maybeSingle();
+      if (targetProfileError || !targetProfile) return res.status(404).json({ error: "Usuario no encontrado." });
+      if (targetProfile.role === "admin") return res.status(403).json({ error: "No se pueden bloquear los retiros de una cuenta administrativa." });
+      if (blocked) {
+        const { error } = await client.from("withdrawal_restrictions").upsert({
+          user_id: userId, reason: reason || "Bloqueado por administración",
+          blocked_by: authData.user.id, blocked_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (error) return res.status(400).json({ error: error.message });
+      } else {
+        const { error } = await client.from("withdrawal_restrictions").delete().eq("user_id", userId);
+        if (error) return res.status(400).json({ error: error.message });
+      }
+      return res.status(200).json({ status: blocked ? "withdrawals_blocked" : "withdrawals_unblocked", userId, withdrawalBlocked: blocked });
+    }
 
     if (req.method === "POST") {
       const password = req.body?.password;
