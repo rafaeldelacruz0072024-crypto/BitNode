@@ -1346,23 +1346,44 @@ function registerAdminMonthlyRoiRoutes(app2) {
 }
 
 // server/adminNodeControl.ts
+function classifyNodeTaskCycles(contracts, cycleRows, nowMs = Date.now()) {
+  const cycles = new Map(cycleRows.map((row) => [row.user_id, row]));
+  const pendingReset = contracts.filter((contract) => {
+    if (contract.status !== "active") return false;
+    const cycle = cycles.get(contract.user_id);
+    return Boolean(
+      cycle?.window_started_at && cycle.deadline_at && new Date(cycle.deadline_at).getTime() <= nowMs && (cycle.completed_tasks?.length || 0) < 4
+    );
+  });
+  const complying = contracts.filter((contract) => {
+    if (contract.status !== "active") return false;
+    const cycle = cycles.get(contract.user_id);
+    return Boolean(
+      cycle?.window_started_at && cycle.deadline_at && new Date(cycle.deadline_at).getTime() > nowMs && (cycle.completed_tasks?.length || 0) > 0
+    );
+  });
+  const completed = contracts.filter((contract) => ["completed", "expired"].includes(contract.status));
+  return { cycles, pendingReset, complying, completed };
+}
 function registerAdminNodeControlRoutes(app2) {
   app2.get("/api/admin/node-control", async (req, res) => {
     const admin4 = await authenticatedAdmin(req);
     if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const weekStartedAt = new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).toISOString();
     const [contractsResult, cyclesResult, resetsResult, profilesResult, plansResult] = await Promise.all([
       admin4.client.from("contracts").select("id,user_id,plan_id,amount,status,starts_at,ends_at,created_at").order("created_at", { ascending: false }).limit(1e3),
       admin4.client.from("daily_task_cycles").select("user_id,cycle_day,completed_tasks,window_started_at,deadline_at,last_completed_at"),
-      admin4.client.from("node_task_reset_log").select("id,user_id,contract_id,reason,reset_at,cycle_day_before,completed_tasks_before").order("reset_at", { ascending: false }).limit(500),
+      admin4.client.from("node_task_reset_log").select("id,user_id,contract_id,reason,reset_at,cycle_day_before,completed_tasks_before").gte("reset_at", weekStartedAt).order("reset_at", { ascending: false }).limit(500),
       admin4.client.from("profiles").select("id,username"),
       admin4.client.from("plans").select("id,name")
     ]);
     const error = contractsResult.error || cyclesResult.error || resetsResult.error || profilesResult.error || plansResult.error;
     if (error) return res.status(500).json({ error: "No se pudo cargar el control de nodos.", details: error.message });
-    const cycles = new Map((cyclesResult.data || []).map((row) => [row.user_id, row]));
+    const contracts = contractsResult.data || [];
+    const classified = classifyNodeTaskCycles(contracts, cyclesResult.data || []);
+    const cycles = classified.cycles;
     const usernames = new Map((profilesResult.data || []).map((row) => [row.id, row.username || row.id.slice(0, 8)]));
     const plans = new Map((plansResult.data || []).map((row) => [row.id, row.name]));
-    const now = Date.now();
     const format = (contract) => {
       const cycle = cycles.get(contract.user_id);
       return {
@@ -1374,19 +1395,27 @@ function registerAdminNodeControlRoutes(app2) {
         deadline_at: cycle?.deadline_at || null
       };
     };
-    const contracts = contractsResult.data || [];
-    const complying = contracts.filter((contract) => {
-      if (contract.status !== "active") return false;
-      const cycle = cycles.get(contract.user_id);
-      return Boolean(cycle?.window_started_at && cycle.deadline_at && new Date(cycle.deadline_at).getTime() > now && (cycle.completed_tasks?.length || 0) > 0);
-    }).map(format);
-    const completed = contracts.filter((contract) => ["completed", "expired"].includes(contract.status)).map(format);
+    const pendingReset = classified.pendingReset.map(format);
+    const complying = classified.complying.map(format);
+    const completed = classified.completed.map(format);
     const resetRows = (resetsResult.data || []).map((row) => ({
       ...row,
       username: usernames.get(row.user_id) || row.user_id.slice(0, 8),
       plan_name: plans.get(contracts.find((contract) => contract.id === row.contract_id)?.plan_id || "") || "Nodo"
     }));
-    return res.json({ reset: resetRows, complying, completed, totals: { reset: resetRows.length, complying: complying.length, completed: completed.length } });
+    return res.json({
+      pendingReset,
+      resetLastWeek: resetRows,
+      complying,
+      completed,
+      period: { days: 7, started_at: weekStartedAt, ended_at: (/* @__PURE__ */ new Date()).toISOString() },
+      totals: {
+        pendingReset: pendingReset.length,
+        resetLastWeek: resetRows.length,
+        complying: complying.length,
+        completed: completed.length
+      }
+    });
   });
 }
 

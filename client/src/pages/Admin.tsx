@@ -107,6 +107,16 @@ type NodeControlRow = {
   deadline_at?: string | null;
   reset_at?: string;
   ends_at?: string | null;
+  reason?: string;
+};
+
+type NodeControlData = {
+  pendingReset: NodeControlRow[];
+  resetLastWeek: NodeControlRow[];
+  complying: NodeControlRow[];
+  completed: NodeControlRow[];
+  period: { days: number; started_at: string; ended_at: string };
+  totals: { pendingReset: number; resetLastWeek: number; complying: number; completed: number };
 };
 
 type AdminData = {
@@ -737,7 +747,7 @@ export function UsersSection({
 }
 
 function NodeControlSection() {
-  const [data, setData] = useState<{ reset: NodeControlRow[]; complying: NodeControlRow[]; completed: NodeControlRow[]; totals: { reset: number; complying: number; completed: number } } | null>(null);
+  const [data, setData] = useState<NodeControlData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -749,7 +759,7 @@ function NodeControlSection() {
       const response = await fetch("/api/admin/node-control", { headers: { Authorization: `Bearer ${session.access_token}` } });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "No se pudo cargar el control de nodos.");
-      setData(body);
+      setData(body as NodeControlData);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el control de nodos."); }
     finally { setLoading(false); }
   }
@@ -760,19 +770,27 @@ function NodeControlSection() {
   if (!data) return null;
 
   const groups: Array<[string, string, NodeControlRow[], string]> = [
-    ["Nodos reiniciados", "No cumplieron la jornada dentro de 24 horas", data.reset, "reset"],
+    ["Pendientes de reinicio", "El plazo de 24 horas venció con menos de 4 tareas. Se reiniciarán al procesarse el ciclo.", data.pendingReset, "pending"],
+    ["Reiniciados en los últimos 7 días", `Reinicios registrados desde ${dateLabel(data.period.started_at)} por incumplimiento de tareas diarias.`, data.resetLastWeek, "reset"],
     ["Cumpliendo tareas", "Jornada activa con tareas completadas y plazo vigente", data.complying, "active"],
     ["Nodos completados", "Ciclos finalizados conservados en el historial", data.completed, "completed"],
   ];
   return <div className="node-control-grid">
+    <article className="admin-card admin-card-full node-reset-weekly-summary">
+      <div className="card-heading">
+        <div><p className="admin-kicker">ÚLTIMOS 7 DÍAS</p><h2>Reinicios por tareas diarias incumplidas</h2><p className="config-note">Vista semanal del historial real y de los ciclos vencidos que esperan reinicio.</p></div>
+        <button className="admin-refresh" type="button" onClick={() => void load()}>Actualizar</button>
+      </div>
+    </article>
     <div className="node-control-metrics">
-      <article><span>REINICIADOS</span><strong>{data.totals.reset}</strong></article>
+      <article className="node-control-metric-alert"><span>PENDIENTES DE REINICIO</span><strong>{data.totals.pendingReset}</strong></article>
+      <article className="node-control-metric-reset"><span>REINICIADOS · 7 DÍAS</span><strong>{data.totals.resetLastWeek}</strong></article>
       <article><span>EN CUMPLIMIENTO</span><strong>{data.totals.complying}</strong></article>
       <article><span>COMPLETADOS</span><strong>{data.totals.completed}</strong></article>
     </div>
     {groups.map(([title, copy, rows, kind]) => <article className="admin-card admin-card-full" key={title}>
       <div className="card-heading"><div><p className="admin-kicker">TASK CONTROL / {kind.toUpperCase()}</p><h2>{title}</h2><p className="config-note">{copy}</p></div><span className="card-status">{rows.length} registros</span></div>
-      {!rows.length ? <EmptyState title="Sin registros" detail="No hay nodos en este estado." /> : <DataTable label={title}><thead><tr><th>Usuario</th><th>Nodo</th><th>Capital</th><th>Jornada</th><th>Tareas</th><th>Fecha límite / evento</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || `${row.contract_id}-${index}`}><td><strong>{row.username}</strong></td><td>{row.plan_name}<small>{row.contract_id || row.id}</small></td><td>{row.amount == null ? "—" : money(row.amount)}</td><td>{row.cycle_day ?? row.cycle_day_before ?? 0}</td><td>{row.completed_tasks ?? row.completed_tasks_before?.length ?? 0} / 4</td><td>{dateLabel(row.reset_at || row.deadline_at || row.ends_at)}</td></tr>)}</tbody></DataTable>}
+      {!rows.length ? <EmptyState title="Sin registros" detail="No hay nodos en este estado." /> : <DataTable label={title}><thead><tr><th>Usuario</th><th>Nodo</th><th>Capital</th><th>Jornada</th><th>Tareas</th><th>Fecha límite / evento</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || `${row.contract_id}-${index}`}><td><strong>{row.username}</strong>{row.reason === "missed_24h_window" && <small>Incumplió ventana de 24 h</small>}</td><td>{row.plan_name}<small>{row.contract_id || row.id}</small></td><td>{row.amount == null ? "—" : money(row.amount)}</td><td>{row.cycle_day ?? row.cycle_day_before ?? 0}</td><td>{row.completed_tasks ?? row.completed_tasks_before?.length ?? 0} / 4</td><td>{dateLabel(row.reset_at || row.deadline_at || row.ends_at)}</td></tr>)}</tbody></DataTable>}
     </article>)}
   </div>;
 }
