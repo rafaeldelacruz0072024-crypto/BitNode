@@ -154,6 +154,9 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
     wallet: row.wallet ? String(row.wallet) : undefined,
     fee: row.fee ? Number(row.fee) : undefined,
     netAmount: row.net_amount ? Number(row.net_amount) : undefined,
+    directCommissionSpent: Number(row.direct_commission_spent) || 0,
+    weeklyBonusSpent: Number(row.weekly_bonus_spent) || 0,
+    nodeRoiSpent: Number(row.node_roi_spent) || 0,
   })) as Movement[];
   const choices = Array.isArray(payload.capitalChoices) ? payload.capitalChoices as Array<Record<string, unknown>> : [];
   for (const choice of choices) if (choice.action === "claim") movements.push({

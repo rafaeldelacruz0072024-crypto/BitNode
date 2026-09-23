@@ -1220,7 +1220,7 @@ function registerAdminWithdrawalRoutes(app2) {
     try {
       const admin4 = await authenticatedAdmin(req);
       if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
+      const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,direct_commission_spent,weekly_bonus_spent,node_roi_spent,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
       if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
       const { data: capitalClaims, error: claimsError } = await admin4.client.from("finite_node_capital_choices").select("contract_id,user_id,amount,fee,net_amount,wallet,status,requested_at,payable_at").eq("action", "claim").order("requested_at", { ascending: false }).limit(200);
       if (claimsError && claimsError.code !== "PGRST205") return res.status(500).json({ error: "No se pudo cargar la cola de retiros de capital." });

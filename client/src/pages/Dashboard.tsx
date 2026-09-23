@@ -54,6 +54,7 @@ import { requestWithdrawal } from "@/lib/withdrawalClient";
 import "@/task-interactions.css";
 import "@/dashboard-visual.css";
 import { WITHDRAW_FEE_RATE, withdrawalFee } from "@shared/withdrawalFee";
+import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import { DEPOSIT_CASHBACK_END, depositCashback, isDepositCashbackActive } from "@shared/depositCashback";
 import {
   emptyPrivateUserDetails,
@@ -2405,12 +2406,26 @@ function WithdrawalForm({
         {historyError && <p role="alert">{historyError}</p>}
         {historyLoading && !withdrawals.length && <p>Cargando retiros…</p>}
         {!historyLoading && !withdrawals.length && <p>Aún no has solicitado retiros.</p>}
-        {[...withdrawals].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map(item => (
-          <article className="withdrawal-history-row" key={item.id}>
-            <div><strong>{money(Math.abs(item.amount))} USDT</strong><small>{new Date(item.date).toLocaleString("es-DO")} · {item.network === "BNB Chain" ? "USDT BEP20" : item.network || "USDT BEP20"}</small></div>
+        {[...withdrawals].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map(item => {
+          const origin = item.id.startsWith("CAPITAL-CLAIM-")
+            ? null
+            : withdrawalSource({
+              directCommissionSpent: item.directCommissionSpent,
+              weeklyBonusSpent: item.weeklyBonusSpent,
+              nodeRoiSpent: item.nodeRoiSpent,
+            });
+          return <article className="withdrawal-history-row" key={item.id}>
+            <div>
+              <strong>{money(Math.abs(item.amount))} USDT</strong>
+              <small>{new Date(item.date).toLocaleString("es-DO")} · {item.network === "BNB Chain" ? "USDT BEP20" : item.network || "USDT BEP20"}</small>
+              <span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>
+                {origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo"}
+                {origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}
+              </span>
+            </div>
             <span className={`withdrawal-history-status status-${item.status}`}>{({ pending: "Pendiente", approved: "Aprobado", completed: "Completado", rejected: "Rechazado", failed: "Fallido", reversed: "Reversado" } as Record<string, string>)[item.status] || item.status}</span>
-          </article>
-        ))}
+          </article>;
+        })}
       </section>
       {confirming && (
         <div className="confirm-backdrop">

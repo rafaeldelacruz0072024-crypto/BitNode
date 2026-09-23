@@ -4,6 +4,7 @@ import { hasRows, matchesAdminSearch, userStatusLabel } from "./adminUtils";
 import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
 import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
+import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import "@/admin-operations.css";
 import {
   ArrowLeft,
@@ -957,6 +958,9 @@ type AdminWithdrawal = {
   provider_status: string | null;
   created_at: string | null;
   payable_at?: string | null;
+  direct_commission_spent?: number | string | null;
+  weekly_bonus_spent?: number | string | null;
+  node_roi_spent?: number | string | null;
 };
 
 function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> }) {
@@ -1055,8 +1059,15 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
             const amount = Math.abs(Number(row.amount) || 0);
             const net = Number(row.net_amount) || amount - (Number(row.fee) || 0);
             const busy = actingId === row.id;
+            const origin = row.id.startsWith("CAPITAL-CLAIM-")
+              ? null
+              : withdrawalSource({
+                directCommissionSpent: row.direct_commission_spent,
+                weeklyBonusSpent: row.weekly_bonus_spent,
+                nodeRoiSpent: row.node_roi_spent,
+              });
             return <tr key={row.id}>
-              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small></td>
+              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small><span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>{origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo"}{origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}</span></td>
               <td><strong>{money(net)}</strong><small>Solicitado {money(amount)} · Fee {money(Number(row.fee) || 0)}</small></td>
               <td>
                 <span>{row.network || "—"}</span>

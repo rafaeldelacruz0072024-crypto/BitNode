@@ -27,6 +27,9 @@ export type Movement = {
   wallet?: string;
   fee?: number;
   netAmount?: number;
+  directCommissionSpent?: number;
+  weeklyBonusSpent?: number;
+  nodeRoiSpent?: number;
 };
 export type LocalUserState = {
   username: string;

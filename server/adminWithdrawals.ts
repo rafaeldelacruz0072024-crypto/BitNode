@@ -99,7 +99,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       const admin = await authenticatedAdmin(req);
       if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
       const { data, error } = await admin.client.from("transactions")
-        .select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,created_at")
+        .select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,direct_commission_spent,weekly_bonus_spent,node_roi_spent,created_at")
         .eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
       if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
       const { data: capitalClaims, error: claimsError } = await admin.client.from("finite_node_capital_choices")

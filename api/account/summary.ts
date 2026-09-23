@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Usuario inválido." });
 
     const ownedUserFilter = encodeURIComponent(user.id);
-    const query = `select=id,type,label,amount,status,network,wallet,fee,net_amount,created_at&user_id=eq.${ownedUserFilter}&order=created_at.desc&limit=200`;
+    const query = `select=id,type,label,amount,status,network,wallet,fee,net_amount,direct_commission_spent,weekly_bonus_spent,node_roi_spent,created_at&user_id=eq.${ownedUserFilter}&order=created_at.desc&limit=200`;
     const contractsQuery = `select=id,plan_id,amount,status,starts_at,ends_at,created_at,plans(name,rate_min,rate_max,duration_days)&user_id=eq.${ownedUserFilter}&order=created_at.desc&limit=200`;
     const ledgerResponse = await fetch(
       `${baseUrl}/rest/v1/transactions?${query}`,
