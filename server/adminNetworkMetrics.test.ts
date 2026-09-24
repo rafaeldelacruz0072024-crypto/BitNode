@@ -9,10 +9,10 @@ describe("admin commission network metrics", () => {
       { id: "direct-b", sponsor_id: "root" },
       { id: "indirect", sponsor_id: "direct-a" },
     ], [
-      { user_id: "root", amount: 50, status: "completed" },
-      { user_id: "direct-a", amount: 100, status: "completed" },
-      { user_id: "direct-b", amount: "200", status: "pending" },
-      { user_id: "indirect", amount: 300, status: "completed" },
+      { user_id: "root", amount: -50, status: "completed" },
+      { user_id: "direct-a", amount: -100, status: "completed" },
+      { user_id: "direct-b", amount: "-200", status: "pending" },
+      { user_id: "indirect", amount: -300, status: "completed" },
       { user_id: "indirect", amount: 999, status: "failed" },
     ]);
 

@@ -31,7 +31,7 @@ export function calculateAdminNetworkMetrics(profiles: NetworkProfile[], contrac
 
   for (const contract of contracts) {
     if (!contract.user_id || contract.status === "failed") continue;
-    volumeByUser.set(contract.user_id, (volumeByUser.get(contract.user_id) ?? 0) + amount(contract.amount));
+    volumeByUser.set(contract.user_id, (volumeByUser.get(contract.user_id) ?? 0) + Math.abs(amount(contract.amount)));
   }
 
   return profiles.map(profile => {
