@@ -1,4 +1,4 @@
-import { calculateAdminNetworkMetrics } from "../../server/adminNetworkMetrics";
+import { calculateAdminNetworkMetrics } from "../../server/adminNetworkMetrics.js";
 
 type VercelRequest = {
   method?: string;
