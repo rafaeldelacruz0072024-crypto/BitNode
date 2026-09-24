@@ -1414,6 +1414,12 @@ function DailyReconciliationSection() {
     {error && <div className="admin-data-error" role="alert">{error}</div>}
     {loading ? <LoadingState /> : report && <>
       <div className="admin-grid">
+        <article className="admin-metric admin-income-total">
+          <div className="metric-icon"><CircleDollarSign size={24} /></div>
+          <p>Total de ingresos</p>
+          <strong>{money(report.incoming.crypto + report.incoming.manual + report.incoming.other)}</strong>
+          <small>{report.date} · Cripto + créditos manuales + otros depósitos. Excluye capital devuelto, cashback y comisiones.</small>
+        </article>
         <article className="admin-metric"><p>Entró por cripto confirmado</p><strong>{money(report.incoming.crypto)}</strong><small>{report.incoming.cryptoCount} depósitos</small></article>
         <article className="admin-metric"><p>Créditos manuales</p><strong>{money(report.incoming.manual)}</strong><small>{report.incoming.manualCount} movimientos</small></article>
         <article className="admin-metric"><p>Capital devuelto de nodos</p><strong>{money(report.incoming.capitalReturned)}</strong><small>{report.incoming.capitalCount} créditos internos · {report.cancelledNodes} nodos cancelados</small></article>
