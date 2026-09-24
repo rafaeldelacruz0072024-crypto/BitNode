@@ -1,4 +1,5 @@
 import { calculateAdminNetworkMetrics } from "../../server/adminNetworkMetrics.js";
+import { classifyUsers } from "../../server/userClassification.js";
 
 type VercelRequest = {
   method?: string;
@@ -45,6 +46,7 @@ type Transaction = {
   net_amount?: number | string | null;
   created_at?: string | null;
   provider_status?: string | null;
+  provider_payment_id?: string | null;
 };
 
 type Commission = {
@@ -67,7 +69,7 @@ type Volume = {
   matched_volume?: number | string | null;
   updated_at?: string | null;
 };
-type CorporateAccount = { user_id: string };
+type CorporateAccount = { user_id: string; source_deposit_id?: string | null };
 type WithdrawalRestriction = { user_id: string; reason?: string | null; blocked_at?: string | null };
 
 type Dataset<T> = { rows: T[]; count: number };
@@ -155,11 +157,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { baseUrl, serviceHeaders, user, profile } = admin;
     const [profiles, transactions, commissions, volumes, corporateAccounts, withdrawalRestrictions, authResponse] = await Promise.all([
       fetchDataset<Profile>(`${baseUrl}/rest/v1/profiles?select=id,username,display_name,sponsor_id,role,created_at,updated_at&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
-      fetchDataset<Transaction>(`${baseUrl}/rest/v1/transactions?select=id,user_id,username,type,label,amount,status,network,wallet,fee,net_amount,created_at,provider_status&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
+      fetchDataset<Transaction>(`${baseUrl}/rest/v1/transactions?select=id,user_id,username,type,label,amount,status,network,wallet,fee,net_amount,created_at,provider_status,provider_payment_id&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<Commission>(`${baseUrl}/rest/v1/commission_ledger?select=id,beneficiary_id,source_user_id,source_event_id,commission_type,amount,rate,leg,status,created_at&order=created_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<Volume>(`${baseUrl}/rest/v1/network_volume?select=user_id,leg,volume,matched_volume,updated_at&order=updated_at.desc&limit=${MAX_ROWS}`, serviceHeaders),
-      fetchDataset<CorporateAccount>(`${baseUrl}/rest/v1/corporate_accounts?select=user_id&limit=${MAX_ROWS}`, serviceHeaders)
-        .catch(() => ({ rows: [], count: 0 })),
+      fetchDataset<CorporateAccount>(`${baseUrl}/rest/v1/corporate_accounts?select=user_id,source_deposit_id&limit=${MAX_ROWS}`, serviceHeaders),
       fetchDataset<WithdrawalRestriction>(`${baseUrl}/rest/v1/withdrawal_restrictions?select=user_id,reason,blocked_at&limit=${MAX_ROWS}`, serviceHeaders)
         .catch(() => ({ rows: [], count: 0 })),
       fetch(`${baseUrl}/auth/v1/admin/users?per_page=${MAX_ROWS}&page=1`, { headers: serviceHeaders }),
@@ -169,6 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authById = new Map(authUsers.map((authUser) => [authUser.id, authUser]));
     const profileById = new Map(profiles.rows.map((row) => [row.id, row]));
     const corporateIds = new Set(corporateAccounts.rows.map(row => row.user_id));
+    const classifications = classifyUsers(transactions.rows, corporateAccounts.rows);
     const withdrawalRestrictionByUser = new Map(withdrawalRestrictions.rows.map(row => [row.user_id, row]));
     const credited = commissions.rows.filter((row) => row.status === "credited");
     const pending = commissions.rows.filter((row) => row.status === "pending");
@@ -192,6 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: authUser?.email ?? null,
         role: row.role ?? "user",
         corporate: corporateIds.has(row.id),
+        classifications: [...(classifications.get(row.id) ?? [])],
         withdrawalBlocked: Boolean(withdrawalRestriction),
         withdrawalBlockReason: withdrawalRestriction?.reason ?? null,
         withdrawalBlockedAt: withdrawalRestriction?.blocked_at ?? null,

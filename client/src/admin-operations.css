@@ -136,3 +136,4 @@
 .admin-shell .admin-income-total p{color:#e6ffc3;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
 .admin-shell .admin-income-total>strong{color:#b7ff3c;font-size:clamp(28px,4vw,42px);font-weight:700;margin:10px 0}
 .admin-shell .admin-income-total small{color:#d0dfc6;font-size:12px;line-height:1.6}
+.admin-user-labels{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.admin-user-label{display:inline-block;padding:5px 8px;border:1px solid currentColor;border-radius:5px;font:700 10px 'IBM Plex Mono';white-space:nowrap}.admin-user-label--crypto{color:#b7ff3c;background:#b7ff3c12}.admin-user-label--manual{color:#70d5ff;background:#70d5ff12}.admin-user-label--corporate{color:#d9a5ff;background:#d9a5ff12}.admin-user-label--unknown{color:#aeb8d7;background:#aeb8d712}

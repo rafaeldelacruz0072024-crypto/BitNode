@@ -47,6 +47,7 @@ type AdminUser = {
   email: string | null;
   role: string;
   corporate: boolean;
+  classifications?: string[];
   withdrawalBlocked: boolean;
   withdrawalBlockReason: string | null;
   withdrawalBlockedAt: string | null;
@@ -524,7 +525,7 @@ export function UsersSection({
     () =>
       users.filter(user =>
         matchesAdminSearch(
-          [user.username, user.displayName, user.email, user.role, user.status, user.corporate ? "corporativa" : "", user.withdrawalBlocked ? "retiros bloqueados" : ""],
+          [user.username, user.displayName, user.email, user.role, user.status, ...(user.classifications ?? []), user.corporate ? "corporativa" : "", user.withdrawalBlocked ? "retiros bloqueados" : ""],
           query
         )
       ),
@@ -685,7 +686,7 @@ export function UsersSection({
                 <td>
                   <strong>{user.username || "Sin username"}</strong>
                   <small>{user.displayName || user.id.slice(0, 12)}</small>
-                  {user.corporate && <span className="admin-corporate-badge">CUENTA CORPORATIVA</span>}
+                  <div className="admin-user-labels">{(user.classifications?.length ? user.classifications : ["Sin clasificar"]).map(label => <span key={label} className={`admin-user-label admin-user-label--${label === "CRYPTO" ? "crypto" : label === "REALES MANUAL" ? "manual" : label === "ADM (CORPORATIVA)" ? "corporate" : "unknown"}`}>{label}</span>)}</div>
                   {user.withdrawalBlocked && <span className="admin-withdrawal-blocked-badge">RETIROS BLOQUEADOS</span>}
                 </td>
                 <td>{user.email || "—"}</td>
