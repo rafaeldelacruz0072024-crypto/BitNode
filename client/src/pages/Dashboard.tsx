@@ -182,7 +182,7 @@ function DailyTasksPanel({
         );
         if (progress.cycle_reset) {
           setMessage(
-            "El plazo de 24 horas venció y se reinició el progreso del ciclo. El ROI ya acreditado permanece en tu historial y balance; el capital sigue bloqueado hasta completar el plazo."
+            "El plazo de 24 horas venció y se reinició el progreso del ciclo. Consulta en el historial los descuentos por reinicio y tu saldo actualizado; el capital del nodo sigue bloqueado hasta completar el plazo."
           );
         }
       })

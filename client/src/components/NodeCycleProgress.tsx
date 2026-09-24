@@ -58,6 +58,6 @@ export function NodeCycleProgress({ id, name, duration }: { id: string; name: st
       <div><span>GANANCIAS DEL CICLO</span><strong>{earnings.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 })} <small>USDT</small></strong></div></div>
     <div className="node-cycle-track" role="progressbar" aria-label={`Días procesados de ${name}`} aria-valuemin={0} aria-valuemax={target || Math.max(1, days)} aria-valuenow={target ? Math.min(days, target) : days} aria-valuetext={target ? `${days} de ${target} días procesados` : `${days} días procesados, sin plazo fijo`}><i style={{ width: `${percent}%` }} /></div>
     <p>{target ? `${Math.max(0, target - days)} días del nodo pendientes · ROI acreditado al balance y retirable en la ventana del miércoles` : "Sin plazo fijo · ganancias del ciclo ya acreditadas"}</p>
-    <p>Si incumples las tareas en 24 horas, estos indicadores vuelven a cero. Tu capital y los pagos liberados se conservan.</p>
+    <p>Si incumples las tareas en 24 horas, estos indicadores vuelven a cero. El capital del nodo se conserva. Consulta los ajustes de rendimiento por reinicio en tu historial.</p>
   </div>;
 }
