@@ -43,10 +43,14 @@ $patch_validator$;
 create or replace function bitnode_private.guard_user_withdrawal_block()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  if tg_table_name = 'transactions' and new.type = 'withdraw' then
-    perform bitnode_private.assert_withdrawals_allowed(new.user_id);
-  elsif tg_table_name = 'finite_node_capital_choices' and new.action = 'claim' then
-    perform bitnode_private.assert_withdrawals_allowed(new.user_id);
+  if tg_table_name = 'transactions' then
+    if new.type = 'withdraw' then
+      perform bitnode_private.assert_withdrawals_allowed(new.user_id);
+    end if;
+  elsif tg_table_name = 'finite_node_capital_choices' then
+    if new.action = 'claim' then
+      perform bitnode_private.assert_withdrawals_allowed(new.user_id);
+    end if;
   end if;
   return new;
 end;
