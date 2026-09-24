@@ -1,3 +1,5 @@
+import { calculateAdminNetworkMetrics } from "../../server/adminNetworkMetrics";
+
 type VercelRequest = {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
@@ -98,12 +100,25 @@ function credentials() {
 }
 
 async function fetchDataset<T>(url: string, headers: Record<string, string>): Promise<Dataset<T>> {
-  const response = await fetch(url, { headers: { ...headers, Prefer: "count=exact" } });
-  if (!response.ok) throw new Error(`La consulta de datos falló con ${response.status}.`);
-  const rows = await response.json() as T[];
-  const contentRange = response.headers.get("content-range") || "";
-  const countMatch = contentRange.match(/\/([0-9]+)$/);
-  return { rows: Array.isArray(rows) ? rows : [], count: countMatch ? Number(countMatch[1]) : rows.length };
+  const endpoint = new URL(url);
+  endpoint.searchParams.delete("limit");
+  endpoint.searchParams.delete("offset");
+  const rows: T[] = [];
+  let count = 0;
+  for (let offset = 0; ; offset += MAX_ROWS) {
+    endpoint.searchParams.set("limit", String(MAX_ROWS));
+    endpoint.searchParams.set("offset", String(offset));
+    const response = await fetch(endpoint, { headers: { ...headers, Prefer: "count=exact" } });
+    if (!response.ok) throw new Error(`La consulta de datos falló con ${response.status}.`);
+    const page = await response.json() as T[];
+    const contentRange = response.headers.get("content-range") || "";
+    const countMatch = contentRange.match(/\/([0-9]+)$/);
+    if (countMatch) count = Number(countMatch[1]);
+    if (!Array.isArray(page)) break;
+    rows.push(...page);
+    if (page.length < MAX_ROWS || (count > 0 && rows.length >= count)) break;
+  }
+  return { rows, count: count || rows.length };
 }
 
 async function authenticateAdmin(accessToken: string) {
@@ -228,6 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: row.status ?? "unknown",
       createdAt: row.created_at ?? null,
     }));
+    const networkMetrics = calculateAdminNetworkMetrics(profiles.rows, contracts);
 
     return respond(res, 200, {
       status: "ready",
@@ -255,6 +271,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         total: round(direct + binary),
         pending: round(pendingCommissions),
         entries: normalizedCommissions,
+        networkMetrics,
       },
       binaryVolume: {
         left: round(left),

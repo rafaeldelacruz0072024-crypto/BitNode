@@ -98,6 +98,16 @@ type AdminCommission = {
   createdAt: string | null;
 };
 
+type AdminNetworkMetric = {
+  userId: string;
+  directCount: number;
+  indirectCount: number;
+  networkCount: number;
+  personalVolume: number;
+  networkVolume: number;
+  organizationVolume: number;
+};
+
 type NodeControlRow = {
   id?: string;
   contract_id?: string;
@@ -149,6 +159,7 @@ type AdminData = {
     total: number;
     pending: number;
     entries: AdminCommission[];
+    networkMetrics: AdminNetworkMetric[];
   };
   binaryVolume: {
     left: number;
@@ -1425,6 +1436,8 @@ function CommissionsSection({ data }: { data: AdminData }) {
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
   const usersById = useMemo(() => new Map(data.users.map(user => [user.id, user])), [data.users]);
+  const networkMetrics = data.commissions.networkMetrics ?? [];
+  const networkMetricsById = useMemo(() => new Map(networkMetrics.map(row => [row.userId, row])), [networkMetrics]);
   const filtered = useMemo(() => data.commissions.entries.filter(row => {
     const beneficiary = row.beneficiaryId ? usersById.get(row.beneficiaryId) : undefined;
     const source = row.sourceUserId ? usersById.get(row.sourceUserId) : undefined;
@@ -1439,6 +1452,14 @@ function CommissionsSection({ data }: { data: AdminData }) {
       && (!query.trim() || haystack.includes(query.trim().toLocaleLowerCase()));
   }), [data.commissions.entries, from, query, status, to, type, userId, usersById]);
   const filteredTotal = filtered.reduce((sum, row) => sum + row.amount, 0);
+  const visibleNetworkMetrics = useMemo(() => networkMetrics.filter(row => {
+    if (userId && row.userId !== userId) return false;
+    if (!query.trim()) return true;
+    const user = usersById.get(row.userId);
+    return [user?.username, user?.email, user?.displayName]
+      .filter(Boolean).join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  }).sort((a, b) => b.networkVolume - a.networkVolume), [networkMetrics, query, userId, usersById]);
+  const selectedNetwork = userId ? networkMetricsById.get(userId) : undefined;
   const clearFilters = () => { setUserId(""); setType(""); setStatus(""); setFrom(""); setTo(""); setQuery(""); };
   return (
     <>
@@ -1530,6 +1551,44 @@ function CommissionsSection({ data }: { data: AdminData }) {
           <label>Hasta<input type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
           <button type="button" className="admin-refresh" onClick={clearFilters}>Limpiar filtros</button>
         </div>
+        {selectedNetwork && (
+          <div className="admin-network-summary">
+            <div><span>Directos</span><strong>{selectedNetwork.directCount}</strong></div>
+            <div><span>Indirectos</span><strong>{selectedNetwork.indirectCount}</strong></div>
+            <div><span>Volumen de la red</span><strong>{money(selectedNetwork.networkVolume)}</strong></div>
+            <div><span>Total organización</span><strong>{money(selectedNetwork.organizationVolume)}</strong></div>
+          </div>
+        )}
+        <DataTable label="Volumen movido por usuario y su red">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Directos</th>
+              <th>Indirectos</th>
+              <th>Total red</th>
+              <th>Volumen personal</th>
+              <th>Volumen de su red</th>
+              <th>Total organización</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleNetworkMetrics.map(row => {
+              const user = usersById.get(row.userId);
+              return (
+                <tr key={row.userId}>
+                  <td><strong>{user?.username || user?.displayName || "Sin usuario"}</strong><small>{user?.email || row.userId.slice(0, 12)}</small></td>
+                  <td>{row.directCount}</td>
+                  <td>{row.indirectCount}</td>
+                  <td>{row.networkCount}</td>
+                  <td>{money(row.personalVolume)}</td>
+                  <td><strong>{money(row.networkVolume)}</strong></td>
+                  <td>{money(row.organizationVolume)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
+        <p className="config-note admin-network-note">El volumen de la red suma contratos y activaciones no fallidas de todos los referidos directos e indirectos según profiles.sponsor_id. El total organización agrega el volumen personal del usuario.</p>
         {filtered.length === 0 ? (
           <EmptyState
             title="Sin comisiones"
