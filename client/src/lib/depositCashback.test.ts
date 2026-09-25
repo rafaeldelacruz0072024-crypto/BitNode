@@ -24,7 +24,7 @@ describe("deposit cashback promotion", () => {
     );
   });
   it("closes the promotion at the same instant shown by the countdown", () => {
-    expect(DEPOSIT_CASHBACK_END).toBe(Date.parse("2026-09-24T20:00:00-04:00"));
+    expect(DEPOSIT_CASHBACK_END).toBe(Date.parse("2026-09-26T20:00:00-04:00"));
     expect(isDepositCashbackActive(DEPOSIT_CASHBACK_END - 1)).toBe(true);
     expect(isDepositCashbackActive(DEPOSIT_CASHBACK_END)).toBe(false);
   });

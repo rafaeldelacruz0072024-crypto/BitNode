@@ -93,7 +93,7 @@ function CashbackCountdown({ now }: { now: number }) {
   return <div className="cashback-countdown" role="timer" aria-label={totalSeconds ? `La promoción termina en ${days} días, ${hours} horas, ${minutes} minutos y ${seconds} segundos` : "Promoción finalizada"}>
     <span>{totalSeconds ? "LA PROMOCIÓN TERMINA EN" : "PROMOCIÓN FINALIZADA"}</span>
     <strong>{[days, hours, minutes, seconds].map(value => String(value).padStart(2, "0")).join(" : ")}</strong>
-    <small>{totalSeconds ? "DÍAS · HORAS · MINUTOS · SEGUNDOS · HASTA 24 SEP, 8:00 P. M. (SANTO DOMINGO)" : "El cashback ya no aplica a nuevos depósitos."}</small>
+    <small>{totalSeconds ? "DÍAS · HORAS · MINUTOS · SEGUNDOS · HASTA 26 SEP, 8:00 P. M. (SANTO DOMINGO)" : "El cashback ya no aplica a nuevos depósitos."}</small>
   </div>;
 }
 

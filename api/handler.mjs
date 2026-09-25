@@ -562,7 +562,7 @@ var DEPOSIT_CASHBACK_TIERS = [
   { minimum: 500, rate: 0.1 }
 ];
 var DEPOSIT_CASHBACK_START = Date.parse("2026-09-11T00:00:00-04:00");
-var DEPOSIT_CASHBACK_END = Date.parse("2026-09-24T20:00:00-04:00");
+var DEPOSIT_CASHBACK_END = Date.parse("2026-09-26T20:00:00-04:00");
 function isDepositCashbackActive(at = Date.now()) {
   return Number.isFinite(at) && at >= DEPOSIT_CASHBACK_START && at < DEPOSIT_CASHBACK_END;
 }
