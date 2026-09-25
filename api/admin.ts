@@ -1,3 +1,5 @@
+import { recordAdminOperation } from "../server/adminAudit.js";
+
 type VercelRequest = { method?: string; headers: Record<string, string | string[] | undefined>; body?: Record<string, unknown> };
 type VercelResponse = { status: (code: number) => VercelResponse; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
 
@@ -70,6 +72,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(depositResponse.status === 400 ? 400 : 500).json({ error: detail.message || "No se pudo registrar el ajuste de balance." });
     }
     const result = await depositResponse.json() as { id: string; status: string; corporate?: boolean; balance?: number; amount?: number };
+    if (result.status !== "duplicate") await recordAdminOperation({ from: (table: string) => ({
+      insert: async (value: Record<string, unknown>) => {
+        const response = await fetch(`${baseUrl}/rest/v1/${table}`, { method: "POST", headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify(value) });
+        return { error: response.ok ? null : { message: `Audit insert failed with ${response.status}` } };
+      },
+      upsert: async (value: Record<string, unknown>) => {
+        const response = await fetch(`${baseUrl}/rest/v1/${table}`, { method: "POST", headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(value) });
+        return { error: response.ok ? null : { message: `Audit fallback failed with ${response.status}` } };
+      },
+    }) }, { adminId: user.id, adminEmail: user.email || null, adminUsername: profile.username || null, action: operation === "remove" ? "balance_debited" : corporate ? "corporate_account_activated" : "balance_credited", targetType: "profile", targetId: targetUserId, details: { amount: signedAmount, reason, transactionId: result.id } });
     return res.status(result.status === "duplicate" ? 200 : 201).json({ ...result, userId: targetUserId, operation });
   } catch (error) {
     console.error("[admin-auth]", error);

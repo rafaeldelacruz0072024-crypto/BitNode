@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { authenticatedAdmin } from "./adminWithdrawals.js";
 import { monthlyRoiInput, roiMonthSchema } from "../shared/monthlyRoi.js";
+import { recordAdminOperation } from "./adminAudit.js";
 
 export function registerAdminMonthlyRoiRoutes(app: Express) {
   app.get("/api/admin/monthly-roi", async (req, res) => {
@@ -31,6 +32,7 @@ export function registerAdminMonthlyRoiRoutes(app: Express) {
       if (error) return res.status(error.code === "40001" ? 409 : 503).json({
         error: error.code === "40001" ? "Otro administrador cambió este mes. Recarga el mes antes de guardar." : "No se guardaron los porcentajes. Verifica la migración y vuelve a intentarlo.",
       });
+      await recordAdminOperation(admin.client, { adminId: admin.userId, adminEmail: admin.email, adminUsername: admin.username, action: "monthly_roi_updated", targetType: "monthly_node_roi", targetId: month, details: { rates, version: data.version } });
       return res.json({ month, rates: data.rates, version: data.version, updatedAt: data.updated_at });
     } catch {
       return res.status(503).json({ error: "No se pudieron guardar los porcentajes." });

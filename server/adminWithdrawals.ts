@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { recordAdminOperation } from "./adminAudit.js";
 
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
@@ -19,11 +20,11 @@ export async function authenticatedAdmin(req: Request) {
   if (!accessToken) return { client, error: "Sesión requerida.", status: 401 } as const;
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesión no es válida.", status: 401 } as const;
-  const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+  const { data: profile, error: profileError } = await client.from("profiles").select("role,username").eq("id", data.user.id).maybeSingle();
   if (profileError || profile?.role !== "admin") {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 } as const;
   }
-  return { client, userId: data.user.id } as const;
+  return { client, userId: data.user.id, email: data.user.email || null, username: profile.username || null } as const;
 }
 
 async function withdrawalWindow(client: ReturnType<typeof serviceClient>) {
@@ -34,6 +35,28 @@ async function withdrawalWindow(client: ReturnType<typeof serviceClient>) {
 const cleanReference = (value: unknown) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 
 export function registerAdminWithdrawalRoutes(app: Express) {
+  app.get("/api/admin/audit-log", async (req, res) => {
+    try {
+      const admin = await authenticatedAdmin(req);
+      if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+      const { data, error } = await admin.client.from("admin_operation_audit_log")
+        .select("id,admin_id,admin_email,admin_username,action,target_type,target_id,details,created_at")
+        .order("created_at", { ascending: false }).limit(300);
+      if (error && (error.code === "42P01" || error.code === "PGRST205")) {
+        const { data: fallback, error: fallbackError } = await admin.client.from("platform_settings")
+          .select("key,value,updated_at").like("key", "admin_audit:%").order("updated_at", { ascending: false }).limit(300);
+        if (fallbackError) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+        const entries = (fallback || []).map(row => ({ id: row.key, ...((row.value || {}) as Record<string, unknown>), created_at: row.updated_at }));
+        return res.status(200).json({ entries, storage: "compatibility" });
+      }
+      if (error) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+      return res.status(200).json({ entries: data || [] });
+    } catch (error) {
+      console.error("[admin-audit-log]", error);
+      return res.status(503).json({ error: "El historial administrativo no está disponible." });
+    }
+  });
+
   app.get("/api/support/whatsapp", async (_req, res) => {
     try {
       const client = serviceClient();
@@ -62,6 +85,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       key: "support_whatsapp", value: { number, updated_by: admin.userId }, updated_at: new Date().toISOString(),
     }, { onConflict: "key" });
     if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
+    await recordAdminOperation(admin.client, { adminId: admin.userId, adminEmail: admin.email, adminUsername: admin.username, action: "support_whatsapp_updated", targetType: "platform_setting", targetId: "support_whatsapp", details: { numberEnding: number.slice(-4) } });
     return res.status(200).json({ number });
   });
 
@@ -87,6 +111,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         updated_at: new Date().toISOString(),
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
+      await recordAdminOperation(admin.client, { adminId: admin.userId, adminEmail: admin.email, adminUsername: admin.username, action: enabled ? "withdrawal_window_enabled" : "withdrawal_window_disabled", targetType: "platform_setting", targetId: "withdrawal_window" });
       return res.status(200).json({ enabled });
     } catch (error) {
       console.error("[admin-withdrawal-window]", error);
@@ -139,6 +164,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         });
         if (error) return res.status(error.code === "P0001" ? 409 : 500)
           .json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
+        await recordAdminOperation(admin.client, { adminId: admin.userId, adminEmail: admin.email, adminUsername: admin.username, action: `capital_withdrawal_${action}`, targetType: "finite_node_capital_claim", targetId: id, details: { reference: reference || null, status: data.status } });
         return res.status(200).json({ id, status: data.status });
       }
       const { data: withdrawal, error: lookupError } = await admin.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
@@ -156,6 +182,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         .update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
       if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
       if (!updated) return res.status(409).json({ error: "El retiro cambió de estado. Actualiza la lista." });
+      await recordAdminOperation(admin.client, { adminId: admin.userId, adminEmail: admin.email, adminUsername: admin.username, action: `withdrawal_${action}`, targetType: "transaction", targetId: id, details: { fromStatus: status, toStatus: transition.to, reference: ref || null } });
       return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
     } catch (error) {
       console.error("[admin-withdrawals]", error);

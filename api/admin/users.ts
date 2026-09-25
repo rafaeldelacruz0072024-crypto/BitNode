@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { recordAdminOperation } from "../../server/adminAudit.js";
 
 type VercelRequest = {
   method?: string;
@@ -42,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: operator, error: operatorError } = await client
       .from("profiles")
-      .select("id,role")
+      .select("id,role,username")
       .eq("id", authData.user.id)
       .maybeSingle();
     if (operatorError || operator?.role !== "admin" || authData.user.email?.toLowerCase() !== "gentecash@gmail.com") {
@@ -68,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { error } = await client.from("withdrawal_restrictions").delete().eq("user_id", userId);
         if (error) return res.status(400).json({ error: error.message });
       }
+      await recordAdminOperation(client as never, { adminId: authData.user.id, adminEmail: authData.user.email || null, adminUsername: operator.username || null, action: blocked ? "user_withdrawals_blocked" : "user_withdrawals_unblocked", targetType: "profile", targetId: userId, details: { reason: blocked ? reason : null } });
       return res.status(200).json({ status: blocked ? "withdrawals_blocked" : "withdrawals_unblocked", userId, withdrawalBlocked: blocked });
     }
 
@@ -85,6 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const { error: passwordError } = await client.auth.admin.updateUserById(userId, { password });
       if (passwordError) return res.status(400).json({ error: "No se pudo cambiar la contraseña. Verifica los requisitos de seguridad del proyecto." });
+      await recordAdminOperation(client as never, { adminId: authData.user.id, adminEmail: authData.user.email || null, adminUsername: operator.username || null, action: "user_password_updated", targetType: "profile", targetId: userId });
       return res.status(200).json({ status: "password_updated", userId });
     }
 
@@ -123,6 +126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update({ username, display_name: displayName || null, updated_at: new Date().toISOString() })
       .eq("id", userId);
     if (profileError) return res.status(400).json({ error: profileError.message });
+
+    await recordAdminOperation(client as never, { adminId: authData.user.id, adminEmail: authData.user.email || null, adminUsername: operator.username || null, action: "user_profile_updated", targetType: "profile", targetId: userId, details: { username, displayName, email } });
 
     return res.status(200).json({
       status: "updated",

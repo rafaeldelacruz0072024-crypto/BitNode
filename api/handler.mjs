@@ -1131,6 +1131,35 @@ function registerDepositRoutes(app2) {
 
 // server/adminWithdrawals.ts
 import { createClient as createClient6 } from "@supabase/supabase-js";
+
+// server/adminAudit.ts
+async function recordAdminOperation(client, entry) {
+  try {
+    if (!client || typeof client.from !== "function") return;
+    const table = client.from("admin_operation_audit_log");
+    if (!table || typeof table.insert !== "function") return;
+    const value = {
+      admin_id: entry.adminId,
+      admin_email: entry.adminEmail || null,
+      admin_username: entry.adminUsername || null,
+      action: entry.action,
+      target_type: entry.targetType,
+      target_id: entry.targetId || null,
+      details: entry.details || {}
+    };
+    const { error } = await table.insert(value);
+    if (!error) return;
+    const fallback = client.from("platform_settings");
+    if (typeof fallback.upsert !== "function") return console.error("[admin-audit]", error.message || error);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const result = await fallback.upsert({ key: `admin_audit:${suffix}`, value, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "key" });
+    if (result.error) console.error("[admin-audit-fallback]", result.error.message || result.error);
+  } catch (error) {
+    console.error("[admin-audit]", error);
+  }
+}
+
+// server/adminWithdrawals.ts
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1147,11 +1176,11 @@ async function authenticatedAdmin(req) {
   if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
   const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
-  const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+  const { data: profile, error: profileError } = await client.from("profiles").select("role,username").eq("id", data.user.id).maybeSingle();
   if (profileError || profile?.role !== "admin") {
     return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
   }
-  return { client, userId: data.user.id };
+  return { client, userId: data.user.id, email: data.user.email || null, username: profile.username || null };
 }
 async function withdrawalWindow(client) {
   const { data } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
@@ -1159,6 +1188,24 @@ async function withdrawalWindow(client) {
 }
 var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
 function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/admin/audit-log", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const { data, error } = await admin4.client.from("admin_operation_audit_log").select("id,admin_id,admin_email,admin_username,action,target_type,target_id,details,created_at").order("created_at", { ascending: false }).limit(300);
+      if (error && (error.code === "42P01" || error.code === "PGRST205")) {
+        const { data: fallback, error: fallbackError } = await admin4.client.from("platform_settings").select("key,value,updated_at").like("key", "admin_audit:%").order("updated_at", { ascending: false }).limit(300);
+        if (fallbackError) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+        const entries = (fallback || []).map((row) => ({ id: row.key, ...row.value || {}, created_at: row.updated_at }));
+        return res.status(200).json({ entries, storage: "compatibility" });
+      }
+      if (error) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+      return res.status(200).json({ entries: data || [] });
+    } catch (error) {
+      console.error("[admin-audit-log]", error);
+      return res.status(503).json({ error: "El historial administrativo no est\xE1 disponible." });
+    }
+  });
   app2.get("/api/support/whatsapp", async (_req, res) => {
     try {
       const client = serviceClient();
@@ -1187,6 +1234,7 @@ function registerAdminWithdrawalRoutes(app2) {
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
     }, { onConflict: "key" });
     if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: "support_whatsapp_updated", targetType: "platform_setting", targetId: "support_whatsapp", details: { numberEnding: number.slice(-4) } });
     return res.status(200).json({ number });
   });
   app2.get("/api/admin/withdrawal-window", async (req, res) => {
@@ -1210,6 +1258,7 @@ function registerAdminWithdrawalRoutes(app2) {
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
       }, { onConflict: "key" });
       if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
+      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: enabled ? "withdrawal_window_enabled" : "withdrawal_window_disabled", targetType: "platform_setting", targetId: "withdrawal_window" });
       return res.status(200).json({ enabled });
     } catch (error) {
       console.error("[admin-withdrawal-window]", error);
@@ -1264,6 +1313,7 @@ function registerAdminWithdrawalRoutes(app2) {
           p_reference: reference || null
         });
         if (error) return res.status(error.code === "P0001" ? 409 : 500).json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
+        await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `capital_withdrawal_${action}`, targetType: "finite_node_capital_claim", targetId: id, details: { reference: reference || null, status: data.status } });
         return res.status(200).json({ id, status: data.status });
       }
       const { data: withdrawal, error: lookupError } = await admin4.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
@@ -1280,6 +1330,7 @@ function registerAdminWithdrawalRoutes(app2) {
       const { data: updated, error: updateError } = await admin4.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
       if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
       if (!updated) return res.status(409).json({ error: "El retiro cambi\xF3 de estado. Actualiza la lista." });
+      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `withdrawal_${action}`, targetType: "transaction", targetId: id, details: { fromStatus: status, toStatus: transition.to, reference: ref || null } });
       return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
@@ -1338,6 +1389,7 @@ function registerAdminMonthlyRoiRoutes(app2) {
       if (error) return res.status(error.code === "40001" ? 409 : 503).json({
         error: error.code === "40001" ? "Otro administrador cambi\xF3 este mes. Recarga el mes antes de guardar." : "No se guardaron los porcentajes. Verifica la migraci\xF3n y vuelve a intentarlo."
       });
+      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: "monthly_roi_updated", targetType: "monthly_node_roi", targetId: month, details: { rates, version: data.version } });
       return res.json({ month, rates: data.rates, version: data.version, updatedAt: data.updated_at });
     } catch {
       return res.status(503).json({ error: "No se pudieron guardar los porcentajes." });

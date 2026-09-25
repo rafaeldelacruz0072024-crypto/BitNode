@@ -36,6 +36,7 @@ type SectionName =
   | "Contratos"
   | "Activaciones"
   | "Cuadre diario"
+  | "Auditoría admin"
   | "Control de nodos"
   | "Transacciones"
   | "Comisiones"
@@ -181,6 +182,7 @@ const sections: SectionName[] = [
   "Contratos",
   "Activaciones",
   "Cuadre diario",
+  "Auditoría admin",
   "Control de nodos",
   "Transacciones",
   "Comisiones",
@@ -194,6 +196,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Contratos: FileClock,
   Activaciones: BarChart3,
   "Cuadre diario": CircleDollarSign,
+  "Auditoría admin": ShieldCheck,
   "Control de nodos": Server,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
@@ -1438,6 +1441,52 @@ function DailyReconciliationSection() {
   </article>;
 }
 
+type AdminAuditEntry = {
+  id: number; admin_id: string; admin_email: string | null; admin_username: string | null;
+  action: string; target_type: string; target_id: string | null; details: Record<string, unknown>; created_at: string;
+};
+
+const auditActionLabels: Record<string, string> = {
+  balance_credited: "Balance acreditado", balance_debited: "Balance debitado", corporate_account_activated: "Cuenta corporativa activada",
+  user_profile_updated: "Perfil actualizado", user_password_updated: "Contraseña actualizada", user_withdrawals_blocked: "Retiros bloqueados",
+  user_withdrawals_unblocked: "Retiros habilitados", withdrawal_approve: "Retiro aprobado", withdrawal_mark_paid: "Retiro pagado",
+  withdrawal_reject: "Retiro rechazado", capital_withdrawal_approve: "Capital aprobado", capital_withdrawal_mark_paid: "Capital pagado",
+  capital_withdrawal_reject: "Capital rechazado", monthly_roi_updated: "ROI mensual actualizado", support_whatsapp_updated: "WhatsApp actualizado",
+  withdrawal_window_enabled: "Ventana de retiros activada", withdrawal_window_disabled: "Ventana de retiros suspendida",
+};
+
+function AdminAuditSection() {
+  const [entries, setEntries] = useState<AdminAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [actor, setActor] = useState("all");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true; setLoading(true); setError("");
+    void (async () => {
+      try {
+        const session = (await supabase?.auth.getSession())?.data.session;
+        if (!session) throw new Error("Sesión administrativa requerida.");
+        const response = await fetch("/api/admin/audit-log", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const body = await response.json().catch(() => ({})) as { entries?: AdminAuditEntry[]; error?: string };
+        if (!response.ok) throw new Error(body.error || "No se pudo cargar el historial.");
+        if (active) setEntries(body.entries ?? []);
+      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "No se pudo cargar el historial."); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [revision]);
+  const admins = Array.from(new Map(entries.map(entry => [entry.admin_id, entry.admin_username || entry.admin_email || entry.admin_id])).entries());
+  const visible = actor === "all" ? entries : entries.filter(entry => entry.admin_id === actor);
+  return <article className="admin-card admin-card-full">
+    <div className="card-heading"><div><p className="admin-kicker">SEGURIDAD / TRAZABILIDAD</p><h2>Actividad administrativa</h2></div><button className="admin-refresh" type="button" onClick={() => setRevision(value => value + 1)}><RefreshCw size={14} /> Actualizar</button></div>
+    <p className="config-note">Identifica qué administrador realizó cada operación, sobre qué registro y en qué momento. Las contraseñas y secretos nunca se guardan en este historial.</p>
+    <div className="admin-toolbar"><label>Administrador <select value={actor} onChange={event => setActor(event.target.value)}><option value="all">Todos</option>{admins.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label><span className="admin-toolbar-note">{visible.length} operaciones</span></div>
+    {error && <div className="admin-data-error" role="alert">{error}</div>}
+    {loading ? <LoadingState /> : !error && <DataTable label="Historial de operaciones administrativas"><thead><tr><th>Fecha</th><th>Administrador</th><th>Operación</th><th>Objetivo</th><th>Identificador</th></tr></thead><tbody>{visible.map(entry => <tr key={entry.id}><td>{new Date(entry.created_at).toLocaleString("es-DO")}</td><td><strong>{entry.admin_username || entry.admin_email || "Administrador"}</strong><small>{entry.admin_email || entry.admin_id}</small></td><td>{auditActionLabels[entry.action] || entry.action}</td><td>{entry.target_type}</td><td className="mono-cell">{entry.target_id || "—"}</td></tr>)}</tbody></DataTable>}
+  </article>;
+}
+
 function CommissionsSection({ data }: { data: AdminData }) {
   const [userId, setUserId] = useState("");
   const [type, setType] = useState("");
@@ -2130,6 +2179,7 @@ export default function Admin() {
           ))}
         {activeSection === "Activaciones" && <ActivationsSection users={adminData?.users ?? []} />}
         {activeSection === "Cuadre diario" && <DailyReconciliationSection />}
+        {activeSection === "Auditoría admin" && <AdminAuditSection />}
         {activeSection === "Control de nodos" && <NodeControlSection />}
         {activeSection === "Transacciones" &&
           (adminData ? (
