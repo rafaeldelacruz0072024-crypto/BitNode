@@ -1361,12 +1361,32 @@ type DailyReconciliation = {
   commissions: { direct: number; other: number }; cancelledNodes: number;
 };
 
+type IncomeMethod = "all" | "crypto" | "manual" | "other";
+
+const incomeMethodLabels: Record<IncomeMethod, string> = {
+  all: "Todos los ingresos",
+  crypto: "Cripto confirmado",
+  manual: "Activación manual",
+  other: "Otros depósitos",
+};
+
+function incomeForMethod(incoming: Pick<DailyReconciliation["incoming"], "crypto" | "manual" | "other">, method: IncomeMethod) {
+  if (method === "all") return incoming.crypto + incoming.manual + incoming.other;
+  return incoming[method];
+}
+
+function incomeCountForMethod(incoming: DailyReconciliation["incoming"], method: IncomeMethod) {
+  if (method === "all") return incoming.cryptoCount + incoming.manualCount + incoming.otherCount;
+  return incoming[`${method}Count`];
+}
+
 function DailyReconciliationSection() {
   const [date, setDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const [from, setFrom] = useState(() => { const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); const start = new Date(`${day}T12:00:00Z`); start.setUTCDate(start.getUTCDate() - 6); return start.toISOString().slice(0, 10); });
   const [to, setTo] = useState(date);
   const [weekday, setWeekday] = useState("all");
   const [periodView, setPeriodView] = useState<"daily" | "weekly">("daily");
+  const [incomeMethod, setIncomeMethod] = useState<IncomeMethod>("all");
   const [days, setDays] = useState<Array<Omit<DailyReconciliation, "outstanding">>>([]);
   const [daysLoading, setDaysLoading] = useState(true);
   const [daysError, setDaysError] = useState("");
@@ -1410,14 +1430,18 @@ function DailyReconciliationSection() {
   }, [from, to, revision]);
   const weekdays = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
   const visibleDays = weekday === "all" ? days : days.filter(day => new Date(`${day.date}T12:00:00Z`).getUTCDay() === Number(weekday));
-  const visibleWeeks = groupWeeklyReconciliation(days);
+  const visibleWeeks = groupWeeklyReconciliation(visibleDays);
+  const filteredIncomeTotal = visibleDays.reduce((total, day) => total + incomeForMethod(day.incoming, incomeMethod), 0);
+  const filteredMovementCount = visibleDays.reduce((total, day) => total + incomeCountForMethod(day.incoming, incomeMethod), 0);
   return <article className="admin-card admin-card-full">
     <div className="card-heading"><div><p className="admin-kicker">CONTABILIDAD / HORA DE CIUDAD DE MÉXICO</p><h2>Cuadre diario</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar cuadre"><RefreshCw size={16} /></button></div>
     <div className="admin-toolbar"><label>Fecha <input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>{report?.isWednesday && <span className="card-status">Miércoles · ventana semanal 08:00–15:00</span>}</div>
     <p>Entradas externas, créditos internos, comisiones y retiros se muestran separados para evitar sumar dos veces el mismo dinero.</p>
-    <div className="admin-toolbar admin-day-filters"><label>Desde <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label><label>Hasta <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label><label>Vista <select value={periodView} onChange={event => setPeriodView(event.target.value as "daily" | "weekly")}><option value="daily">Cuadre diario</option><option value="weekly">Cuadre semanal</option></select></label>{periodView === "daily" && <label>Día <select value={weekday} onChange={event => setWeekday(event.target.value)}><option value="all">Todos los días</option>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label>}</div>
+    <div className="payment-method-legend" aria-label="Clasificación de métodos de pago"><span className="payment-method payment-method--crypto"><b>Cripto confirmado</b> Pagos verificados por la pasarela</span><span className="payment-method payment-method--manual"><b>Activación manual</b> Créditos ingresados por administración</span><span className="payment-method payment-method--other"><b>Otros depósitos</b> Ingresos sin un origen confirmado</span></div>
+    <div className="admin-toolbar admin-day-filters"><label>Desde <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label><label>Hasta <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label><label>Vista <select value={periodView} onChange={event => setPeriodView(event.target.value as "daily" | "weekly")}><option value="daily">Cuadre diario</option><option value="weekly">Cuadre semanal</option></select></label><label>Día de semana <select value={weekday} onChange={event => setWeekday(event.target.value)}><option value="all">Todos los días</option>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label><label>Método de pago <select value={incomeMethod} onChange={event => setIncomeMethod(event.target.value as IncomeMethod)}>{(Object.keys(incomeMethodLabels) as IncomeMethod[]).map(method => <option key={method} value={method}>{incomeMethodLabels[method]}</option>)}</select></label></div>
     {daysError && <div className="admin-data-error" role="alert">{daysError}</div>}
-    {daysLoading ? <p className="config-note">Cargando días…</p> : !daysError && periodView === "daily" ? <><p className="config-note">{visibleDays.length} días mostrados · selecciona una fecha para ver su detalle.</p><DataTable label="Cuadre por día"><thead><tr><th>Fecha</th><th>Cripto</th><th>Manual</th><th>Capital devuelto</th><th>Comisiones</th><th>Retiros solicitados</th><th>Nodos cancelados</th><th /></tr></thead><tbody>{visibleDays.map(day => <tr key={day.date}><td>{day.date} · {weekdays[new Date(`${day.date}T12:00:00Z`).getUTCDay()]}</td><td>{money(day.incoming.crypto)}</td><td>{money(day.incoming.manual)}</td><td>{money(day.incoming.capitalReturned)}</td><td>{money(day.commissions.direct + day.commissions.other)}</td><td>{money(day.withdrawalRequests.gross)}</td><td>{day.cancelledNodes}</td><td><button className="admin-refresh" type="button" onClick={() => setDate(day.date)}>Ver detalle</button></td></tr>)}</tbody></DataTable></> : !daysLoading && !daysError && <><p className="config-note">{visibleWeeks.length} semanas mostradas · cada fila suma los días disponibles del rango seleccionado.</p><DataTable label="Cuadre por semana"><thead><tr><th>Semana</th><th>Ingresos</th><th>Cripto</th><th>Manual</th><th>Otros</th><th>Capital devuelto</th><th>Comisiones</th><th>Retiros solicitados</th><th>Nodos cancelados</th></tr></thead><tbody>{visibleWeeks.map(week => <tr key={`${week.from}-${week.to}`}><td><strong>{week.from} — {week.to}</strong><small>{week.days} {week.days === 1 ? "día incluido" : "días incluidos"}</small></td><td><strong>{money(week.incoming.crypto + week.incoming.manual + week.incoming.other)}</strong></td><td>{money(week.incoming.crypto)}</td><td>{money(week.incoming.manual)}</td><td>{money(week.incoming.other)}</td><td>{money(week.incoming.capitalReturned)}</td><td>{money(week.commissions.direct + week.commissions.other)}</td><td>{money(week.withdrawalRequests.gross)}</td><td>{week.cancelledNodes}</td></tr>)}</tbody></DataTable></>}
+    {!daysLoading && !daysError && <div className="reconciliation-filter-total" aria-live="polite"><div><span>Total según filtros</span><strong>{money(filteredIncomeTotal)}</strong></div><p><b>{incomeMethodLabels[incomeMethod]}</b> · {filteredMovementCount} {filteredMovementCount === 1 ? "movimiento" : "movimientos"} · {visibleDays.length} {visibleDays.length === 1 ? "día incluido" : "días incluidos"}<small>El total excluye capital devuelto, cashback y comisiones.</small></p></div>}
+    {daysLoading ? <p className="config-note">Cargando días…</p> : !daysError && periodView === "daily" ? <><p className="config-note">{visibleDays.length} días mostrados · selecciona una fecha para ver su detalle.</p><DataTable label="Cuadre por día"><thead><tr><th>Fecha</th><th>{incomeMethodLabels[incomeMethod]}</th><th>Cripto confirmado</th><th>Activación manual</th><th>Otros</th><th>Capital devuelto</th><th>Comisiones</th><th>Retiros solicitados</th><th>Nodos cancelados</th><th /></tr></thead><tbody>{visibleDays.map(day => <tr key={day.date}><td>{day.date} · {weekdays[new Date(`${day.date}T12:00:00Z`).getUTCDay()]}</td><td className="filtered-income-cell"><strong>{money(incomeForMethod(day.incoming, incomeMethod))}</strong></td><td>{money(day.incoming.crypto)}</td><td>{money(day.incoming.manual)}</td><td>{money(day.incoming.other)}</td><td>{money(day.incoming.capitalReturned)}</td><td>{money(day.commissions.direct + day.commissions.other)}</td><td>{money(day.withdrawalRequests.gross)}</td><td>{day.cancelledNodes}</td><td><button className="admin-refresh" type="button" onClick={() => setDate(day.date)}>Ver detalle</button></td></tr>)}</tbody></DataTable></> : !daysLoading && !daysError && <><p className="config-note">{visibleWeeks.length} semanas mostradas · cada fila respeta los días y el método seleccionados.</p><DataTable label="Cuadre por semana"><thead><tr><th>Semana</th><th>{incomeMethodLabels[incomeMethod]}</th><th>Cripto confirmado</th><th>Activación manual</th><th>Otros</th><th>Capital devuelto</th><th>Comisiones</th><th>Retiros solicitados</th><th>Nodos cancelados</th></tr></thead><tbody>{visibleWeeks.map(week => <tr key={`${week.from}-${week.to}`}><td><strong>{week.from} — {week.to}</strong><small>{week.days} {week.days === 1 ? "día incluido" : "días incluidos"}</small></td><td className="filtered-income-cell"><strong>{money(incomeForMethod(week.incoming, incomeMethod))}</strong></td><td>{money(week.incoming.crypto)}</td><td>{money(week.incoming.manual)}</td><td>{money(week.incoming.other)}</td><td>{money(week.incoming.capitalReturned)}</td><td>{money(week.commissions.direct + week.commissions.other)}</td><td>{money(week.withdrawalRequests.gross)}</td><td>{week.cancelledNodes}</td></tr>)}</tbody></DataTable></>}
     {error && <div className="admin-data-error" role="alert">{error}</div>}
     {loading ? <LoadingState /> : report && <>
       <div className="admin-grid">
