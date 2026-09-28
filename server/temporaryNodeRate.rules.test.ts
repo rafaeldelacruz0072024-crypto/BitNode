@@ -31,5 +31,6 @@ describe("temporary lower-half node rate policy", () => {
     );
     expect(migration).toContain("if assignment_count <> 1 then");
     expect(migration).not.toContain("Unknown node reward engine");
+    expect(migration).not.toContain("temporary_expression constant text");
   });
 });

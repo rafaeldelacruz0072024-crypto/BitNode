@@ -8,7 +8,6 @@ do $patch$
 declare
   definition text := pg_get_functiondef('public.complete_daily_tasks(text)'::regprocedure);
   rate_assignment_pattern constant text := 'v_rate[[:space:]]*:=[[:space:]]*[^;]+;';
-  temporary_expression constant text := 'v_rate := case when current_date between date ''2026-09-28'' and date ''2026-10-02'' then round((v_contract.rate_min + random() * ((v_contract.rate_max - v_contract.rate_min) / 2))::numeric, 6) else round((v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric, 6) end;';
   assignment_count integer;
 begin
   -- pg_get_functiondef preserves whitespace from the stored PL/pgSQL body, so
@@ -22,7 +21,11 @@ begin
     raise exception 'Expected exactly one v_rate assignment, found %. Review complete_daily_tasks before applying.', assignment_count;
   end if;
 
-  execute regexp_replace(definition, rate_assignment_pattern, temporary_expression);
+  execute regexp_replace(
+    definition,
+    rate_assignment_pattern,
+    $rate$v_rate := case when current_date between date '2026-09-28' and date '2026-10-02' then round((v_contract.rate_min + random() * ((v_contract.rate_max - v_contract.rate_min) / 2))::numeric, 6) else round((v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric, 6) end;$rate$
+  );
 
   definition := pg_get_functiondef('public.complete_daily_tasks(text)'::regprocedure);
   if position('date ''2026-09-28''' in definition) = 0
