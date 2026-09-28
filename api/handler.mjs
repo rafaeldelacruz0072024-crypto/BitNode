@@ -1352,6 +1352,14 @@ var monthlyRatesSchema = z2.object({
   fourteen: percentage,
   twentyOne: percentage
 }).strict();
+var rewardPolicyInput = z2.object({
+  mode: z2.enum(["minimum", "lower_half", "maximum"]),
+  periodType: z2.enum(["day", "week", "month"]),
+  startsOn: z2.string().regex(/^20\d{2}-\d{2}-\d{2}$/),
+  endsOn: z2.string().regex(/^20\d{2}-\d{2}-\d{2}$/),
+  enabled: z2.boolean(),
+  version: z2.number().int().nonnegative()
+}).strict().refine((value) => value.endsOn >= value.startsOn);
 var monthlyRoiInput = z2.object({
   month: roiMonthSchema,
   rates: monthlyRatesSchema,
@@ -1360,6 +1368,24 @@ var monthlyRoiInput = z2.object({
 
 // server/adminMonthlyRoi.ts
 function registerAdminMonthlyRoiRoutes(app2) {
+  app2.get("/api/admin/node-reward-policy", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const { data, error } = await admin4.client.from("node_reward_policy").select("mode,period_type,starts_on,ends_on,enabled,version,updated_at").eq("singleton", true).maybeSingle();
+    if (error) return res.status(503).json({ error: "Aplica la migraci\xF3n de pol\xEDtica de rendimientos." });
+    return res.json(data ? { mode: data.mode, periodType: data.period_type, startsOn: data.starts_on, endsOn: data.ends_on, enabled: data.enabled, version: data.version, updatedAt: data.updated_at } : null);
+  });
+  app2.put("/api/admin/node-reward-policy", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const input = rewardPolicyInput.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: "Pol\xEDtica inv\xE1lida." });
+    const p = input.data;
+    const { data, error } = await admin4.client.rpc("save_node_reward_policy", { p_mode: p.mode, p_period_type: p.periodType, p_starts_on: p.startsOn, p_ends_on: p.endsOn, p_enabled: p.enabled, p_expected_version: p.version, p_actor: admin4.userId });
+    if (error) return res.status(error.code === "40001" ? 409 : 503).json({ error: error.code === "40001" ? "La pol\xEDtica cambi\xF3; recarga." : "No se pudo guardar la pol\xEDtica." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: "node_reward_policy_updated", targetType: "node_reward_policy", targetId: "current", details: p });
+    return res.json({ mode: data.mode, periodType: data.period_type, startsOn: data.starts_on, endsOn: data.ends_on, enabled: data.enabled, version: data.version, updatedAt: data.updated_at });
+  });
   app2.get("/api/admin/monthly-roi", async (req, res) => {
     try {
       const admin4 = await authenticatedAdmin(req);
