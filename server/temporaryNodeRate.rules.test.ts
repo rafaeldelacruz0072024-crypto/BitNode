@@ -21,16 +21,18 @@ describe("temporary lower-half node rate policy", () => {
 
   it("refuses to remove the Monday-Friday guard", () => {
     expect(migration).toContain(
-      "definition !~ 'extract\\(isodow[[:space:]]+from[[:space:]]+now\\(\\)\\)[[:space:]]+between[[:space:]]+1[[:space:]]+and[[:space:]]+5'",
+      "extract(isodow from now() at time zone ''America/Santo_Domingo'') between 1 and 5",
     );
+    expect(migration).toContain("position('not between 1 and 5' in definition) = 0");
   });
 
-  it("matches the stored rate assignment regardless of whitespace", () => {
+  it("replaces only the verified production rate assignment", () => {
     expect(migration).toContain(
-      "rate_assignment_pattern constant text := 'v_rate[[:space:]]*:=[[:space:]]*[^;]+;'",
+      "current_assignment constant text := 'v_rate := round(coalesce(bitnode_private.monthly_daily_rate",
     );
-    expect(migration).toContain("if assignment_count <> 1 then");
+    expect(migration).toContain("position(current_assignment in definition) = 0");
     expect(migration).not.toContain("Unknown node reward engine");
     expect(migration).not.toContain("temporary_expression constant text");
+    expect(migration).not.toContain("regexp_replace");
   });
 });
