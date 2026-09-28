@@ -1,9 +1,23 @@
 import type { Express } from "express";
 import { authenticatedAdmin } from "./adminWithdrawals.js";
-import { monthlyRoiInput, roiMonthSchema } from "../shared/monthlyRoi.js";
+import { monthlyRoiInput, rewardPolicyInput, roiMonthSchema } from "../shared/monthlyRoi.js";
 import { recordAdminOperation } from "./adminAudit.js";
 
 export function registerAdminMonthlyRoiRoutes(app: Express) {
+  app.get("/api/admin/node-reward-policy", async (req, res) => {
+    const admin = await authenticatedAdmin(req); if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+    const { data, error } = await admin.client.from("node_reward_policy").select("mode,period_type,starts_on,ends_on,enabled,version,updated_at").eq("singleton", true).maybeSingle();
+    if (error) return res.status(503).json({ error: "Aplica la migración de política de rendimientos." });
+    return res.json(data ? { mode:data.mode, periodType:data.period_type, startsOn:data.starts_on, endsOn:data.ends_on, enabled:data.enabled, version:data.version, updatedAt:data.updated_at } : null);
+  });
+  app.put("/api/admin/node-reward-policy", async (req, res) => {
+    const admin = await authenticatedAdmin(req); if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+    const input=rewardPolicyInput.safeParse(req.body); if(!input.success) return res.status(400).json({error:"Política inválida."}); const p=input.data;
+    const {data,error}=await admin.client.rpc("save_node_reward_policy",{p_mode:p.mode,p_period_type:p.periodType,p_starts_on:p.startsOn,p_ends_on:p.endsOn,p_enabled:p.enabled,p_expected_version:p.version,p_actor:admin.userId});
+    if(error) return res.status(error.code==="40001"?409:503).json({error:error.code==="40001"?"La política cambió; recarga.":"No se pudo guardar la política."});
+    await recordAdminOperation(admin.client,{adminId:admin.userId,adminEmail:admin.email,adminUsername:admin.username,action:"node_reward_policy_updated",targetType:"node_reward_policy",targetId:"current",details:p});
+    return res.json({mode:data.mode,periodType:data.period_type,startsOn:data.starts_on,endsOn:data.ends_on,enabled:data.enabled,version:data.version,updatedAt:data.updated_at});
+  });
   app.get("/api/admin/monthly-roi", async (req, res) => {
     try {
       const admin = await authenticatedAdmin(req);

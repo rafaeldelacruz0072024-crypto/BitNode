@@ -9,6 +9,13 @@ export const monthlyRatesSchema = z.object({
   daily: percentage, seven: percentage, fourteen: percentage, twentyOne: percentage,
 }).strict();
 export type MonthlyRates = z.infer<typeof monthlyRatesSchema>;
+export const rewardPolicyInput = z.object({
+  mode: z.enum(["minimum", "lower_half", "maximum"]),
+  periodType: z.enum(["day", "week", "month"]),
+  startsOn: z.string().regex(/^20\d{2}-\d{2}-\d{2}$/),
+  endsOn: z.string().regex(/^20\d{2}-\d{2}-\d{2}$/),
+  enabled: z.boolean(), version: z.number().int().nonnegative(),
+}).strict().refine(value => value.endsOn >= value.startsOn);
 export const monthlyRoiInput = z.object({
   month: roiMonthSchema,
   rates: monthlyRatesSchema,
