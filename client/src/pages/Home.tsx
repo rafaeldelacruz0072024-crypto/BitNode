@@ -37,7 +37,7 @@ const rules = [
 ];
 
 const faqs = [
-  ["¿Cómo se elige el rendimiento?", "El porcentaje se selecciona dentro del rango del nodo cuando concluye cada ciclo."],
+  ["¿Cómo se elige el rendimiento?", "Cada pago utiliza el porcentaje mínimo del rango configurado para el nodo."],
   ["¿Qué pasa si no completo las tareas?", "El avance y los días procesados reinician a cero. El capital colocado en el nodo se mantiene."],
   ["¿Cuándo puedo solicitar un retiro?", "Bonos binario/rango y ROI de nodos de 7, 14 y 21 días: miércoles de 8:00 AM a 3:00 PM, hora de Ciudad de México. La comisión directa madura a las 24 horas y el ROI del Nodo Diario no espera al miércoles. El retiro aplica un fee de 5%."],
 ];
