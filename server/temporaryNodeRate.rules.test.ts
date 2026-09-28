@@ -21,7 +21,15 @@ describe("temporary lower-half node rate policy", () => {
 
   it("refuses to remove the Monday-Friday guard", () => {
     expect(migration).toContain(
-      "v_is_business_day boolean := extract(isodow from now()) between 1 and 5",
+      "definition !~ 'extract\\(isodow[[:space:]]+from[[:space:]]+now\\(\\)\\)[[:space:]]+between[[:space:]]+1[[:space:]]+and[[:space:]]+5'",
     );
+  });
+
+  it("matches the stored rate assignment regardless of whitespace", () => {
+    expect(migration).toContain(
+      "rate_assignment_pattern constant text := 'v_rate[[:space:]]*:=[[:space:]]*[^;]+;'",
+    );
+    expect(migration).toContain("if assignment_count <> 1 then");
+    expect(migration).not.toContain("Unknown node reward engine");
   });
 });
