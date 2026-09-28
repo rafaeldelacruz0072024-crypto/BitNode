@@ -7,7 +7,8 @@ select
   position('date ''2026-10-02''' in definition) > 0 as ends_on_friday,
   position('(v_contract.rate_max - v_contract.rate_min) / 2' in definition) > 0 as lower_half_active,
   position('else round((v_contract.rate_min + random() * (v_contract.rate_max - v_contract.rate_min))::numeric, 6)' in definition) > 0 as full_range_auto_restore,
-  position('v_is_business_day boolean := extract(isodow from now()) between 1 and 5' in definition) > 0 as monday_to_friday_only
+  position('extract(isodow from now() at time zone ''America/Santo_Domingo'') between 1 and 5' in definition) > 0
+    and position('not between 1 and 5' in definition) > 0 as monday_to_friday_only
 from engine;
 
 select *
