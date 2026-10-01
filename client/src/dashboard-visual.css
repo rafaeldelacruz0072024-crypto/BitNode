@@ -179,6 +179,78 @@
 .cashback-login-timer .cashback-countdown strong {
   font-size: clamp(17px, 4vw, 27px);
 }
+.reinvestment-promo-overlay { z-index: 2001; }
+.reinvestment-promo-modal {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 7%, rgba(89, 228, 255, .15), transparent 34%),
+    linear-gradient(145deg, #080d22, #11103a 58%, #071526);
+  border-color: rgba(116, 235, 255, .68);
+}
+.reinvestment-promo-flyer {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: clamp(32px, 7vw, 54px) clamp(22px, 7vw, 48px) 30px;
+  text-align: center;
+}
+.reinvestment-promo-kicker {
+  color: #a9f5ff;
+  font: 700 10px 'IBM Plex Mono', monospace;
+  letter-spacing: .18em;
+}
+.reinvestment-promo-percent {
+  color: #b7ff3c;
+  font: 800 clamp(76px, 17vw, 116px)/.95 'IBM Plex Mono', monospace;
+  letter-spacing: -.1em;
+  text-shadow: 0 0 38px rgba(183, 255, 60, .25);
+}
+.reinvestment-promo-flyer h2 {
+  margin: 0;
+  color: #f2f7ff;
+  font-size: clamp(24px, 6vw, 34px);
+  letter-spacing: -.04em;
+}
+.reinvestment-promo-flyer > p {
+  max-width: 400px;
+  margin: 0;
+  color: #b3c2df;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.reinvestment-promo-example {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 17px;
+  border: 1px solid rgba(132, 225, 255, .24);
+  border-radius: 12px;
+  background: rgba(3, 9, 26, .7);
+  color: #aebbd7;
+  font-size: 12px;
+  text-align: left;
+}
+.reinvestment-promo-example span { display: flex; justify-content: space-between; gap: 12px; }
+.reinvestment-promo-example strong { color: #e9f5ff; font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.reinvestment-promo-example span:nth-child(2) strong { color: #b7ff3c; }
+.reinvestment-promo-example > b {
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(132, 225, 255, .18);
+  color: #7ceaff;
+  font: 700 13px 'IBM Plex Mono', monospace;
+}
+.reinvestment-promo-flyer > small {
+  max-width: 410px;
+  color: #8292b2;
+  font-size: 10px;
+  line-height: 1.6;
+}
+@media (max-width: 600px) {
+  .reinvestment-promo-flyer { gap: 10px; padding: 48px 20px 24px; }
+  .reinvestment-promo-example { padding: 14px; font-size: 11px; }
+}
 .deposit-cashback-promo.is-expired .cashback-tiers {
   opacity: .48;
 }

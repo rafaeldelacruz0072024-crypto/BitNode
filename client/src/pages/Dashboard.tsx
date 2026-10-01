@@ -83,6 +83,7 @@ const DAILY_TASKS = [
 ] as const;
 
 const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
+const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:reinvestment-promo-seen";
 
 function CashbackCountdown({ now }: { now: number }) {
   const totalSeconds = Math.max(0, Math.ceil((DEPOSIT_CASHBACK_END - now) / 1000));
@@ -541,6 +542,7 @@ export default function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [cashbackPromoOpen, setCashbackPromoOpen] = useState(false);
+  const [reinvestmentPromoOpen, setReinvestmentPromoOpen] = useState(false);
   const [liveNodes, setLiveNodes] = useState(15014);
   const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
@@ -574,6 +576,13 @@ export default function Dashboard() {
     }
   }, [authUserId]);
   useEffect(() => {
+    if (!authUserId) return;
+    const key = `${REINVESTMENT_PROMO_SESSION_KEY}:${authUserId}`;
+    if (window.sessionStorage.getItem(key) !== "1") {
+      setReinvestmentPromoOpen(true);
+    }
+  }, [authUserId]);
+  useEffect(() => {
     const remaining = DEPOSIT_CASHBACK_END - Date.now();
     if (remaining <= 0) {
       setCashbackPromoOpen(false);
@@ -599,6 +608,23 @@ export default function Dashboard() {
     }
     setCashbackPromoOpen(false);
   };
+  const closeReinvestmentPromo = () => {
+    if (authUserId) {
+      window.sessionStorage.setItem(
+        `${REINVESTMENT_PROMO_SESSION_KEY}:${authUserId}`,
+        "1"
+      );
+    }
+    setReinvestmentPromoOpen(false);
+  };
+  useEffect(() => {
+    if (!reinvestmentPromoOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeReinvestmentPromo();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [reinvestmentPromoOpen]);
   useEffect(() => {
     if (!authLoading && (!authConfigured || !authUser)) navigate("/auth");
   }, [authLoading, authConfigured, authUser, navigate]);
@@ -892,6 +918,40 @@ export default function Dashboard() {
               alt="Giveaway BitNode: cashback de 10% para depósitos de 500 USDT o más y 20% para depósitos de 1,000 USDT o más"
             />
             <div className="cashback-login-timer"><LiveCashbackCountdown /></div>
+          </div>
+        </div>
+      )}
+      {reinvestmentPromoOpen && (
+        <div
+          className="cashback-login-overlay reinvestment-promo-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Promoción de capital adicional por reinversión"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) closeReinvestmentPromo();
+          }}
+        >
+          <div className="cashback-login-modal reinvestment-promo-modal">
+            <button
+              className="cashback-login-close"
+              type="button"
+              aria-label="Cerrar promoción"
+              onClick={closeReinvestmentPromo}
+            >
+              <X aria-hidden="true" />
+            </button>
+            <div className="reinvestment-promo-flyer">
+              <span className="reinvestment-promo-kicker">PROMOCIÓN ESPECIAL · BITNODE</span>
+              <div className="reinvestment-promo-percent">+5%</div>
+              <h2>Reinvierte y crece</h2>
+              <p>Recibe capital promocional adicional al reinvertir capital elegible de un nodo finalizado.</p>
+              <div className="reinvestment-promo-example">
+                <span>Reinviertes <strong>200 USDT</strong></span>
+                <span>Capital promocional <strong>+10 USDT</strong></span>
+                <b>Nuevo nodo: 210 USDT</b>
+              </div>
+              <small>El bono se agrega al capital del nuevo nodo; no se acredita como saldo disponible para retiro. Aplican condiciones de elegibilidad.</small>
+            </div>
           </div>
         </div>
       )}
