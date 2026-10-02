@@ -85,7 +85,7 @@ const DAILY_TASKS = [
 ] as const;
 
 const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
-const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:reinvestment-promo-seen";
+const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:login-promotions-v2-seen";
 
 function CashbackCountdown({ now }: { now: number }) {
   const totalSeconds = Math.max(0, Math.ceil((DEPOSIT_CASHBACK_END - now) / 1000));
@@ -546,6 +546,7 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [cashbackPromoOpen, setCashbackPromoOpen] = useState(false);
   const [reinvestmentPromoOpen, setReinvestmentPromoOpen] = useState(false);
+  const [loginPromotion, setLoginPromotion] = useState<"reinvestment" | "sara">("sara");
   const [liveNodes, setLiveNodes] = useState(15014);
   const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
@@ -929,7 +930,7 @@ export default function Dashboard() {
           className="cashback-login-overlay reinvestment-promo-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="Promoción de capital adicional por reinversión"
+          aria-label="Promociones de SARA IA y reinversión"
           onMouseDown={event => {
             if (event.target === event.currentTarget) closeReinvestmentPromo();
           }}
@@ -943,7 +944,15 @@ export default function Dashboard() {
             >
               <X aria-hidden="true" />
             </button>
-            <div className="reinvestment-promo-flyer">
+            <div className="login-promo-switch" aria-label="Elegir promoción">
+              <button type="button" aria-pressed={loginPromotion === "sara"} onClick={() => setLoginPromotion("sara")}>SARA IA</button>
+              <button type="button" aria-pressed={loginPromotion === "reinvestment"} onClick={() => setLoginPromotion("reinvestment")}>Reinversión +5%</button>
+            </div>
+            {loginPromotion === "sara" ? <div className="sara-login-flyer">
+              <img src="/sara-ia-launch-flyer.png" alt="SARA IA de BitNode: automatiza tus cuatro tareas de lunes a viernes por 25 dólares al mes. Lanzamiento este lunes." />
+              <p>Exclusivo para usuarios con un nodo de 21 días activo.</p>
+              <button type="button" onClick={() => { closeReinvestmentPromo(); navigate("/dashboard/sara-ia"); }}>Conocer SARA IA</button>
+            </div> : <div className="reinvestment-promo-flyer">
               <span className="reinvestment-promo-kicker">PROMOCIÓN ESPECIAL · BITNODE</span>
               <div className="reinvestment-promo-percent">+5%</div>
               <h2>Reinvierte y crece</h2>
@@ -954,7 +963,7 @@ export default function Dashboard() {
                 <b>Nuevo nodo: 210 USDT</b>
               </div>
               <small>El bono se agrega al capital del nuevo nodo; no se acredita como saldo disponible para retiro. Aplican condiciones de elegibilidad.</small>
-            </div>
+            </div>}
           </div>
         </div>
       )}
@@ -983,6 +992,7 @@ export default function Dashboard() {
         <button
           className="logout"
           onClick={async () => {
+            window.sessionStorage.removeItem(`${REINVESTMENT_PROMO_SESSION_KEY}:${authUserId}`);
             window.sessionStorage.removeItem(
               `${CASHBACK_PROMO_SESSION_KEY}:${authUserId}`
             );
@@ -1025,7 +1035,22 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main className="dash-content"><NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider></main>
+        <main className="dash-content">
+          {isHome && <section className="sara-promo-banner" aria-label="Promoción SARA IA">
+            <div className="sara-banner-copy">
+              <span className="sara-banner-kicker">NUEVO PRODUCTO · BITNODE</span>
+              <h2>SARA IA trabaja por ti</h2>
+              <p>Tus 4 tareas en automático, de lunes a viernes.</p>
+              <small>Exclusivo con nodo de 21 días activo · 25 USD / mes</small>
+              <div className="sara-banner-actions">
+                <button type="button" onClick={() => { setLoginPromotion("sara"); setReinvestmentPromoOpen(true); }}>Ver flyer de SARA IA</button>
+                <button type="button" onClick={() => { setLoginPromotion("reinvestment"); setReinvestmentPromoOpen(true); }}>Reinversión +5%</button>
+              </div>
+            </div>
+            <img src="/sara-ia-avatar.png" alt="Avatar de SARA IA" />
+          </section>}
+          <NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider>
+        </main>
       </div>
       {supportWhatsapp && (
         <a

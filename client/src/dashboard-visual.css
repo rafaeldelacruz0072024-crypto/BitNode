@@ -180,8 +180,28 @@
   font-size: clamp(17px, 4vw, 27px);
 }
 .reinvestment-promo-overlay { z-index: 2001; }
+.login-promo-switch { display: flex; gap: 8px; padding: 14px 54px 14px 14px; }
+.login-promo-switch button, .sara-login-flyer button, .sara-banner-actions button { border: 1px solid #39badd; border-radius: 10px; padding: 10px 14px; background: #071b32; color: #c9f6ff; cursor: pointer; font-weight: 700; }
+.login-promo-switch button[aria-pressed="true"], .sara-banner-actions button:first-child { background: #aaff36; border-color: #aaff36; color: #081323; }
+.sara-login-flyer { display: grid; justify-items: center; gap: 10px; padding: 0 12px 14px; }
+.reinvestment-promo-modal .sara-login-flyer img { width: auto; max-width: 100%; height: auto; max-height: calc(100dvh - 220px); object-fit: contain; border-radius: 8px; }
+.sara-login-flyer p { margin: 0; color: #c9f6ff; text-align: center; font-size: 12px; }
+.sara-promo-banner { position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 220px; overflow: hidden; padding: 26px 32px; margin-bottom: 24px; border: 1px solid #2487ba; border-radius: 18px; background: radial-gradient(ellipse at 90% 40%, #124d81 0%, transparent 60%), linear-gradient(110deg, #081127, #071f39); box-shadow: 0 12px 38px #00142766; }
+.sara-banner-copy { position: relative; z-index: 1; }
+.sara-banner-kicker { color: #65e8ff; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+.sara-promo-banner h2 { margin: 8px 0; font-size: clamp(25px, 3vw, 38px); color: #fff; }
+.sara-promo-banner p { margin: 0 0 10px; color: #d8edff; }
+.sara-promo-banner small { color: #a7c6dd; }
+.sara-banner-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.sara-promo-banner > img { width: 230px; height: 220px; object-fit: contain; align-self: flex-end; margin: -12px -12px -26px 16px; }
+@media (max-width: 600px) {
+  .sara-promo-banner { padding: 22px 18px; }
+  .sara-promo-banner > img { position: absolute; right: -55px; bottom: 0; opacity: .22; width: 210px; margin: 0; }
+  .sara-banner-copy { max-width: 100%; }
+  .login-promo-switch button { padding: 9px; font-size: 12px; }
+}
 .reinvestment-promo-modal {
-  overflow: hidden;
+  overflow: auto;
   background:
     radial-gradient(circle at 50% 7%, rgba(89, 228, 255, .15), transparent 34%),
     linear-gradient(145deg, #080d22, #11103a 58%, #071526);
