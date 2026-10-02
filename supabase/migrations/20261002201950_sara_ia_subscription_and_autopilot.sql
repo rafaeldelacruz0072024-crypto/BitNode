@@ -5,6 +5,17 @@ begin;
 create schema if not exists bitnode_private;
 create extension if not exists pg_cron with schema pg_catalog;
 
+-- Golden rule: SARA IA requires an active 21-day node on an enabled plan.
+create or replace function bitnode_private.has_active_sara_node(p_user_id uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.contracts c join public.plans p on p.id = c.plan_id
+    where c.user_id = p_user_id and c.status = 'active'
+      and p.active and p.duration_days = 21
+  );
+$$;
+revoke all on function bitnode_private.has_active_sara_node(uuid) from public, anon, authenticated;
+
 create table if not exists public.sara_ia_subscriptions (
   user_id uuid primary key references auth.users(id) on delete cascade,
   paid_through_at timestamptz not null,
@@ -43,6 +54,20 @@ alter table public.sara_ia_payments enable row level security;
 alter table public.sara_ia_runs enable row level security;
 revoke all on public.sara_ia_subscriptions, public.sara_ia_payments, public.sara_ia_runs from public, anon, authenticated;
 grant select, insert, update on public.sara_ia_subscriptions, public.sara_ia_payments, public.sara_ia_runs to service_role;
+
+create or replace function bitnode_private.require_sara_21_day_node()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if not bitnode_private.has_active_sara_node(new.user_id) then
+    raise exception 'Regla de oro: necesitas un nodo de 21 días activo para contratar SARA IA.';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function bitnode_private.require_sara_21_day_node() from public, anon, authenticated;
+drop trigger if exists require_sara_21_day_node on public.sara_ia_payments;
+create trigger require_sara_21_day_node before insert on public.sara_ia_payments
+for each row execute function bitnode_private.require_sara_21_day_node();
 
 create or replace function public.complete_sara_ia_payment(
   p_order_id text, p_payment_id text, p_pay_currency text, p_price_amount numeric, p_actually_paid numeric
@@ -117,10 +142,7 @@ begin
         v_skipped := v_skipped + 1;
         continue;
       end if;
-      if not exists (
-        select 1 from public.contracts c join public.plans p on p.id = c.plan_id
-        where c.user_id = v_sub.user_id and c.status = 'active' and p.active
-      ) then
+      if not bitnode_private.has_active_sara_node(v_sub.user_id) then
         v_skipped := v_skipped + 1;
         continue;
       end if;

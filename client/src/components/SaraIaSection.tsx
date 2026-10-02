@@ -16,8 +16,9 @@ import "@/sara-ia.css";
 
 type SaraStatus = {
   active: boolean;
+  subscriptionPaid: boolean;
   paidThroughAt: string | null;
-  hasActiveNode: boolean;
+  hasActive21DayNode: boolean;
   payments: Array<{
     order_id: string;
     status: string;
@@ -137,8 +138,8 @@ export function SaraIaSection() {
           <h2>Las cuatro tareas de tus nodos, de lunes a viernes.</h2>
           <p>
             SARA IA completa automáticamente las tareas diarias mientras tu
-            suscripción esté pagada y tengas al menos un nodo activo. Se aplica
-            el mismo ciclo y las mismas reglas del sistema.
+            suscripción esté pagada y tengas un nodo de 21 días activo. Se
+            aplica el mismo ciclo y las mismas reglas del sistema.
           </p>
           <div className="sara-points">
             <span>
@@ -171,9 +172,13 @@ export function SaraIaSection() {
           </div>
           <div className={`sara-state ${isActive ? "is-active" : ""}`}>
             <span />
-            {isActive ? "Suscripción activa" : "No activa"}
+            {isActive
+              ? "SARA IA activa"
+              : status?.subscriptionPaid
+                ? "Servicio suspendido · requiere nodo de 21 días"
+                : "No activa"}
           </div>
-          {isActive && status?.paidThroughAt && (
+          {status?.subscriptionPaid && status?.paidThroughAt && (
             <p className="sara-expiry">
               Vigente hasta{" "}
               {new Date(status.paidThroughAt).toLocaleString("es-DO", {
@@ -182,9 +187,11 @@ export function SaraIaSection() {
               })}
             </p>
           )}
-          {!status?.hasActiveNode && (
+          {status && !status.hasActive21DayNode && (
             <p className="sara-warning">
-              Necesitas al menos un nodo activo para contratar y usar SARA IA.
+              Regla de oro: SARA IA está disponible únicamente con un nodo de 21
+              días activo. Si ese nodo termina o se desactiva, SARA suspende las
+              tareas hasta que tengas otro nodo de 21 días activo.
             </p>
           )}
           {!isActive && (
@@ -204,7 +211,7 @@ export function SaraIaSection() {
               <button
                 className="sara-primary"
                 type="button"
-                disabled={busy || !status?.hasActiveNode}
+                disabled={busy || !status?.hasActive21DayNode}
                 onClick={() => void createPayment()}
               >
                 {busy ? <LoaderCircle className="sara-spin" /> : <Sparkles />}
@@ -298,8 +305,8 @@ export function SaraIaSection() {
       )}
       <p className="sara-footnote">
         La primera tarea continúa sujeta a la espera inicial de 24 horas. Si el
-        ciclo no está disponible o no hay nodo activo, SARA IA no forzará tareas
-        fuera de las reglas vigentes.
+        ciclo no está disponible o no hay nodo de 21 días activo, SARA IA no
+        ejecutará tareas fuera de las reglas vigentes.
       </p>
     </main>
   );

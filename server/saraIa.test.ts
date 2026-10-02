@@ -1,5 +1,55 @@
 import { describe, expect, it, vi } from "vitest";
-import { processSaraIaIpn } from "./saraIa";
+import { hasActiveSaraNode, processSaraIaIpn } from "./saraIa";
+
+describe("SARA IA 21-day golden rule", () => {
+  it.each([
+    [{ status: "active", duration: 7, enabled: true }, false],
+    [{ status: "active", duration: 14, enabled: true }, false],
+    [{ status: "completed", duration: 21, enabled: true }, false],
+    [{ status: "active", duration: 21, enabled: false }, false],
+    [{ status: "active", duration: 21, enabled: true }, true],
+  ])("requires the matching active 21-day plan: %j", async (node, eligible) => {
+    const filters: Record<string, unknown> = {};
+    const query = {
+      select: vi.fn(() => query),
+      eq: (key: string, value: unknown) => {
+        filters[key] = value;
+        return query;
+      },
+      limit: () => query,
+      maybeSingle: async () => ({
+        data:
+          node.status === filters.status &&
+          node.duration === filters["plans.duration_days"] &&
+          node.enabled === filters["plans.active"]
+            ? { id: "NODE-21" }
+            : null,
+        error: null,
+      }),
+    };
+    const admin = { from: () => query };
+    expect(await hasActiveSaraNode(admin as never, "user-1")).toBe(eligible);
+    expect(query.select).toHaveBeenCalledWith(
+      "id,plans!inner(duration_days,active)"
+    );
+    expect(filters.user_id).toBe("user-1");
+  });
+
+  it("fails closed when node eligibility cannot be verified", async () => {
+    const query = {
+      select: () => query,
+      eq: () => query,
+      limit: () => query,
+      maybeSingle: async () => ({
+        data: null,
+        error: { message: "database unavailable" },
+      }),
+    };
+    await expect(
+      hasActiveSaraNode({ from: () => query } as never, "user-1")
+    ).rejects.toThrow("No se pudo verificar tu nodo de 21 días");
+  });
+});
 
 function paymentAdmin(payment: Record<string, unknown>) {
   const update = vi.fn(() => ({

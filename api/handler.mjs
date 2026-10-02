@@ -596,6 +596,11 @@ function bearer(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
+async function hasActiveSaraNode(admin4, userId) {
+  const { data, error } = await admin4.from("contracts").select("id,plans!inner(duration_days,active)").eq("user_id", userId).eq("status", "active").eq("plans.duration_days", 21).eq("plans.active", true).limit(1).maybeSingle();
+  if (error) throw new Error("No se pudo verificar tu nodo de 21 d\xEDas.");
+  return Boolean(data);
+}
 async function authenticatedUser(req) {
   const token4 = bearer(req);
   const admin4 = adminClient();
@@ -616,26 +621,28 @@ function registerSaraIaRoutes(app2) {
       const [
         { data: subscription, error: subscriptionError },
         { data: payments, error: paymentsError },
-        { data: contracts }
+        hasActive21DayNode
       ] = await Promise.all([
         admin4.from("sara_ia_subscriptions").select("paid_through_at").eq("user_id", user.id).maybeSingle(),
         admin4.from("sara_ia_payments").select(
           "order_id,status,provider_status,pay_currency,created_at,completed_at"
         ).eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
-        admin4.from("contracts").select("id,plan_id").eq("user_id", user.id).eq("status", "active").limit(1)
+        hasActiveSaraNode(admin4, user.id)
       ]);
       if (subscriptionError || paymentsError)
         return res.status(503).json({
           error: "SARA IA todav\xEDa no est\xE1 disponible en la base de datos."
         });
-      const activePlan = contracts?.[0]?.plan_id ? await admin4.from("plans").select("id").eq("id", contracts[0].plan_id).eq("active", true).maybeSingle() : { data: null, error: null };
-      if (activePlan.error)
-        return res.status(503).json({ error: "No se pudo verificar el plan del nodo." });
       const paidThrough = subscription?.paid_through_at ? new Date(subscription.paid_through_at) : null;
       return res.json({
-        active: Boolean(paidThrough && paidThrough.getTime() > Date.now()),
+        active: Boolean(
+          paidThrough && paidThrough.getTime() > Date.now() && hasActive21DayNode
+        ),
+        subscriptionPaid: Boolean(
+          paidThrough && paidThrough.getTime() > Date.now()
+        ),
         paidThroughAt: subscription?.paid_through_at || null,
-        hasActiveNode: Boolean(activePlan.data),
+        hasActive21DayNode,
         payments: payments || []
       });
     } catch (error) {
@@ -657,15 +664,9 @@ function registerSaraIaRoutes(app2) {
         );
         if (!payCurrency)
           return res.status(400).json({ error: "Elige USDT por TRC20 o BEP20." });
-        const { data: activeNode, error: nodeError } = await admin4.from("contracts").select("id,plan_id").eq("user_id", user.id).eq("status", "active").limit(1).maybeSingle();
-        if (nodeError)
-          return res.status(503).json({ error: "No se pudo verificar si tienes un nodo activo." });
-        const { data: activePlan, error: planError } = activeNode ? await admin4.from("plans").select("id").eq("id", activeNode.plan_id).eq("active", true).maybeSingle() : { data: null, error: null };
-        if (planError)
-          return res.status(503).json({ error: "No se pudo verificar el plan de tu nodo." });
-        if (!activeNode || !activePlan)
+        if (!await hasActiveSaraNode(admin4, user.id))
           return res.status(409).json({
-            error: "Necesitas al menos un nodo activo y habilitado para contratar SARA IA."
+            error: "Regla de oro: necesitas un nodo de 21 d\xEDas activo para contratar SARA IA."
           });
         const orderId = `SARA-${crypto.randomUUID()}`;
         const { error: insertError } = await admin4.from("sara_ia_payments").insert({
