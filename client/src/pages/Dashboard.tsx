@@ -11,6 +11,7 @@ import { Link, useLocation } from "wouter";
 import {
   Activity,
   ArrowRight,
+  Bot,
   Box,
   CheckCircle2,
   ChevronDown,
@@ -32,6 +33,7 @@ import {
   Zap,
 } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
+import { SaraIaSection } from "@/components/SaraIaSection";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
@@ -419,6 +421,7 @@ const nav = [
   ["Inicio", "/dashboard", Home],
   ["Activar nodos", "/dashboard/activate", Gem],
   ["Tareas diarias", "/dashboard/tasks", CheckCircle2],
+  ["SARA IA", "/dashboard/sara-ia", Bot],
   ["Mis nodos", "/dashboard/nodes", Box],
   ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
@@ -1285,6 +1288,7 @@ function SectionPanel({
     Record<string, string>
   >(() => Object.fromEntries(catalog.map(item => [item.id, String(item.min)])));
   const labels: Record<string, [string, string, string]> = {
+    "sara-ia": ["ASISTENTE DE TAREAS", "SARA IA", "Automatiza tus cuatro tareas de lunes a viernes."],
     activate: [
       "CONTRATOS DISPONIBLES",
       "Activar nodos",
@@ -1400,6 +1404,7 @@ function SectionPanel({
     );
   if (section === "tasks")
     return <DailyTasksPanel user={user} onRewards={reward} />;
+  if (section === "sara-ia") return <SaraIaSection />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} />;
   if (section === "withdraw")

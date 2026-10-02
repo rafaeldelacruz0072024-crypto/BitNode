@@ -6,6 +6,7 @@ import { registerStorageProxy } from "./_core/storageProxy.js";
 import { appRouter } from "./routers.js";
 import { createContext } from "./_core/context.js";
 import { registerNowPaymentsRoutes } from "./nowpayments.js";
+import { registerSaraIaRoutes } from "./saraIa.js";
 import { registerWithdrawalRoutes } from "./withdrawals.js";
 import { registerCommissionRoutes } from "./commissions.js";
 import { registerSecureCommissionRoutes } from "./secureCommissionEndpoint.js";
@@ -28,13 +29,14 @@ export function createApp(): Express {
   app.use(express.urlencoded({ limit: "64kb", extended: true }));
   app.use("/api", createApiRateLimiter());
   app.use(
-    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions"],
+    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia"],
     createFinancialRateLimiter()
   );
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerNowPaymentsRoutes(app);
+  registerSaraIaRoutes(app);
   registerWithdrawalRoutes(app);
   registerFiniteNodeCapitalRoutes(app);
   registerCommissionRoutes(app);

@@ -553,8 +553,8 @@ async function createContext(opts) {
 }
 
 // server/nowpayments.ts
-import crypto from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import crypto2 from "node:crypto";
+import { createClient as createClient2 } from "@supabase/supabase-js";
 
 // shared/depositCashback.ts
 var DEPOSIT_CASHBACK_TIERS = [
@@ -576,20 +576,248 @@ function depositCashback(amount2) {
   return { rate, amount: Number((amount2 * rate).toFixed(2)) };
 }
 
-// server/nowpayments.ts
+// server/saraIa.ts
+import crypto from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
+var apiUrl = process.env.VITE_SUPABASE_URL;
+var serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+var apiKey = process.env.NOWPAYMENTS_API_KEY;
 var NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
+var validSaraCurrency = (value) => {
+  const currency = String(value || "").toLowerCase();
+  return currency === "usdttrc20" || currency === "usdtbsc" ? currency : null;
+};
+function adminClient() {
+  return apiUrl && serviceKey ? createClient(apiUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  }) : null;
+}
+function bearer(req) {
+  const value = req.header("authorization") || "";
+  return value.startsWith("Bearer ") ? value.slice(7) : null;
+}
+async function authenticatedUser(req) {
+  const token4 = bearer(req);
+  const admin4 = adminClient();
+  if (!token4 || !admin4) return { admin: null, user: null };
+  try {
+    const { data, error } = await admin4.auth.getUser(token4);
+    return { admin: admin4, user: error ? null : data.user };
+  } catch {
+    return { admin: null, user: null };
+  }
+}
+function registerSaraIaRoutes(app2) {
+  app2.get("/api/sara-ia/status", async (req, res) => {
+    try {
+      const { admin: admin4, user } = await authenticatedUser(req);
+      if (!admin4 || !user)
+        return res.status(401).json({ error: "Inicia sesi\xF3n para consultar SARA IA." });
+      const [
+        { data: subscription, error: subscriptionError },
+        { data: payments, error: paymentsError },
+        { data: contracts }
+      ] = await Promise.all([
+        admin4.from("sara_ia_subscriptions").select("paid_through_at").eq("user_id", user.id).maybeSingle(),
+        admin4.from("sara_ia_payments").select(
+          "order_id,status,provider_status,pay_currency,created_at,completed_at"
+        ).eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+        admin4.from("contracts").select("id,plan_id").eq("user_id", user.id).eq("status", "active").limit(1)
+      ]);
+      if (subscriptionError || paymentsError)
+        return res.status(503).json({
+          error: "SARA IA todav\xEDa no est\xE1 disponible en la base de datos."
+        });
+      const activePlan = contracts?.[0]?.plan_id ? await admin4.from("plans").select("id").eq("id", contracts[0].plan_id).eq("active", true).maybeSingle() : { data: null, error: null };
+      if (activePlan.error)
+        return res.status(503).json({ error: "No se pudo verificar el plan del nodo." });
+      const paidThrough = subscription?.paid_through_at ? new Date(subscription.paid_through_at) : null;
+      return res.json({
+        active: Boolean(paidThrough && paidThrough.getTime() > Date.now()),
+        paidThroughAt: subscription?.paid_through_at || null,
+        hasActiveNode: Boolean(activePlan.data),
+        payments: payments || []
+      });
+    } catch (error) {
+      console.error("[SARA IA] status lookup failed", error);
+      return res.status(500).json({ error: "No se pudo consultar el estado de SARA IA." });
+    }
+  });
+  app2.post(
+    "/api/payments/nowpayments/sara-ia",
+    async (req, res) => {
+      try {
+        const { admin: admin4, user } = await authenticatedUser(req);
+        if (!admin4 || !user)
+          return res.status(401).json({ error: "Supabase Auth requerida." });
+        if (!apiKey)
+          return res.status(503).json({ error: "NOWPayments no est\xE1 configurado." });
+        const payCurrency = validSaraCurrency(
+          req.body?.payCurrency || "usdtbsc"
+        );
+        if (!payCurrency)
+          return res.status(400).json({ error: "Elige USDT por TRC20 o BEP20." });
+        const { data: activeNode, error: nodeError } = await admin4.from("contracts").select("id,plan_id").eq("user_id", user.id).eq("status", "active").limit(1).maybeSingle();
+        if (nodeError)
+          return res.status(503).json({ error: "No se pudo verificar si tienes un nodo activo." });
+        const { data: activePlan, error: planError } = activeNode ? await admin4.from("plans").select("id").eq("id", activeNode.plan_id).eq("active", true).maybeSingle() : { data: null, error: null };
+        if (planError)
+          return res.status(503).json({ error: "No se pudo verificar el plan de tu nodo." });
+        if (!activeNode || !activePlan)
+          return res.status(409).json({
+            error: "Necesitas al menos un nodo activo y habilitado para contratar SARA IA."
+          });
+        const orderId = `SARA-${crypto.randomUUID()}`;
+        const { error: insertError } = await admin4.from("sara_ia_payments").insert({
+          order_id: orderId,
+          user_id: user.id,
+          price_amount: 25,
+          price_currency: "usd",
+          pay_currency: payCurrency,
+          status: "pending",
+          provider_status: "creating"
+        });
+        if (insertError)
+          return res.status(503).json({ error: "No se pudo preparar el pago de SARA IA." });
+        const forwardedProto = String(
+          req.headers["x-forwarded-proto"] || "https"
+        ).split(",")[0];
+        const callbackUrl = `${forwardedProto}://${req.get("host")}/api/payments/nowpayments/ipn`;
+        try {
+          const response = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              price_amount: 25,
+              price_currency: "usd",
+              pay_currency: payCurrency,
+              order_id: orderId,
+              order_description: "BitNode SARA IA \xB7 suscripci\xF3n mensual",
+              ipn_callback_url: callbackUrl,
+              is_fixed_rate: true
+            })
+          });
+          const payment = await response.json().catch(() => ({}));
+          if (!response.ok || !payment.payment_id || !payment.pay_address || !payment.pay_amount || String(payment.pay_currency || "").toLowerCase() !== payCurrency) {
+            await admin4.from("sara_ia_payments").update({
+              status: "failed",
+              provider_status: "invoice_creation_failed"
+            }).eq("order_id", orderId);
+            return res.status(502).json({
+              error: "NOWPayments no confirm\xF3 los datos de pago USDT esperados."
+            });
+          }
+          const { error: updateError } = await admin4.from("sara_ia_payments").update({
+            provider_payment_id: String(payment.payment_id),
+            expected_pay_amount: String(payment.pay_amount),
+            provider_status: String(payment.payment_status || "waiting")
+          }).eq("order_id", orderId).eq("status", "pending");
+          if (updateError)
+            return res.status(503).json({ error: "No se pudo guardar la referencia del pago." });
+          return res.json({
+            orderId,
+            paymentId: String(payment.payment_id),
+            payAddress: String(payment.pay_address),
+            payAmount: String(payment.pay_amount),
+            payCurrency,
+            status: String(payment.payment_status || "waiting")
+          });
+        } catch (error) {
+          console.error("[SARA IA] payment creation failed", error);
+          await admin4.from("sara_ia_payments").update({
+            status: "failed",
+            provider_status: "invoice_creation_error"
+          }).eq("order_id", orderId);
+          return res.status(502).json({ error: "No se pudo crear el pago en NOWPayments." });
+        }
+      } catch (error) {
+        console.error("[SARA IA] payment setup failed", error);
+        return res.status(500).json({ error: "No se pudo iniciar la activaci\xF3n de SARA IA." });
+      }
+    }
+  );
+}
+async function processSaraIaIpn(admin4, body) {
+  if (!admin4)
+    return { handled: false, error: "Persistencia Supabase no configurada." };
+  const orderId = body.order_id ? String(body.order_id) : "";
+  if (!orderId.startsWith("SARA-")) return { handled: false };
+  const { data: payment, error } = await admin4.from("sara_ia_payments").select("order_id,provider_payment_id,pay_currency,status").eq("order_id", orderId).maybeSingle();
+  if (error)
+    return { handled: true, error: "No se pudo consultar el pago de SARA IA." };
+  if (!payment)
+    return { handled: true, error: "Pago de SARA IA no encontrado." };
+  const paymentId = String(body.payment_id || "");
+  if (paymentId && payment.provider_payment_id && paymentId !== payment.provider_payment_id) {
+    return {
+      handled: true,
+      error: "El pago no corresponde a la orden de SARA IA."
+    };
+  }
+  const providerStatus = String(body.payment_status || "unknown").toLowerCase();
+  if (providerStatus === "finished") {
+    const price = Number(body.price_amount);
+    const priceCurrency = String(body.price_currency || "").toLowerCase();
+    const payCurrency = String(body.pay_currency || "").toLowerCase();
+    const actuallyPaid = Number(body.actually_paid);
+    if (payment.status === "completed") return { handled: true, ok: true };
+    if (!Number.isFinite(price) || price !== 25 || priceCurrency !== "usd" || payCurrency !== payment.pay_currency || !Number.isFinite(actuallyPaid)) {
+      await admin4.from("sara_ia_payments").update({ status: "review", provider_status: "finished_mismatch" }).eq("order_id", orderId).eq("status", "pending");
+      return { handled: true, ok: true };
+    }
+    const { data: result, error: rpcError } = await admin4.rpc(
+      "complete_sara_ia_payment",
+      {
+        p_order_id: orderId,
+        p_payment_id: paymentId,
+        p_pay_currency: payCurrency,
+        p_price_amount: price,
+        p_actually_paid: actuallyPaid
+      }
+    );
+    if (rpcError)
+      return {
+        handled: true,
+        error: "No se pudo activar la suscripci\xF3n de SARA IA."
+      };
+    return {
+      handled: true,
+      ok: ["completed", "already_completed", "review_required"].includes(
+        String(result?.status)
+      )
+    };
+  }
+  if (["failed", "expired", "refunded", "partially_paid"].includes(providerStatus)) {
+    const status = providerStatus === "refunded" ? "review" : "failed";
+    const { error: updateError } = await admin4.from("sara_ia_payments").update({ status, provider_status: providerStatus }).eq("order_id", orderId).eq("status", "pending");
+    if (updateError)
+      return {
+        handled: true,
+        error: "No se pudo actualizar el estado del pago."
+      };
+  } else {
+    await admin4.from("sara_ia_payments").update({ provider_status: providerStatus }).eq("order_id", orderId).eq("status", "pending");
+  }
+  return { handled: true, ok: true };
+}
+
+// server/nowpayments.ts
+var NOWPAYMENTS_API_URL2 = "https://api.nowpayments.io/v1";
 var SUPPORTED_DEPOSIT_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
 var supabaseUrl = process.env.VITE_SUPABASE_URL;
 var serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-function adminClient() {
+function adminClient2() {
   if (!supabaseUrl || !serviceRoleKey) return null;
-  return createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient2(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 function origin(req) {
   const forwardedProto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0];
   return `${forwardedProto}://${req.get("host")}`;
 }
-function bearer(req) {
+function bearer2(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -604,10 +832,10 @@ function sortObject(value) {
 function validIpnSignature(body, signature) {
   const secret = process.env.NOWPAYMENTS_IPN_SECRET;
   if (!secret || !signature) return false;
-  const digest2 = crypto.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
+  const digest2 = crypto2.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
   const expected = Buffer.from(digest2, "utf8");
   const received = Buffer.from(signature, "utf8");
-  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+  return expected.length === received.length && crypto2.timingSafeEqual(expected, received);
 }
 function validDepositCurrency(value) {
   const currency = String(value || "").toLowerCase();
@@ -623,21 +851,21 @@ function depositCashbackEntry(deposit, confirmedAt = Date.now()) {
 function registerNowPaymentsRoutes(app2) {
   app2.post("/api/payments/nowpayments/payment", async (req, res) => {
     try {
-      const apiKey = process.env.NOWPAYMENTS_API_KEY;
-      const admin4 = adminClient();
-      const token4 = bearer(req);
-      if (!apiKey || !admin4 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
+      const apiKey2 = process.env.NOWPAYMENTS_API_KEY;
+      const admin4 = adminClient2();
+      const token4 = bearer2(req);
+      if (!apiKey2 || !admin4 || !token4) return res.status(401).json({ error: "Supabase Auth requerida." });
       const { data: authData, error: authError } = await admin4.auth.getUser(token4);
       if (authError || !authData.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
       const amount2 = Number(req.body?.amount);
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
       if (!Number.isFinite(amount2) || amount2 < 10 || amount2 > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
-      const transactionId = `NP-${crypto.randomUUID()}`;
+      const transactionId = `NP-${crypto2.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL2}/payment`, {
         method: "POST",
-        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        headers: { "x-api-key": apiKey2, "Content-Type": "application/json" },
         body: JSON.stringify({
           price_amount: amount2,
           price_currency: "usd",
@@ -681,10 +909,21 @@ function registerNowPaymentsRoutes(app2) {
   });
   app2.post("/api/payments/nowpayments/ipn", async (req, res) => {
     if (!validIpnSignature(req.body, req.header("x-nowpayments-sig"))) return res.status(401).json({ error: "Firma IPN inv\xE1lida." });
-    const admin4 = adminClient();
+    const admin4 = adminClient2();
     if (!admin4) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
     const body = req.body;
     const orderId = body.order_id ? String(body.order_id) : "";
+    if (orderId.startsWith("SARA-")) {
+      try {
+        const result = await processSaraIaIpn(admin4, body);
+        if (!result.handled) return res.status(404).json({ error: "Orden no encontrada." });
+        if (result.error) return res.status(500).json({ error: result.error });
+        return res.json({ received: Boolean(result.ok) });
+      } catch (error) {
+        console.error("[SARA IA] IPN processing failed", error);
+        return res.status(500).json({ error: "No se pudo procesar el pago de SARA IA." });
+      }
+    }
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
     const status = ["finished", "confirmed"].includes(providerStatus) ? "completed" : ["failed", "expired", "refunded"].includes(providerStatus) ? "failed" : "pending";
     if (orderId) {
@@ -712,14 +951,14 @@ function registerNowPaymentsRoutes(app2) {
 }
 
 // server/withdrawals.ts
-import crypto2 from "node:crypto";
-import { createClient as createClient2 } from "@supabase/supabase-js";
+import crypto3 from "node:crypto";
+import { createClient as createClient3 } from "@supabase/supabase-js";
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient2(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient3(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function token(req) {
   const value = req.header("authorization") || "";
@@ -727,7 +966,7 @@ function token(req) {
 }
 function challengeHash(challengeId, nonce) {
   const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
-  return crypto2.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
+  return crypto3.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
 }
 function validWallet(network, wallet) {
   return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
@@ -762,8 +1001,8 @@ function registerWithdrawalRoutes(app2) {
       if (validationError.code === "P0001") return res.status(400).json({ error: validationError.message });
       return res.status(500).json({ error: "No se pudo validar la solicitud de retiro." });
     }
-    const challengeId = crypto2.randomUUID();
-    const nonce = crypto2.randomBytes(32).toString("hex");
+    const challengeId = crypto3.randomUUID();
+    const nonce = crypto3.randomBytes(32).toString("hex");
     const codeHash = challengeHash(challengeId, nonce);
     const { error: challengeError } = await client.from("email_security_challenges").insert({
       id: challengeId,
@@ -790,15 +1029,15 @@ function registerWithdrawalRoutes(app2) {
 }
 
 // server/commissions.ts
-import { createClient as createClient3 } from "@supabase/supabase-js";
-function adminClient2() {
+import { createClient as createClient4 } from "@supabase/supabase-js";
+function adminClient3() {
   const url = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && serviceRoleKey2 ? createClient3(url, serviceRoleKey2, {
+  return url && serviceRoleKey2 ? createClient4(url, serviceRoleKey2, {
     auth: { persistSession: false, autoRefreshToken: false }
   }) : null;
 }
-function bearer2(req) {
+function bearer3(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -826,7 +1065,7 @@ function summarizeCommissionRows(rows) {
   return { direct, binary, total: direct + binary };
 }
 async function getCommissionSummary(userId) {
-  const client = adminClient2();
+  const client = adminClient3();
   if (!client)
     throw new Error("Supabase server credentials are not configured.");
   const { data, error } = await client.from("commission_ledger").select(
@@ -960,8 +1199,8 @@ async function processConfirmedContractCommissions(client, userId, contractId) {
 }
 function registerCommissionRoutes(app2) {
   app2.get("/api/commissions/summary", async (req, res) => {
-    const client = adminClient2();
-    const accessToken = bearer2(req);
+    const client = adminClient3();
+    const accessToken = bearer3(req);
     if (!client || !accessToken)
       return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
@@ -975,8 +1214,8 @@ function registerCommissionRoutes(app2) {
     }
   });
   app2.post("/api/contracts/activate", async (req, res) => {
-    const client = adminClient2();
-    const accessToken = bearer2(req);
+    const client = adminClient3();
+    const accessToken = bearer3(req);
     if (!client || !accessToken)
       return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error } = await client.auth.getUser(accessToken);
@@ -1006,8 +1245,8 @@ function registerCommissionRoutes(app2) {
   app2.post(
     "/api/commissions/contract-confirmed",
     async (req, res) => {
-      const client = adminClient2();
-      const accessToken = bearer2(req);
+      const client = adminClient3();
+      const accessToken = bearer3(req);
       if (!client || !accessToken)
         return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
       const { data, error } = await client.auth.getUser(accessToken);
@@ -1034,20 +1273,20 @@ function registerCommissionRoutes(app2) {
 }
 
 // server/secureCommissionEndpoint.ts
-import { createClient as createClient4 } from "@supabase/supabase-js";
-function adminClient3() {
+import { createClient as createClient5 } from "@supabase/supabase-js";
+function adminClient4() {
   const url = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && serviceRoleKey2 ? createClient4(url, serviceRoleKey2, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && serviceRoleKey2 ? createClient5(url, serviceRoleKey2, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function bearer3(req) {
+function bearer4(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
 function registerSecureCommissionRoutes(app2) {
   app2.post("/api/commissions/process", async (req, res) => {
-    const client = adminClient3();
-    const accessToken = bearer3(req);
+    const client = adminClient4();
+    const accessToken = bearer4(req);
     if (!client || !accessToken) {
       return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     }
@@ -1087,12 +1326,12 @@ function registerSecureCommissionRoutes(app2) {
 }
 
 // server/deposits.ts
-import crypto3 from "node:crypto";
-import { createClient as createClient5 } from "@supabase/supabase-js";
+import crypto4 from "node:crypto";
+import { createClient as createClient6 } from "@supabase/supabase-js";
 function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient5(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function token2(req) {
   const value = req.header("authorization") || "";
@@ -1112,7 +1351,7 @@ function registerDepositRoutes(app2) {
     const amount2 = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount2);
     if (validationError) return res.status(400).json({ error: validationError });
-    const id = `DEP-${crypto3.randomUUID()}`;
+    const id = `DEP-${crypto4.randomUUID()}`;
     const { error } = await client.from("transactions").insert({
       id,
       user_id: data.user.id,
@@ -1130,7 +1369,7 @@ function registerDepositRoutes(app2) {
 }
 
 // server/adminWithdrawals.ts
-import { createClient as createClient6 } from "@supabase/supabase-js";
+import { createClient as createClient7 } from "@supabase/supabase-js";
 
 // server/adminAudit.ts
 async function recordAdminOperation(client, entry) {
@@ -1164,7 +1403,7 @@ function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
-  return createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient7(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 function token3(req) {
   const header = req.header("authorization") || "";
@@ -1515,37 +1754,37 @@ function createFinancialRateLimiter(overrides = {}) {
 }
 
 // server/emailSecurity.ts
-import crypto4 from "node:crypto";
-import { createClient as createClient7 } from "@supabase/supabase-js";
+import crypto5 from "node:crypto";
+import { createClient as createClient8 } from "@supabase/supabase-js";
 var CODE_TTL_MS = 10 * 60 * 1e3;
 function admin3() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient7(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient8(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function bearer4(req) {
+function bearer5(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : "";
 }
 function digest(challengeId, code) {
   const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
-  return crypto4.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
+  return crypto5.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
 }
 function safeEqual(a, b) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
-  return left.length === right.length && crypto4.timingSafeEqual(left, right);
+  return left.length === right.length && crypto5.timingSafeEqual(left, right);
 }
 function escapeHtml(value) {
   return value.replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c] || c);
 }
 async function sendEmail(to, subject, html, idempotencyKey) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY no est\xE1 configurada.");
+  const apiKey2 = process.env.RESEND_API_KEY;
+  if (!apiKey2) throw new Error("RESEND_API_KEY no est\xE1 configurada.");
   const from = process.env.RESEND_FROM_EMAIL || "BitNode <onboarding@resend.dev>";
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    headers: { Authorization: `Bearer ${apiKey2}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     body: JSON.stringify({ from, to: [to], subject, html })
   });
   const body = await response.json().catch(() => ({}));
@@ -1554,7 +1793,7 @@ async function sendEmail(to, subject, html, idempotencyKey) {
 }
 async function authenticated(req) {
   const client = admin3();
-  const token4 = bearer4(req);
+  const token4 = bearer5(req);
   if (!client || !token4) return null;
   const { data, error } = await client.auth.getUser(token4);
   return error || !data.user?.email ? null : { client, user: data.user };
@@ -1611,8 +1850,8 @@ function registerEmailSecurityRoutes(app2) {
       const recentSince = new Date(Date.now() - 6e4).toISOString();
       const { count } = await auth.client.from("email_security_challenges").select("id", { count: "exact", head: true }).eq("user_id", auth.user.id).gte("created_at", recentSince);
       if ((count || 0) > 0) return res.status(429).json({ error: "Espera un minuto antes de solicitar otro c\xF3digo." });
-      const id = crypto4.randomUUID();
-      const code = crypto4.randomInt(1e5, 1e6).toString();
+      const id = crypto5.randomUUID();
+      const code = crypto5.randomInt(1e5, 1e6).toString();
       const { error } = await auth.client.from("email_security_challenges").insert({ id, user_id: auth.user.id, purpose, code_hash: digest(id, code), payload, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() });
       if (error) throw error;
       const action = purpose === "withdrawal" ? "confirmar tu retiro" : "confirmar tu wallet de retiro";
@@ -1750,10 +1989,10 @@ function buildDailyReconciliation(date, transactions, commissions, contracts) {
   const daily = transactions.filter((row) => mexicoDay(row.created_at) === date);
   const open = transactions.filter((row) => row.type === "withdraw" && ["pending", "approved"].includes(row.status));
   const dayWithdrawals = daily.filter((row) => row.type === "withdraw");
-  const crypto5 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
+  const crypto6 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
   const manual = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("ADMIN-") && row.provider_status?.startsWith("admin_manual:"));
   const capital = daily.filter((row) => row.type === "deposit" && row.status === "completed" && (row.id.startsWith("DAILY-CAPITAL-") || row.id.startsWith("PRINCIPAL-")));
-  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto5.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
+  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto6.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
   const credited = commissions.filter((row) => row.status === "credited" && mexicoDay(row.created_at) === date);
   const source = (field) => round(open.reduce((total, row) => total + amount(row[field]), 0));
   const pendingGross = round(open.reduce((total, row) => total + Math.abs(amount(row.amount)), 0));
@@ -1763,8 +2002,8 @@ function buildDailyReconciliation(date, transactions, commissions, contracts) {
     timezone: "America/Mexico_City",
     isWednesday: (/* @__PURE__ */ new Date(`${date}T12:00:00Z`)).getUTCDay() === 3,
     incoming: {
-      crypto: round(crypto5.reduce((sum, row) => sum + amount(row.amount), 0)),
-      cryptoCount: crypto5.length,
+      crypto: round(crypto6.reduce((sum, row) => sum + amount(row.amount), 0)),
+      cryptoCount: crypto6.length,
       manual: round(manual.reduce((sum, row) => sum + amount(row.amount), 0)),
       manualCount: manual.length,
       capitalReturned: round(capital.reduce((sum, row) => sum + amount(row.amount), 0)),
@@ -1861,22 +2100,22 @@ function registerDailyReconciliationRoutes(app2) {
 }
 
 // server/finiteNodeCapital.ts
-import { createClient as createClient8 } from "@supabase/supabase-js";
+import { createClient as createClient9 } from "@supabase/supabase-js";
 function registerFiniteNodeCapitalRoutes(app2) {
   app2.post("/api/nodes/capital-choice", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return res.status(503).json({ error: "El servicio no est\xE1 configurado." });
-    const bearer5 = req.header("authorization") || "";
-    const token4 = bearer5.startsWith("Bearer ") ? bearer5.slice(7).trim() : "";
+    const bearer6 = req.header("authorization") || "";
+    const token4 = bearer6.startsWith("Bearer ") ? bearer6.slice(7).trim() : "";
     if (!token4) return res.status(401).json({ error: "Sesi\xF3n requerida." });
     const contractId = String(req.body?.contractId || "").trim();
     const action = String(req.body?.action || "");
     if (!contractId || contractId.length > 120 || !["claim", "reinvest"].includes(action))
       return res.status(400).json({ error: "Elecci\xF3n de capital inv\xE1lida." });
     try {
-      const client = createClient8(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const client = createClient9(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data: auth, error: authError } = await client.auth.getUser(token4);
       if (authError || !auth.user) return res.status(401).json({ error: "Sesi\xF3n inv\xE1lida." });
       const { data, error } = await client.rpc("choose_finite_node_capital", {
@@ -1903,12 +2142,13 @@ function createApp() {
   app2.use(express.urlencoded({ limit: "64kb", extended: true }));
   app2.use("/api", createApiRateLimiter());
   app2.use(
-    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions"],
+    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia"],
     createFinancialRateLimiter()
   );
   registerStorageProxy(app2);
   registerOAuthRoutes(app2);
   registerNowPaymentsRoutes(app2);
+  registerSaraIaRoutes(app2);
   registerWithdrawalRoutes(app2);
   registerFiniteNodeCapitalRoutes(app2);
   registerCommissionRoutes(app2);

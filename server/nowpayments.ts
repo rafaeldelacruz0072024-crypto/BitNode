@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { depositCashback, depositCashbackTransactionId, isDepositCashbackActive } from "@shared/depositCashback";
+import { processSaraIaIpn } from "./saraIa.js";
 
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 export const SUPPORTED_DEPOSIT_CURRENCIES = new Set(["usdttrc20", "usdtbsc"]);
@@ -123,6 +124,17 @@ export function registerNowPaymentsRoutes(app: Express) {
     if (!admin) return res.status(503).json({ error: "Persistencia Supabase no configurada." });
     const body = req.body as Record<string, unknown>;
     const orderId = body.order_id ? String(body.order_id) : "";
+    if (orderId.startsWith("SARA-")) {
+      try {
+        const result = await processSaraIaIpn(admin, body);
+        if (!result.handled) return res.status(404).json({ error: "Orden no encontrada." });
+        if (result.error) return res.status(500).json({ error: result.error });
+        return res.json({ received: Boolean(result.ok) });
+      } catch (error) {
+        console.error("[SARA IA] IPN processing failed", error);
+        return res.status(500).json({ error: "No se pudo procesar el pago de SARA IA." });
+      }
+    }
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
     const status = ["finished", "confirmed"].includes(providerStatus) ? "completed" : ["failed", "expired", "refunded"].includes(providerStatus) ? "failed" : "pending";
     if (orderId) {
