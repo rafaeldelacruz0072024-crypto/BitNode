@@ -1043,7 +1043,7 @@ export default function Dashboard() {
               <p>Tus 4 tareas en automático, de lunes a viernes.</p>
               <small>Lanzamiento: lunes 5 de octubre · Nodo de 21 días activo · 25 USD / mes</small>
               <div className="sara-banner-actions">
-                <button type="button" onClick={() => { setLoginPromotion("sara"); setReinvestmentPromoOpen(true); }}>Ver flyer de SARA IA</button>
+                <button type="button" onClick={() => { setLoginPromotion("sara"); setReinvestmentPromoOpen(true); }}>SARA IA</button>
                 <button type="button" onClick={() => { setLoginPromotion("reinvestment"); setReinvestmentPromoOpen(true); }}>Reinversión +5%</button>
               </div>
             </div>
