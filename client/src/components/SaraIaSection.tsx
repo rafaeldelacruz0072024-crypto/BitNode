@@ -14,6 +14,8 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import "@/sara-ia.css";
 
+const SARA_LAUNCH_AT = Date.parse("2026-10-05T00:00:00-04:00");
+
 type SaraStatus = {
   launched: boolean;
   launchAt: string;
@@ -48,6 +50,7 @@ async function authHeaders() {
 }
 
 export function SaraIaSection() {
+  const [launchTimeReached, setLaunchTimeReached] = useState(() => Date.now() >= SARA_LAUNCH_AT);
   const [status, setStatus] = useState<SaraStatus | null>(null);
   const [payCurrency, setPayCurrency] = useState("usdtbsc");
   const [payment, setPayment] = useState<PaymentDetails | null>(null);
@@ -77,7 +80,10 @@ export function SaraIaSection() {
     void refresh();
   }, [refresh]);
   useEffect(() => {
-    const timer = window.setInterval(() => void refresh(), 15000);
+    const timer = window.setInterval(() => {
+      setLaunchTimeReached(Date.now() >= SARA_LAUNCH_AT);
+      void refresh();
+    }, 15000);
     return () => window.clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
@@ -93,6 +99,7 @@ export function SaraIaSection() {
   }, [payment]);
 
   async function createPayment() {
+    if (Date.now() < SARA_LAUNCH_AT || !status?.launched || !status?.hasActive21DayNode || busy) return;
     setBusy(true);
     setError("");
     setPayment(null);
@@ -196,7 +203,7 @@ export function SaraIaSection() {
               tareas hasta que tengas otro nodo de 21 días activo.
             </p>
           )}
-          {status && !status.launched && <p className="sara-warning">Lanzamiento: lunes 5 de octubre de 2026. La contratación estará disponible a partir de ese día, hora de Santo Domingo.</p>}
+          {!launchTimeReached && <p id="sara-launch-notice" className="sara-warning">Disponible el lunes 5 de octubre de 2026 a las 12:00 a. m., hora de Santo Domingo. La compra permanece desactivada hasta entonces.</p>}
           {(
             <>
               <label className="sara-field-label" htmlFor="sara-network">
@@ -206,6 +213,7 @@ export function SaraIaSection() {
                 id="sara-network"
                 className="sara-select"
                 value={payCurrency}
+                disabled={!launchTimeReached || busy}
                 onChange={event => setPayCurrency(event.target.value)}
               >
                 <option value="usdtbsc">USDT · BEP20</option>
@@ -214,11 +222,12 @@ export function SaraIaSection() {
               <button
                 className="sara-primary"
                 type="button"
-                disabled={busy || !status?.hasActive21DayNode || !status?.launched}
+                disabled={!launchTimeReached || busy || !status?.hasActive21DayNode || !status?.launched}
+                aria-describedby={!launchTimeReached ? "sara-launch-notice" : undefined}
                 onClick={() => void createPayment()}
               >
                 {busy ? <LoaderCircle className="sara-spin" /> : <Sparkles />}
-                {busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/mes" : "Activar SARA IA · $25/mes"}
+                {!launchTimeReached ? "Comprar SARA IA · Disponible el lunes" : busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/mes" : "Comprar SARA IA · $25/mes"}
               </button>
             </>
           )}
