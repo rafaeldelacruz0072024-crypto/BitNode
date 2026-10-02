@@ -58,6 +58,9 @@ grant select, insert, update on public.sara_ia_subscriptions, public.sara_ia_pay
 create or replace function bitnode_private.require_sara_21_day_node()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  if now() < timestamptz '2026-10-05 00:00:00-04' then
+    raise exception 'SARA IA estará disponible el lunes 5 de octubre de 2026.';
+  end if;
   if not bitnode_private.has_active_sara_node(new.user_id) then
     raise exception 'Regla de oro: necesitas un nodo de 21 días activo para contratar SARA IA.';
   end if;
@@ -125,6 +128,9 @@ declare
   v_today date := (now() at time zone 'America/Santo_Domingo')::date;
   v_tasks constant text[] := array['sync_node', 'validate_block', 'audit_mempool', 'sign_checkpoint'];
 begin
+  if now() < timestamptz '2026-10-05 00:00:00-04' then
+    return jsonb_build_object('status', 'before_launch', 'completed', 0);
+  end if;
   if extract(isodow from now() at time zone 'America/Santo_Domingo') not between 1 and 5 then
     return jsonb_build_object('status', 'weekend', 'completed', 0);
   end if;
@@ -138,7 +144,7 @@ begin
     order by s.user_id
   loop
     begin
-      if exists (select 1 from public.sara_ia_runs r where r.user_id = v_sub.user_id and r.business_date = v_today) then
+      if exists (select 1 from public.sara_ia_runs r where r.user_id = v_sub.user_id and r.business_date = v_today and r.status = 'completed') then
         v_skipped := v_skipped + 1;
         continue;
       end if;
@@ -167,20 +173,21 @@ begin
 
       perform set_config('request.jwt.claim.sub', v_sub.user_id::text, true);
       perform set_config('request.jwt.claim.role', 'authenticated', true);
-      select coalesce(c.completed_tasks, array[]::text[]) into v_completed
-      from public.daily_task_cycles c where c.user_id = v_sub.user_id;
-      v_completed := coalesce(v_completed, array[]::text[]);
+      -- Always consult the canonical RPC: it can reset an expired partial cycle.
+      -- Do not skip tasks using a snapshot taken before that reset.
       foreach v_key in array v_tasks loop
-        if not (v_key = any(v_completed)) then
-          v_result := public.complete_daily_tasks(v_key);
-          if coalesce(v_result->>'status', '') in ('credited', 'task_completed', 'already_completed') then
-            v_completed := array_append(v_completed, v_key);
-          else
-            raise exception 'Existing task RPC did not accept SARA task %: %', v_key, v_result;
-          end if;
+        v_result := public.complete_daily_tasks(v_key);
+        if coalesce(v_result->>'status', '') in ('credited', 'day_already_completed') then
+          exit;
+        elsif coalesce(v_result->>'status', '') not in ('task_completed', 'already_completed') then
+          raise exception 'Existing task RPC did not accept SARA task %: %', v_key, v_result;
         end if;
       end loop;
-      update public.sara_ia_runs set details = jsonb_build_object('status', 'completed', 'tasks', to_jsonb(v_completed))
+      select c.completed_tasks into v_completed from public.daily_task_cycles c where c.user_id = v_sub.user_id;
+      if not coalesce(v_completed @> v_tasks, false) then
+        raise exception 'SARA did not complete all four tasks';
+      end if;
+      update public.sara_ia_runs set status = 'completed', details = jsonb_build_object('status', 'completed', 'tasks', to_jsonb(v_completed))
       where user_id = v_sub.user_id and business_date = v_today;
       v_done := v_done + 1;
     exception when others then
@@ -204,7 +211,9 @@ begin
   if exists (select 1 from cron.job where jobname = 'bitnode-sara-ia-weekday-tasks') then
     perform cron.unschedule(jobid) from cron.job where jobname = 'bitnode-sara-ia-weekday-tasks';
   end if;
-  perform cron.schedule('bitnode-sara-ia-weekday-tasks', '*/5 11-23 * * 1-5',
+  -- Wake every five minutes; the function enforces local weekdays, including
+  -- late-night deadlines that fall on the next UTC calendar day.
+  perform cron.schedule('bitnode-sara-ia-weekday-tasks', '*/5 * * * *',
     'select bitnode_private.run_sara_ia_daily()');
 end;
 $$;

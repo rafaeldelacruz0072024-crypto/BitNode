@@ -6,6 +6,8 @@ const apiUrl = process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const apiKey = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
+export const SARA_IA_LAUNCH_AT = "2026-10-05T00:00:00-04:00";
+export const saraIaHasLaunched = (at = Date.now()) => at >= Date.parse(SARA_IA_LAUNCH_AT);
 const validSaraCurrency = (value: unknown) => {
   const currency = String(value || "").toLowerCase();
   return currency === "usdttrc20" || currency === "usdtbsc" ? currency : null;
@@ -89,8 +91,10 @@ export function registerSaraIaRoutes(app: Express) {
         ? new Date(subscription.paid_through_at)
         : null;
       return res.json({
+        launched: saraIaHasLaunched(),
+        launchAt: SARA_IA_LAUNCH_AT,
         active: Boolean(
-          paidThrough &&
+          saraIaHasLaunched() && paidThrough &&
             paidThrough.getTime() > Date.now() &&
             hasActive21DayNode
         ),
@@ -116,6 +120,8 @@ export function registerSaraIaRoutes(app: Express) {
         const { admin, user } = await authenticatedUser(req);
         if (!admin || !user)
           return res.status(401).json({ error: "Supabase Auth requerida." });
+        if (!saraIaHasLaunched())
+          return res.status(409).json({ error: "SARA IA estará disponible el lunes 5 de octubre de 2026 (hora de Santo Domingo)." });
         if (!apiKey)
           return res
             .status(503)

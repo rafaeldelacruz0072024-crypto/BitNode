@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { hasActiveSaraNode, processSaraIaIpn } from "./saraIa";
+import { hasActiveSaraNode, processSaraIaIpn, saraIaHasLaunched } from "./saraIa";
+
+describe("SARA IA Monday launch", () => {
+  it("blocks purchases before Monday midnight in Santo Domingo", () => {
+    expect(saraIaHasLaunched(Date.parse("2026-10-05T03:59:59Z"))).toBe(false);
+    expect(saraIaHasLaunched(Date.parse("2026-10-05T04:00:00Z"))).toBe(true);
+  });
+});
 
 describe("SARA IA 21-day golden rule", () => {
   it.each([

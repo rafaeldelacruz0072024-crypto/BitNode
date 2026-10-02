@@ -15,6 +15,8 @@ import { supabase } from "@/lib/supabaseClient";
 import "@/sara-ia.css";
 
 type SaraStatus = {
+  launched: boolean;
+  launchAt: string;
   active: boolean;
   subscriptionPaid: boolean;
   paidThroughAt: string | null;
@@ -194,7 +196,8 @@ export function SaraIaSection() {
               tareas hasta que tengas otro nodo de 21 días activo.
             </p>
           )}
-          {!isActive && (
+          {status && !status.launched && <p className="sara-warning">Lanzamiento: lunes 5 de octubre de 2026. La contratación estará disponible a partir de ese día, hora de Santo Domingo.</p>}
+          {(
             <>
               <label className="sara-field-label" htmlFor="sara-network">
                 Red de pago USDT
@@ -211,11 +214,11 @@ export function SaraIaSection() {
               <button
                 className="sara-primary"
                 type="button"
-                disabled={busy || !status?.hasActive21DayNode}
+                disabled={busy || !status?.hasActive21DayNode || !status?.launched}
                 onClick={() => void createPayment()}
               >
                 {busy ? <LoaderCircle className="sara-spin" /> : <Sparkles />}
-                {busy ? "Preparando pago…" : "Activar SARA IA · $25/mes"}
+                {busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/mes" : "Activar SARA IA · $25/mes"}
               </button>
             </>
           )}

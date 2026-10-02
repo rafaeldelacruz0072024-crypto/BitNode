@@ -1041,7 +1041,7 @@ export default function Dashboard() {
               <span className="sara-banner-kicker">NUEVO PRODUCTO · BITNODE</span>
               <h2>SARA IA trabaja por ti</h2>
               <p>Tus 4 tareas en automático, de lunes a viernes.</p>
-              <small>Exclusivo con nodo de 21 días activo · 25 USD / mes</small>
+              <small>Lanzamiento: lunes 5 de octubre · Nodo de 21 días activo · 25 USD / mes</small>
               <div className="sara-banner-actions">
                 <button type="button" onClick={() => { setLoginPromotion("sara"); setReinvestmentPromoOpen(true); }}>Ver flyer de SARA IA</button>
                 <button type="button" onClick={() => { setLoginPromotion("reinvestment"); setReinvestmentPromoOpen(true); }}>Reinversión +5%</button>
