@@ -702,7 +702,7 @@ function registerSaraIaRoutes(app2) {
               price_currency: "usd",
               pay_currency: payCurrency,
               order_id: orderId,
-              order_description: "BitNode SARA IA \xB7 suscripci\xF3n mensual",
+              order_description: "BitNode SARA IA \xB7 30 d\xEDas calendario",
               ipn_callback_url: callbackUrl,
               is_fixed_rate: true
             })

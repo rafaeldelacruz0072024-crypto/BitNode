@@ -7,7 +7,7 @@ Estado: implementado y probado localmente; pendiente de aplicación SQL y verifi
 3. Publicar la rama `codex/sara-ia` tras la aprobación de publicación y comprobar las variables servidor de Supabase y NOWPayments y el webhook firmado existente.
 4. Antes del lunes, verificar que contratar devuelve bloqueo por fecha. Desde el lunes, comprobar con una cuenta de prueba autorizada el flujo real de pago, suscripción, tareas y ledger; no asumir que las pruebas locales sustituyen ese control.
 
-La contratación y el ejecutor se habilitan desde el lunes 5 a las 00:00 de Santo Domingo. Precio: 25 USD mensuales, USDT BEP20 o TRC20, renovación manual. No se carga la billetera ni se generan depósitos por el pago del servicio.
+La contratación y el ejecutor se habilitan desde el lunes 5 a las 00:00 de Santo Domingo. Precio: 25 USD por 30 días calendario, USDT BEP20 o TRC20, renovación manual. Aplicar también `migrations/20261003000934_sara_ia_30_calendar_days.sql`: las próximas compras y renovaciones suman 30 días, sin modificar vencimientos existentes. No se carga la billetera ni se generan depósitos por el pago del servicio.
 
 Requiere nodo de 21 días activo sobre un plan habilitado. Si pierde ese nodo, las tareas se suspenden; la fecha de vencimiento de la suscripción no se pausa.
 

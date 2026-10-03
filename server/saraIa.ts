@@ -172,7 +172,7 @@ export function registerSaraIaRoutes(app: Express) {
               price_currency: "usd",
               pay_currency: payCurrency,
               order_id: orderId,
-              order_description: "BitNode SARA IA · suscripción mensual",
+              order_description: "BitNode SARA IA · 30 días calendario",
               ipn_callback_url: callbackUrl,
               is_fixed_rate: true,
             }),

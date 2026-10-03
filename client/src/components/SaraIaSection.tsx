@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import "@/sara-ia.css";
+import { saraDaysRemaining } from "@/lib/saraSubscription";
 
 const SARA_LAUNCH_AT = Date.parse("2026-10-05T00:00:00-04:00");
 
@@ -51,6 +52,7 @@ async function authHeaders() {
 
 export function SaraIaSection() {
   const [launchTimeReached, setLaunchTimeReached] = useState(() => Date.now() >= SARA_LAUNCH_AT);
+  const [countdownNow, setCountdownNow] = useState(Date.now);
   const [status, setStatus] = useState<SaraStatus | null>(null);
   const [payCurrency, setPayCurrency] = useState("usdtbsc");
   const [payment, setPayment] = useState<PaymentDetails | null>(null);
@@ -82,6 +84,7 @@ export function SaraIaSection() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setLaunchTimeReached(Date.now() >= SARA_LAUNCH_AT);
+      setCountdownNow(Date.now());
       void refresh();
     }, 15000);
     return () => window.clearInterval(timer);
@@ -132,6 +135,7 @@ export function SaraIaSection() {
   }
 
   const isActive = Boolean(status?.active);
+  const daysRemaining = saraDaysRemaining(status?.paidThroughAt, countdownNow);
   const latestPayment = status?.payments?.[0];
 
   return (
@@ -174,10 +178,10 @@ export function SaraIaSection() {
         <article className="sara-card sara-plan">
           <div className="sara-card-heading">
             <WalletCards />
-            <h3>Plan mensual</h3>
+            <h3>Plan de 30 días calendario</h3>
           </div>
           <div className="sara-price">
-            $25 <small>USD / mes</small>
+            $25 <small>USD / 30 días</small>
           </div>
           <div className={`sara-state ${isActive ? "is-active" : ""}`}>
             <span />
@@ -187,12 +191,18 @@ export function SaraIaSection() {
                 ? "Servicio suspendido · requiere nodo de 21 días"
                 : "No activa"}
           </div>
-          {status?.subscriptionPaid && status?.paidThroughAt && (
+          {daysRemaining !== null && <div className="sara-days-remaining" role="status">
+            <strong>{daysRemaining}</strong>
+            <span>{daysRemaining === 1 ? "día calendario restante" : "días calendario restantes"}</span>
+            <small>{daysRemaining > 0 ? "Incluye sábados y domingos. Las tareas se ejecutan de lunes a viernes." : "Suscripción vencida. Renueva para continuar."}</small>
+          </div>}
+          {status?.paidThroughAt && (
             <p className="sara-expiry">
               Vigente hasta{" "}
               {new Date(status.paidThroughAt).toLocaleString("es-DO", {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: "America/Santo_Domingo",
               })}
             </p>
           )}
@@ -227,13 +237,13 @@ export function SaraIaSection() {
                 onClick={() => void createPayment()}
               >
                 {busy ? <LoaderCircle className="sara-spin" /> : <Sparkles />}
-                {!launchTimeReached ? "Comprar SARA IA · Disponible el lunes" : busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/mes" : "Comprar SARA IA · $25/mes"}
+                {!launchTimeReached ? "Comprar SARA IA · Disponible el lunes" : busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/30 días" : "Comprar SARA IA · $25/30 días"}
               </button>
             </>
           )}
           {isActive && (
             <p className="sara-manual-renew">
-              <Clock3 /> Renovación manual mensual con USDT por NOWPayments.
+              <Clock3 /> Renovación manual: suma 30 días con USDT por NOWPayments.
             </p>
           )}
           <p className="sara-note">

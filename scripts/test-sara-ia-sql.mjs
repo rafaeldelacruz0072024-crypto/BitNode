@@ -45,6 +45,8 @@ try {
   const migration = await readFile(new URL('../supabase/migrations/20261002201950_sara_ia_subscription_and_autopilot.sql', import.meta.url), 'utf8');
   // Only the test harness substitutes the clock and mocks pg_cron.
   await db.exec(migration.replace('create extension if not exists pg_cron with schema pg_catalog;', '').replaceAll('now()', 'public.test_now()'));
+  const thirtyDays = await readFile(new URL('../supabase/migrations/20261003000934_sara_ia_30_calendar_days.sql', import.meta.url), 'utf8');
+  await db.exec(thirtyDays.replaceAll('now()', 'public.test_now()'));
   const run = async () => (await db.query('select bitnode_private.run_sara_ia_daily() result')).rows[0].result;
   assert.equal((await run()).status,'before_launch');
   await assert.rejects(db.exec(`insert into sara_ia_payments(order_id,user_id,pay_currency) values('early','${uid}','usdtbsc')`), /lunes 5/);
@@ -69,8 +71,14 @@ try {
     values('paid','${uid}','usdtbsc','provider',25);
     select complete_sara_ia_payment('paid','provider','usdtbsc',25,25);`);
   const expiry = (await db.query('select paid_through_at::text expiry from sara_ia_subscriptions')).rows[0].expiry;
+  assert.equal(Number((await db.query(`select extract(epoch from (paid_through_at-timestamptz '2026-11-05'))/86400 days from sara_ia_subscriptions`)).rows[0].days),30);
   await db.exec(`select complete_sara_ia_payment('paid','provider','usdtbsc',25,25)`);
   assert.equal((await db.query('select paid_through_at::text expiry from sara_ia_subscriptions')).rows[0].expiry,expiry);
+  await db.exec(`update test_clock set at='2027-01-31 12:00-04';
+    insert into sara_ia_payments(order_id,user_id,pay_currency,provider_payment_id,expected_pay_amount)
+    values('expired-renewal','${uid}','usdtbsc','provider-2',25);
+    select complete_sara_ia_payment('expired-renewal','provider-2','usdtbsc',25,25);`);
+  assert.equal(Number((await db.query(`select extract(epoch from (paid_through_at-public.test_now()))/86400 days from sara_ia_subscriptions`)).rows[0].days),30);
   await db.exec(`update test_clock set at='2026-10-10 10:00-04'`);
   assert.equal((await run()).status,'weekend');
   await db.exec('set role authenticated');
