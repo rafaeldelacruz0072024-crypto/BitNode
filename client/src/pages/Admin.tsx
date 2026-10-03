@@ -5,6 +5,7 @@ import { groupWeeklyReconciliation } from "@/lib/weeklyReconciliation";
 import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
 import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
+import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import "@/admin-operations.css";
 import {
@@ -40,6 +41,7 @@ type SectionName =
   | "Control de nodos"
   | "Transacciones"
   | "Comisiones"
+  | "Marketing y materiales"
   | "Configuración";
 
 type AdminUser = {
@@ -186,6 +188,7 @@ const sections: SectionName[] = [
   "Control de nodos",
   "Transacciones",
   "Comisiones",
+  "Marketing y materiales",
   "Configuración",
 ];
 const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
@@ -200,6 +203,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   "Control de nodos": Server,
   Transacciones: WalletCards,
   Comisiones: BarChart3,
+  "Marketing y materiales": FileClock,
   Configuración: Settings2,
 };
 
@@ -2181,6 +2185,7 @@ export default function Admin() {
           </div>
         )}
         {activeSection === "Resumen" && <SummarySection data={adminData} />}
+        {activeSection === "Marketing y materiales" && <MarketingMaterials admin />}
         {activeSection === "Usuarios" &&
           (adminData ? (
             <UsersSection data={adminData} onUpdated={refreshData} />

@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { SaraIaSection } from "@/components/SaraIaSection";
+import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
@@ -422,6 +423,7 @@ const nav = [
   ["Activar nodos", "/dashboard/activate", Gem],
   ["Tareas diarias", "/dashboard/tasks", CheckCircle2],
   ["SARA IA", "/dashboard/sara-ia", Bot],
+  ["Marketing y materiales", "/dashboard/marketing", Box],
   ["Mis nodos", "/dashboard/nodes", Box],
   ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
@@ -1430,6 +1432,7 @@ function SectionPanel({
   if (section === "tasks")
     return <DailyTasksPanel user={user} onRewards={reward} />;
   if (section === "sara-ia") return <SaraIaSection />;
+  if (section === "marketing") return <MarketingMaterials />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} />;
   if (section === "withdraw")
