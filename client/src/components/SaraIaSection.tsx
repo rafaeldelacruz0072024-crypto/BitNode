@@ -134,8 +134,8 @@ export function SaraIaSection() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  const isActive = Boolean(status?.active);
   const daysRemaining = saraDaysRemaining(status?.paidThroughAt, countdownNow);
+  const isActive = Boolean(status?.active && daysRemaining !== null && daysRemaining > 0);
   const latestPayment = status?.payments?.[0];
 
   return (
@@ -187,6 +187,8 @@ export function SaraIaSection() {
             <span />
             {isActive
               ? "SARA IA activa"
+              : daysRemaining === 0
+                ? "SARA IA vencida · tareas manuales"
               : status?.subscriptionPaid
                 ? "Servicio suspendido · requiere nodo de 21 días"
                 : "No activa"}
@@ -194,7 +196,8 @@ export function SaraIaSection() {
           {daysRemaining !== null && <div className="sara-days-remaining" role="status">
             <strong>{daysRemaining}</strong>
             <span>{daysRemaining === 1 ? "día calendario restante" : "días calendario restantes"}</span>
-            <small>{daysRemaining > 0 ? "Incluye sábados y domingos. Las tareas se ejecutan de lunes a viernes." : "Suscripción vencida. Renueva para continuar."}</small>
+            <small>{daysRemaining > 0 ? "Incluye sábados y domingos. Las tareas se ejecutan de lunes a viernes." : "Los 30 días terminaron. SARA ya no ejecuta tareas: debes realizarlas manualmente de lunes a viernes hasta renovar."}</small>
+            {daysRemaining === 0 && <a href="/dashboard/tasks">Ir a mis tareas manuales</a>}
           </div>}
           {status?.paidThroughAt && (
             <p className="sara-expiry">

@@ -79,6 +79,10 @@ try {
     values('expired-renewal','${uid}','usdtbsc','provider-2',25);
     select complete_sara_ia_payment('expired-renewal','provider-2','usdtbsc',25,25);`);
   assert.equal(Number((await db.query(`select extract(epoch from (paid_through_at-public.test_now()))/86400 days from sara_ia_subscriptions`)).rows[0].days),30);
+  await db.exec(`update test_clock set at=(select paid_through_at from sara_ia_subscriptions)`);
+  const creditsBeforeExpiry = (await db.query('select credits from test_control')).rows[0].credits;
+  assert.equal((await run()).completed,0);
+  assert.equal((await db.query('select credits from test_control')).rows[0].credits,creditsBeforeExpiry);
   await db.exec(`update test_clock set at='2026-10-10 10:00-04'`);
   assert.equal((await run()).status,'weekend');
   await db.exec('set role authenticated');
