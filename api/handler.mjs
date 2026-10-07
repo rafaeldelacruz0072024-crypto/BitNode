@@ -2139,6 +2139,51 @@ function registerFiniteNodeCapitalRoutes(app2) {
   });
 }
 
+// server/adminAccountView.ts
+function registerAdminAccountView(app2) {
+  app2.post("/api/admin/account-view", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+      const userId = req.body?.userId;
+      if (typeof userId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(userId))
+        return res.status(400).json({ error: "Usuario inv\xE1lido." });
+      const { data: profile, error } = await admin4.client.from("profiles").select("id,username,sponsor_id").eq("id", userId).maybeSingle();
+      if (error) throw error;
+      if (!profile) return res.status(404).json({ error: "Usuario no encontrado." });
+      const audit = await admin4.client.from("admin_operation_audit_log").insert({
+        admin_id: admin4.userId,
+        admin_email: admin4.email,
+        admin_username: admin4.username,
+        action: "account_support_view",
+        target_type: "profile",
+        target_id: userId,
+        details: { mode: "read_only" }
+      });
+      if (audit.error) return res.status(503).json({ error: "No se pudo registrar el acceso en auditor\xEDa. No se abri\xF3 la cuenta." });
+      const [tree, directs, contracts] = await Promise.all([
+        admin4.client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
+        admin4.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id").limit(1e3),
+        admin4.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id").limit(1e3)
+      ]);
+      if (tree.error || directs.error || contracts.error) throw new Error("Account query failed");
+      return res.json({
+        profile,
+        nodes: tree.data || [],
+        directs: directs.data || [],
+        contracts: contracts.data || [],
+        operator: admin4.username || admin4.email,
+        depthLimit: 25,
+        rowLimit: 1e3
+      });
+    } catch (error) {
+      console.error("[admin-account-view]", error);
+      return res.status(503).json({ error: "No se pudo cargar la vista de soporte." });
+    }
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -2162,6 +2207,7 @@ function createApp() {
   registerSecureCommissionRoutes(app2);
   registerDepositRoutes(app2);
   registerAdminWithdrawalRoutes(app2);
+  registerAdminAccountView(app2);
   registerAdminMonthlyRoiRoutes(app2);
   registerAdminNodeControlRoutes(app2);
   registerActivationReportRoutes(app2);

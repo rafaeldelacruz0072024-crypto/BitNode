@@ -19,6 +19,7 @@ import { registerEmailSecurityRoutes } from "./emailSecurity.js";
 import { registerActivationReportRoutes } from "./activationReport.js";
 import { registerDailyReconciliationRoutes } from "./dailyReconciliation.js";
 import { registerFiniteNodeCapitalRoutes } from "./finiteNodeCapital.js";
+import { registerAdminAccountView } from "./adminAccountView.js";
 
 export function createApp(): Express {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp(): Express {
   registerSecureCommissionRoutes(app);
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);
+  registerAdminAccountView(app);
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
   registerActivationReportRoutes(app);

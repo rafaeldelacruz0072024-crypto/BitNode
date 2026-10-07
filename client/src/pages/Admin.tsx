@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
 import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
+import { AdminAccountView } from "@/components/AdminAccountView";
 import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import "@/admin-operations.css";
 import {
@@ -520,6 +521,7 @@ export function UsersSection({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [monitorId, setMonitorId] = useState("");
+  const [supportId, setSupportId] = useState("");
   const [saving, setSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -713,6 +715,9 @@ export function UsersSection({
                   <button className="admin-refresh" type="button" onClick={() => { setMonitorId(user.id); setSelectedId(""); }}>
                     Monitorear cuenta
                   </button>
+                  <button className="admin-refresh" type="button" onClick={() => { setSupportId(user.id); setMonitorId(""); setSelectedId(""); }}>
+                    Ver cuenta (soporte)
+                  </button>
                   <button className="admin-refresh" type="button" onClick={() => selectUser(user)}>
                     Gestionar
                   </button>
@@ -722,6 +727,7 @@ export function UsersSection({
           </tbody>
         </DataTable>
       )}
+      {supportId && <AdminAccountView userId={supportId} onClose={() => setSupportId("")} />}
       {monitored && (
         <section className="admin-user-manager" aria-label={`Monitoreo de ${monitored.username || monitored.email || monitored.id}`}>
           <div className="card-heading">
