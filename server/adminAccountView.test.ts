@@ -31,23 +31,25 @@ describe("account support view", () => {
     const rpc = vi.fn();
     const from = vi.fn((table: string) => table === "profiles"
       ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: "target" } }) }) }) }
-      : { insert: async () => ({ error: { message: "missing table" } }) });
+      : { insert: async () => ({ error: { message: "missing table" } }), upsert: async () => ({ error: { message: "unavailable" } }) });
     vi.mocked(authenticatedAdmin).mockResolvedValue({ client: { from, rpc }, userId: "admin" } as any);
     await handler({ body: { userId: "075aab1e-5590-4885-8733-44692751e771" } }, res);
     expect(res.status).toHaveBeenCalledWith(503);
     expect(rpc).not.toHaveBeenCalled();
   });
-  it("returns read-only snapshot and audits the actual administrator", async () => {
-    const insert = vi.fn().mockResolvedValue({ error: null });
+  it.each([false, true])("returns read-only snapshot with audited access (fallback=%s)", async fallback => {
+    const insert = vi.fn().mockResolvedValue({ error: fallback ? { message: "missing table" } : null });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
     const result = { data: [], error: null };
     const query: any = { eq: () => query, order: () => query, limit: async () => result,
       maybeSingle: async () => ({ data: { id: "target", username: "member" }, error: null }) };
     const from = vi.fn((table: string) => table === "admin_operation_audit_log"
-      ? { insert } : { select: () => query });
+      ? { insert } : table === "platform_settings" ? { upsert } : { select: () => query });
     const rpc = vi.fn().mockResolvedValue(result);
     vi.mocked(authenticatedAdmin).mockResolvedValue({ client: { from, rpc }, userId: "admin", username: "operator" } as any);
     await handler({ body: { userId: "075aab1e-5590-4885-8733-44692751e771" } }, res);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ admin_id: "admin", action: "account_support_view" }));
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ operator: "operator", directs: [], contracts: [] }));
+    if (fallback) expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ value: expect.objectContaining({ admin_id: "admin", target_id: "075aab1e-5590-4885-8733-44692751e771" }) }), { onConflict: "key" });
   });
 });

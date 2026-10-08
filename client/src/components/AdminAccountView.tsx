@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { BinaryTree } from "./BinaryTree";
 
@@ -11,6 +11,8 @@ type Snapshot = {
 };
 
 export function AdminAccountView({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => { panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }); panel.current?.focus({ preventScroll: true }); }, [userId]);
   const [data, setData] = useState<Snapshot | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -32,7 +34,7 @@ export function AdminAccountView({ userId, onClose }: { userId: string; onClose:
     })();
     return () => controller.abort();
   }, [userId]);
-  return <section className="admin-user-manager" aria-label="Vista de soporte de cuenta" aria-live="polite">
+  return <section ref={panel} tabIndex={-1} className="admin-user-manager" aria-label="Vista de soporte de cuenta" aria-live="polite">
     <div className="card-heading"><div><p className="admin-kicker">VISTA DE SOPORTE · SOLO LECTURA</p>
       <h2>{data?.profile.username || "Cuenta del usuario"}</h2></div>
       <button type="button" className="admin-refresh" onClick={onClose}>Salir de la cuenta</button></div>

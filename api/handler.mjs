@@ -553,7 +553,7 @@ async function createContext(opts) {
 }
 
 // server/nowpayments.ts
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import { createClient as createClient2 } from "@supabase/supabase-js";
 
 // shared/depositCashback.ts
@@ -577,7 +577,7 @@ function depositCashback(amount2) {
 }
 
 // server/saraIa.ts
-import crypto from "node:crypto";
+import crypto2 from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 var apiUrl = process.env.VITE_SUPABASE_URL;
 var serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -674,7 +674,7 @@ function registerSaraIaRoutes(app2) {
           return res.status(409).json({
             error: "Regla de oro: necesitas un nodo de 21 d\xEDas activo para contratar SARA IA."
           });
-        const orderId = `SARA-${crypto.randomUUID()}`;
+        const orderId = `SARA-${crypto2.randomUUID()}`;
         const { error: insertError } = await admin4.from("sara_ia_payments").insert({
           order_id: orderId,
           user_id: user.id,
@@ -839,10 +839,10 @@ function sortObject(value) {
 function validIpnSignature(body, signature) {
   const secret = process.env.NOWPAYMENTS_IPN_SECRET;
   if (!secret || !signature) return false;
-  const digest2 = crypto2.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
+  const digest2 = crypto3.createHmac("sha512", secret).update(JSON.stringify(sortObject(body))).digest("hex");
   const expected = Buffer.from(digest2, "utf8");
   const received = Buffer.from(signature, "utf8");
-  return expected.length === received.length && crypto2.timingSafeEqual(expected, received);
+  return expected.length === received.length && crypto3.timingSafeEqual(expected, received);
 }
 function validDepositCurrency(value) {
   const currency = String(value || "").toLowerCase();
@@ -868,7 +868,7 @@ function registerNowPaymentsRoutes(app2) {
       const payCurrency = validDepositCurrency(req.body?.payCurrency || "usdtbsc");
       if (!Number.isFinite(amount2) || amount2 < 10 || amount2 > 1e5) return res.status(400).json({ error: "El monto debe estar entre 10 y 100000 USD." });
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
-      const transactionId = `NP-${crypto2.randomUUID()}`;
+      const transactionId = `NP-${crypto3.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
       const response = await fetch(`${NOWPAYMENTS_API_URL2}/payment`, {
         method: "POST",
@@ -958,7 +958,7 @@ function registerNowPaymentsRoutes(app2) {
 }
 
 // server/withdrawals.ts
-import crypto3 from "node:crypto";
+import crypto4 from "node:crypto";
 import { createClient as createClient3 } from "@supabase/supabase-js";
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
@@ -973,7 +973,7 @@ function token(req) {
 }
 function challengeHash(challengeId, nonce) {
   const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
-  return crypto3.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
+  return crypto4.createHmac("sha256", secret).update(`${challengeId}:${nonce}`).digest("hex");
 }
 function validWallet(network, wallet) {
   return network === "BNB Chain" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
@@ -1008,8 +1008,8 @@ function registerWithdrawalRoutes(app2) {
       if (validationError.code === "P0001") return res.status(400).json({ error: validationError.message });
       return res.status(500).json({ error: "No se pudo validar la solicitud de retiro." });
     }
-    const challengeId = crypto3.randomUUID();
-    const nonce = crypto3.randomBytes(32).toString("hex");
+    const challengeId = crypto4.randomUUID();
+    const nonce = crypto4.randomBytes(32).toString("hex");
     const codeHash = challengeHash(challengeId, nonce);
     const { error: challengeError } = await client.from("email_security_challenges").insert({
       id: challengeId,
@@ -1333,7 +1333,7 @@ function registerSecureCommissionRoutes(app2) {
 }
 
 // server/deposits.ts
-import crypto4 from "node:crypto";
+import crypto5 from "node:crypto";
 import { createClient as createClient6 } from "@supabase/supabase-js";
 function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -1358,7 +1358,7 @@ function registerDepositRoutes(app2) {
     const amount2 = Number(req.body?.amount);
     const validationError = validateManualDeposit(amount2);
     if (validationError) return res.status(400).json({ error: validationError });
-    const id = `DEP-${crypto4.randomUUID()}`;
+    const id = `DEP-${crypto5.randomUUID()}`;
     const { error } = await client.from("transactions").insert({
       id,
       user_id: data.user.id,
@@ -1761,7 +1761,7 @@ function createFinancialRateLimiter(overrides = {}) {
 }
 
 // server/emailSecurity.ts
-import crypto5 from "node:crypto";
+import crypto6 from "node:crypto";
 import { createClient as createClient8 } from "@supabase/supabase-js";
 var CODE_TTL_MS = 10 * 60 * 1e3;
 function admin3() {
@@ -1775,12 +1775,12 @@ function bearer5(req) {
 }
 function digest(challengeId, code) {
   const secret = process.env.EMAIL_OTP_SECRET || process.env.RESEND_API_KEY || "";
-  return crypto5.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
+  return crypto6.createHmac("sha256", secret).update(`${challengeId}:${code}`).digest("hex");
 }
 function safeEqual(a, b) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
-  return left.length === right.length && crypto5.timingSafeEqual(left, right);
+  return left.length === right.length && crypto6.timingSafeEqual(left, right);
 }
 function escapeHtml(value) {
   return value.replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c] || c);
@@ -1857,8 +1857,8 @@ function registerEmailSecurityRoutes(app2) {
       const recentSince = new Date(Date.now() - 6e4).toISOString();
       const { count } = await auth.client.from("email_security_challenges").select("id", { count: "exact", head: true }).eq("user_id", auth.user.id).gte("created_at", recentSince);
       if ((count || 0) > 0) return res.status(429).json({ error: "Espera un minuto antes de solicitar otro c\xF3digo." });
-      const id = crypto5.randomUUID();
-      const code = crypto5.randomInt(1e5, 1e6).toString();
+      const id = crypto6.randomUUID();
+      const code = crypto6.randomInt(1e5, 1e6).toString();
       const { error } = await auth.client.from("email_security_challenges").insert({ id, user_id: auth.user.id, purpose, code_hash: digest(id, code), payload, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() });
       if (error) throw error;
       const action = purpose === "withdrawal" ? "confirmar tu retiro" : "confirmar tu wallet de retiro";
@@ -1996,10 +1996,10 @@ function buildDailyReconciliation(date, transactions, commissions, contracts) {
   const daily = transactions.filter((row) => mexicoDay(row.created_at) === date);
   const open = transactions.filter((row) => row.type === "withdraw" && ["pending", "approved"].includes(row.status));
   const dayWithdrawals = daily.filter((row) => row.type === "withdraw");
-  const crypto6 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
+  const crypto7 = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("NP-") && row.provider_payment_id && ["finished", "confirmed"].includes(row.provider_status || ""));
   const manual = daily.filter((row) => row.type === "deposit" && row.status === "completed" && row.id.startsWith("ADMIN-") && row.provider_status?.startsWith("admin_manual:"));
   const capital = daily.filter((row) => row.type === "deposit" && row.status === "completed" && (row.id.startsWith("DAILY-CAPITAL-") || row.id.startsWith("PRINCIPAL-")));
-  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto6.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
+  const other = daily.filter((row) => row.type === "deposit" && row.status === "completed" && amount(row.amount) > 0 && !crypto7.includes(row) && !manual.includes(row) && !capital.includes(row) && !row.provider_status?.startsWith("promo_cashback:") && row.provider_status !== "finite_capital_refund");
   const credited = commissions.filter((row) => row.status === "credited" && mexicoDay(row.created_at) === date);
   const source = (field) => round(open.reduce((total, row) => total + amount(row[field]), 0));
   const pendingGross = round(open.reduce((total, row) => total + Math.abs(amount(row.amount)), 0));
@@ -2009,8 +2009,8 @@ function buildDailyReconciliation(date, transactions, commissions, contracts) {
     timezone: "America/Mexico_City",
     isWednesday: (/* @__PURE__ */ new Date(`${date}T12:00:00Z`)).getUTCDay() === 3,
     incoming: {
-      crypto: round(crypto6.reduce((sum, row) => sum + amount(row.amount), 0)),
-      cryptoCount: crypto6.length,
+      crypto: round(crypto7.reduce((sum, row) => sum + amount(row.amount), 0)),
+      cryptoCount: crypto7.length,
       manual: round(manual.reduce((sum, row) => sum + amount(row.amount), 0)),
       manualCount: manual.length,
       capitalReturned: round(capital.reduce((sum, row) => sum + amount(row.amount), 0)),
@@ -2161,13 +2161,31 @@ function registerAdminAccountView(app2) {
         target_id: userId,
         details: { mode: "read_only" }
       });
-      if (audit.error) return res.status(503).json({ error: "No se pudo registrar el acceso en auditor\xEDa. No se abri\xF3 la cuenta." });
+      if (audit.error) {
+        const fallback = await admin4.client.from("platform_settings").upsert({
+          key: `admin_audit:${crypto.randomUUID()}`,
+          value: {
+            admin_id: admin4.userId,
+            admin_email: admin4.email,
+            admin_username: admin4.username,
+            action: "account_support_view",
+            target_type: "profile",
+            target_id: userId,
+            details: { mode: "read_only" }
+          },
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }, { onConflict: "key" });
+        if (fallback.error) return res.status(503).json({ error: "No se pudo registrar el acceso en auditor\xEDa. No se abri\xF3 la cuenta." });
+      }
       const [tree, directs, contracts] = await Promise.all([
         admin4.client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
         admin4.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id").limit(1e3),
         admin4.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id").limit(1e3)
       ]);
-      if (tree.error || directs.error || contracts.error) throw new Error("Account query failed");
+      if (tree.error || directs.error || contracts.error) {
+        console.error("[admin-account-view] queries", { tree: tree.error, directs: directs.error, contracts: contracts.error });
+        return res.status(503).json({ error: tree.error ? "No se pudo consultar el \xE1rbol del usuario. Verifica get_my_network_tree en Supabase." : "No se pudieron consultar los referidos o nodos del usuario." });
+      }
       return res.json({
         profile,
         nodes: tree.data || [],

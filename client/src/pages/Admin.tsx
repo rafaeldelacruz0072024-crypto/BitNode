@@ -526,6 +526,7 @@ export function UsersSection({
   const [selectedId, setSelectedId] = useState("");
   const [monitorId, setMonitorId] = useState("");
   const [supportId, setSupportId] = useState("");
+  const [userPage, setUserPage] = useState(0);
   const [saving, setSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -546,6 +547,9 @@ export function UsersSection({
     [query, users]
   );
   const selected = users.find(user => user.id === selectedId) || null;
+  const userPages = Math.max(1, Math.ceil(filtered.length / 25));
+  const currentUserPage = Math.min(userPage, userPages - 1);
+  useEffect(() => { setUserPage(0); }, [query]);
   const monitored = users.find(user => user.id === monitorId) || null;
   const accountTransactions = monitored ? data.transactions.filter(row => row.userId === monitored.id) : [];
   const accountContracts = monitored ? data.contracts.filter(row => row.userId === monitored.id) : [];
@@ -695,7 +699,7 @@ export function UsersSection({
             </tr>
           </thead>
           <tbody>
-            {filtered.map(user => (
+            {filtered.slice(currentUserPage * 25, (currentUserPage + 1) * 25).map(user => (
               <tr key={user.id} className={user.corporate ? "admin-corporate-row" : undefined}>
                 <td>
                   <strong>{user.username || "Sin username"}</strong>
@@ -731,7 +735,12 @@ export function UsersSection({
           </tbody>
         </DataTable>
       )}
-      {supportId && <AdminAccountView userId={supportId} onClose={() => setSupportId("")} />}
+      <div className="admin-toolbar" aria-label="Paginación de usuarios">
+        <button className="admin-refresh" disabled={currentUserPage === 0} onClick={() => setUserPage(currentUserPage - 1)}>Anterior</button>
+        <span>Página {currentUserPage + 1} de {userPages} · {filtered.length} usuarios · 25 por página</span>
+        <button className="admin-refresh" disabled={currentUserPage + 1 >= userPages} onClick={() => setUserPage(currentUserPage + 1)}>Siguiente</button>
+      </div>
+      {supportId && <AdminAccountView key={supportId} userId={supportId} onClose={() => setSupportId("")} />}
       {monitored && (
         <section className="admin-user-manager" aria-label={`Monitoreo de ${monitored.username || monitored.email || monitored.id}`}>
           <div className="card-heading">
@@ -1051,7 +1060,20 @@ type AdminWithdrawal = {
 };
 
 function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> }) {
+  const [withdrawalQuery, setWithdrawalQuery] = useState("");
+  const [withdrawalStatus, setWithdrawalStatus] = useState("");
+  const [withdrawalNetwork, setWithdrawalNetwork] = useState("");
+  const [withdrawalFrom, setWithdrawalFrom] = useState("");
+  const [withdrawalTo, setWithdrawalTo] = useState("");
   const [rows, setRows] = useState<AdminWithdrawal[]>([]);
+  const invalidDates = Boolean(withdrawalFrom && withdrawalTo && withdrawalFrom > withdrawalTo);
+  const filteredWithdrawals = rows.filter(row => {
+    const day = row.created_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(row.created_at)) : "";
+    return !invalidDates && matchesAdminSearch([row.id, row.username, row.user_id, row.wallet], withdrawalQuery)
+      && (!withdrawalStatus || row.status === withdrawalStatus)
+      && (!withdrawalNetwork || row.network === withdrawalNetwork)
+      && (!withdrawalFrom || day >= withdrawalFrom) && (!withdrawalTo || Boolean(day && day <= withdrawalTo));
+  });
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState("");
   const [message, setMessage] = useState("");
@@ -1136,13 +1158,23 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
         </button>
       </div>
       <p className="config-note">Aprueba la solicitud, realiza el envío desde tu wallet externa y luego marca el retiro como pagado. El panel no transfiere criptomonedas automáticamente.</p>
+      <div className="admin-toolbar">
+        <label className="admin-search"><Search size={16} /><input aria-label="Buscar retiros" placeholder="Usuario, ID o wallet" value={withdrawalQuery} onChange={e => setWithdrawalQuery(e.target.value)} /></label>
+        <label>Estado <select aria-label="Estado de retiro" value={withdrawalStatus} onChange={e => setWithdrawalStatus(e.target.value)}><option value="">Todos</option>{["pending", "approved", "completed", "rejected"].map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}</select></label>
+        <label>Red <select aria-label="Red de retiro" value={withdrawalNetwork} onChange={e => setWithdrawalNetwork(e.target.value)}><option value="">Todas</option>{Array.from(new Set(rows.map(r => r.network).filter(Boolean))).map(n => <option key={n} value={n!}>{n}</option>)}</select></label>
+        <label>Desde <input aria-label="Retiros desde" type="date" value={withdrawalFrom} onChange={e => setWithdrawalFrom(e.target.value)} /></label>
+        <label>Hasta <input aria-label="Retiros hasta" type="date" value={withdrawalTo} onChange={e => setWithdrawalTo(e.target.value)} /></label>
+        <button className="admin-refresh" onClick={() => { setWithdrawalQuery(""); setWithdrawalStatus(""); setWithdrawalNetwork(""); setWithdrawalFrom(""); setWithdrawalTo(""); }}>Limpiar filtros</button>
+      </div>
+      <p className="config-note">{filteredWithdrawals.length} de {rows.length} retiros cargados · Hasta 200 retiros y 200 solicitudes de capital recientes · Fecha de solicitud, hora de Santo Domingo.</p>
+      {invalidDates && <p role="alert">La fecha inicial no puede ser posterior a la final.</p>}
       {message && <p className="config-note" role="status">{message}</p>}
-      {loading ? <LoadingState /> : rows.length === 0 ? (
+      {loading ? <LoadingState /> : filteredWithdrawals.length === 0 ? (
         <EmptyState title="Sin retiros" detail="No hay solicitudes de retiro para revisar." />
       ) : (
         <DataTable label="Cola de retiros manuales">
           <thead><tr><th>Usuario</th><th>Envío</th><th>Wallet destino</th><th>Estado</th><th>Referencia / acciones</th></tr></thead>
-          <tbody>{rows.map(row => {
+          <tbody>{filteredWithdrawals.map(row => {
             const amount = Math.abs(Number(row.amount) || 0);
             const net = Number(row.net_amount) || amount - (Number(row.fee) || 0);
             const busy = actingId === row.id;
