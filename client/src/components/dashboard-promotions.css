@@ -1,7 +1,12 @@
 .dashboard-promotions{--promo-accent:#70e5ff;position:relative;overflow:hidden;border:1px solid #2b6787;border-radius:22px;background:radial-gradient(ellipse at 90% 40%,#124d8166,transparent 65%),#081428;margin-bottom:24px;color:#fff;box-shadow:0 12px 38px #00142744}
 .dashboard-promotions.theme-reinvestment{--promo-accent:#b7ff3c;background:radial-gradient(ellipse at 90% 40%,#496b2855,transparent 65%),#101e1e;border-color:#526c37}
 .dashboard-promotions.theme-marketing{--promo-accent:#c6acff;background:radial-gradient(ellipse at 90% 40%,#6546a055,transparent 65%),#15132d;border-color:#5e4b8b}
-.promotion-slide{display:flex;align-items:center;justify-content:space-between;min-height:270px;padding:28px 32px 18px;gap:24px}
+.promotion-viewport{overflow:hidden;width:100%;height:360px;touch-action:pan-y;isolation:isolate}
+.promotion-track{display:flex;width:100%;height:100%;transition:transform .65s cubic-bezier(.22,.61,.36,1);will-change:transform}
+.promotion-slide{position:relative;box-sizing:border-box;flex:0 0 100%;width:100%;min-width:0;display:flex;align-items:center;justify-content:space-between;min-height:270px;padding:28px 32px 18px;gap:24px;overflow:hidden}
+.promotion-image-slide{padding:0;background:#031024}.promotion-image-link{width:100%;height:100%;border:0;padding:0;display:block;background:transparent;cursor:pointer}.promotion-image-link picture{display:block;width:100%;height:100%}.promotion-image-link img{display:block;width:100%;height:100%;object-fit:contain}
+@media(prefers-reduced-motion:reduce){.promotion-track{transition:none}}
+@media(max-width:600px){.promotion-viewport{height:390px}.promotion-image-slide{padding:0!important}.dashboard-promotions{max-width:100%;min-width:0}}
 .promotion-copy{position:relative;z-index:1;max-width:700px;min-width:0}.promotion-kicker{font-size:11px;letter-spacing:.16em;color:var(--promo-accent);font-weight:800}
 .promotion-copy h2{font-size:clamp(25px,3vw,38px);line-height:1.15;margin:12px 0}.promotion-copy p{font-size:16px;color:#e0e9f5;margin:0 0 12px}.promotion-copy small{display:block;font-size:12px;line-height:1.6;color:#b9c6d9}
 .promotion-cta{display:flex;align-items:center;gap:14px;margin-top:20px;padding:11px 18px;border:0;border-radius:10px;background:var(--promo-accent);color:#081323;font-weight:800;cursor:pointer}

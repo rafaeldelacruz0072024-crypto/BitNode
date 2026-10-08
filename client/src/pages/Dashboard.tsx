@@ -1034,6 +1034,7 @@ export default function Dashboard() {
         </header>
         <main className="dash-content">
           {isHome && <DashboardPromotions onSelect={key => {
+            if (key === "support") { window.dispatchEvent(new Event("bitnode:open-support")); return; }
             if (key === "marketing") { navigate("/dashboard/marketing"); return; }
             setLoginPromotion(key); setReinvestmentPromoOpen(true);
           }} />}

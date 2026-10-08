@@ -32,6 +32,15 @@ export function SaraSupport({ userId }: { userId: string }) {
   const [error, setError] = useState("");
   const generation = useRef(0);
   useEffect(() => {
+    const show = () => {
+      if (chatActive) {
+        (window as CrispWindow).$crisp?.push(["do", "chat:open"]);
+      } else setOpen(true);
+    };
+    window.addEventListener("bitnode:open-support", show);
+    return () => window.removeEventListener("bitnode:open-support", show);
+  }, [chatActive]);
+  useEffect(() => {
     generation.current += 1;
     setOpen(false); setError("");
     return () => {
