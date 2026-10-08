@@ -41,7 +41,7 @@ describe("account support view", () => {
     const insert = vi.fn().mockResolvedValue({ error: fallback ? { message: "missing table" } : null });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const result = { data: [], error: null };
-    const query: any = { eq: () => query, order: () => query, limit: async () => result,
+    const query: any = { eq: () => query, order: () => query, range: async () => result,
       maybeSingle: async () => ({ data: { id: "target", username: "member" }, error: null }) };
     const from = vi.fn((table: string) => table === "admin_operation_audit_log"
       ? { insert } : table === "platform_settings" ? { upsert } : { select: () => query });

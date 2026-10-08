@@ -42,7 +42,7 @@ export function AdminAccountView({ userId, onClose }: { userId: string; onClose:
     {error ? <p role="alert">{error}</p> : !data ? <p>Cargando cuenta…</p> : <>
       <p>Administrador: {data.operator} · Acceso registrado en auditoría.</p>
       <BinaryTree key={userId} nodes={data.nodes} currentUserId={userId} ownerName={data.profile.username} />
-      <p>El árbol carga hasta 25 niveles. Referidos y nodos: hasta 1,000 registros por lista.</p>
+      <p>Red completa del usuario, sin límite fijo de niveles ni registros. Explora las ramas para recorrerla.</p>
       <h3>Referidos directos por patrocinio ({data.directs.length})</h3>
       {data.directs.length ? <ul>{data.directs.map(user => <li key={user.id}>{user.username}</li>)}</ul> : <p>Sin referidos directos.</p>}
       <h3>Nodos del usuario ({data.contracts.length})</h3>

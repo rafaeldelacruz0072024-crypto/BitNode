@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { authenticatedAdmin } from "./adminWithdrawals.js";
+import { supportSubtree } from "./supportTree.js";
 
 export function registerAdminAccountView(app: Express) {
   app.post("/api/admin/account-view", async (req, res) => {
@@ -30,17 +31,29 @@ export function registerAdminAccountView(app: Express) {
         }, { onConflict: "key" });
         if (fallback.error) return res.status(503).json({ error: "No se pudo registrar el acceso en auditoría. No se abrió la cuenta." });
       }
-      const [tree, directs, contracts] = await Promise.all([
-        admin.client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
-        admin.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id").limit(1000),
-        admin.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id").limit(1000),
+      const all = async (build: () => any) => {
+        const rows: any[] = [];
+        // Empty-page termination also works if the server page cap is below 500.
+        for (;;) {
+          const { data, error } = await build().range(rows.length, rows.length + 499);
+          if (error) throw error;
+          if (!data?.length) return rows;
+          rows.push(...data);
+        }
+      };
+      const [network, directs, contracts] = await Promise.all([
+        all(() => admin.client.from("network_nodes").select("user_id,parent_id,leg").order("user_id")),
+        all(() => admin.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id")),
+        all(() => admin.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id")),
       ]);
-      if (tree.error || directs.error || contracts.error) {
-        console.error("[admin-account-view] queries", { tree: tree.error, directs: directs.error, contracts: contracts.error });
-        return res.status(503).json({ error: tree.error ? "No se pudo consultar el árbol del usuario. Verifica get_my_network_tree en Supabase." : "No se pudieron consultar los referidos o nodos del usuario." });
+      const nodes = supportSubtree(network, userId);
+      for (let offset = 0; offset < nodes.length; offset += 100) {
+        const ids = nodes.slice(offset, offset + 100).map(n => n.user_id);
+        const names = await all(() => admin.client.from("profiles").select("id,username").in("id", ids).order("id"));
+        const byId = new Map(names.map(p => [p.id, p.username]));
+        for (const node of nodes.slice(offset, offset + 100)) node.username = byId.get(node.user_id) || "Usuario";
       }
-      return res.json({ profile, nodes: tree.data || [], directs: directs.data || [], contracts: contracts.data || [],
-        operator: admin.username || admin.email, depthLimit: 25, rowLimit: 1000 });
+      return res.json({ profile, nodes, directs, contracts, operator: admin.username || admin.email });
     } catch (error) {
       console.error("[admin-account-view]", error);
       return res.status(503).json({ error: "No se pudo cargar la vista de soporte." });

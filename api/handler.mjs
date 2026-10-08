@@ -2139,6 +2139,26 @@ function registerFiniteNodeCapitalRoutes(app2) {
   });
 }
 
+// server/supportTree.ts
+function supportSubtree(nodes, userId) {
+  const root = nodes.find((n) => n.user_id === userId);
+  if (!root) return [];
+  const children = /* @__PURE__ */ new Map();
+  for (const node of nodes) {
+    if (node.parent_id) children.set(node.parent_id, [...children.get(node.parent_id) || [], node]);
+  }
+  const result = [{ ...root, parent_id: null, leg: null }];
+  const seen = /* @__PURE__ */ new Set([userId]);
+  for (let index = 0; index < result.length; index++) {
+    for (const node of children.get(result[index].user_id) || []) {
+      if (seen.has(node.user_id)) continue;
+      seen.add(node.user_id);
+      result.push(node);
+    }
+  }
+  return result;
+}
+
 // server/adminAccountView.ts
 function registerAdminAccountView(app2) {
   app2.post("/api/admin/account-view", async (req, res) => {
@@ -2177,24 +2197,28 @@ function registerAdminAccountView(app2) {
         }, { onConflict: "key" });
         if (fallback.error) return res.status(503).json({ error: "No se pudo registrar el acceso en auditor\xEDa. No se abri\xF3 la cuenta." });
       }
-      const [tree, directs, contracts] = await Promise.all([
-        admin4.client.rpc("get_my_network_tree", { p_user_id: userId, p_max_depth: 25 }),
-        admin4.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id").limit(1e3),
-        admin4.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id").limit(1e3)
+      const all = async (build) => {
+        const rows = [];
+        for (; ; ) {
+          const { data, error: error2 } = await build().range(rows.length, rows.length + 499);
+          if (error2) throw error2;
+          if (!data?.length) return rows;
+          rows.push(...data);
+        }
+      };
+      const [network, directs, contracts] = await Promise.all([
+        all(() => admin4.client.from("network_nodes").select("user_id,parent_id,leg").order("user_id")),
+        all(() => admin4.client.from("profiles").select("id,username").eq("sponsor_id", userId).order("id")),
+        all(() => admin4.client.from("contracts").select("id,plan_id,amount,status").eq("user_id", userId).order("id"))
       ]);
-      if (tree.error || directs.error || contracts.error) {
-        console.error("[admin-account-view] queries", { tree: tree.error, directs: directs.error, contracts: contracts.error });
-        return res.status(503).json({ error: tree.error ? "No se pudo consultar el \xE1rbol del usuario. Verifica get_my_network_tree en Supabase." : "No se pudieron consultar los referidos o nodos del usuario." });
+      const nodes = supportSubtree(network, userId);
+      for (let offset = 0; offset < nodes.length; offset += 100) {
+        const ids = nodes.slice(offset, offset + 100).map((n) => n.user_id);
+        const names = await all(() => admin4.client.from("profiles").select("id,username").in("id", ids).order("id"));
+        const byId = new Map(names.map((p) => [p.id, p.username]));
+        for (const node of nodes.slice(offset, offset + 100)) node.username = byId.get(node.user_id) || "Usuario";
       }
-      return res.json({
-        profile,
-        nodes: tree.data || [],
-        directs: directs.data || [],
-        contracts: contracts.data || [],
-        operator: admin4.username || admin4.email,
-        depthLimit: 25,
-        rowLimit: 1e3
-      });
+      return res.json({ profile, nodes, directs, contracts, operator: admin4.username || admin4.email });
     } catch (error) {
       console.error("[admin-account-view]", error);
       return res.status(503).json({ error: "No se pudo cargar la vista de soporte." });
