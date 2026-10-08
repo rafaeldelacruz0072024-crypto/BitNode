@@ -22,7 +22,6 @@ import {
   Home,
   LogOut,
   Menu,
-  MessageCircle,
   Plus,
   RefreshCw,
   Settings,
@@ -34,6 +33,7 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { SaraIaSection } from "@/components/SaraIaSection";
+import { SaraSupport } from "@/components/SaraSupport";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
@@ -560,14 +560,7 @@ export default function Dashboard() {
   const [networkSummary, setNetworkSummary] = useState<NetworkSummary | null>(null);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
-  const [supportWhatsapp, setSupportWhatsapp] = useState("");
   const section = useMemo(() => location.split("/")[2] || "home", [location]);
-  useEffect(() => {
-    fetch("/api/support/whatsapp")
-      .then(response => response.ok ? response.json() : { number: "" })
-      .then(body => setSupportWhatsapp(String(body.number || "").replace(/\D/g, "")))
-      .catch(() => setSupportWhatsapp(""));
-  }, []);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
@@ -1055,18 +1048,7 @@ export default function Dashboard() {
           <NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider>
         </main>
       </div>
-      {supportWhatsapp && (
-        <a
-          className="dashboard-whatsapp"
-          href={`https://wa.me/${supportWhatsapp}?text=${encodeURIComponent("Hola, necesito soporte con mi cuenta de BitNode.")}`}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Contactar soporte por WhatsApp"
-        >
-          <MessageCircle size={23} />
-          <span>Soporte</span>
-        </a>
-      )}
+      <SaraSupport key={authUserId} userId={authUserId} />
     </div>
   );
 }

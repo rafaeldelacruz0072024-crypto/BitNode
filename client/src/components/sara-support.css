@@ -1,0 +1,9 @@
+.sara-support{position:fixed;right:22px;bottom:calc(22px + env(safe-area-inset-bottom));z-index:75;font-family:inherit}
+.sara-support-launcher{display:flex;align-items:center;gap:10px;padding:8px 18px 8px 8px;border:1px solid #55ddf5;border-radius:50px;background:linear-gradient(130deg,#182a4b,#10192f);color:#fff;box-shadow:0 8px 30px #0008;cursor:pointer;font-weight:800}
+.sara-support img{width:46px;height:46px;object-fit:cover;border-radius:50%;border:1px solid #55ddf5}
+.sara-support-launcher small,.sara-support-panel header small{display:block;font-size:11px;color:#78e7ff;font-weight:400}
+.sara-support-panel{width:min(350px,calc(100vw - 32px));padding:20px;border:1px solid #416184;border-radius:20px;background:#0d1628;color:#eef4ff;box-shadow:0 15px 60px #0009;margin-bottom:12px;max-height:70dvh;overflow:auto}
+.sara-support-panel header{display:flex;align-items:center;gap:12px}.sara-support-panel header button{margin-left:auto;background:transparent;border:0;color:#fff;font-size:28px;cursor:pointer}
+.sara-support-panel p{font-size:14px;line-height:1.6;margin:16px 0}.sara-support-panel>small{display:block;color:#a9bad1;font-size:12px;line-height:1.5}
+.sara-support-connect{width:100%;margin-top:18px;padding:12px;border:0;border-radius:10px;background:#b7ff3c;color:#071421;font-weight:800;cursor:pointer}.sara-support-connect:disabled{opacity:.6}
+@media(max-width:600px){.sara-support{right:16px;bottom:calc(16px + env(safe-area-inset-bottom))}}
