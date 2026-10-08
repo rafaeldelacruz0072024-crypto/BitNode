@@ -34,6 +34,7 @@ import {
 import { BrandMark } from "@/components/BrandMark";
 import { SaraIaSection } from "@/components/SaraIaSection";
 import { SaraSupport } from "@/components/SaraSupport";
+import { DashboardPromotions } from "@/components/DashboardPromotions";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
@@ -1032,19 +1033,10 @@ export default function Dashboard() {
           </div>
         </header>
         <main className="dash-content">
-          {isHome && <section className="sara-promo-banner" aria-label="Promoción SARA IA">
-            <div className="sara-banner-copy">
-              <span className="sara-banner-kicker">NUEVO PRODUCTO · BITNODE</span>
-              <h2>SARA IA trabaja por ti</h2>
-              <p>Tus 4 tareas en automático, de lunes a viernes.</p>
-              <small>Lanzamiento: lunes 5 de octubre · Nodo de 21 días activo · 25 USD / 30 días</small>
-              <div className="sara-banner-actions">
-                <button type="button" onClick={() => { setLoginPromotion("sara"); setReinvestmentPromoOpen(true); }}>SARA IA</button>
-                <button type="button" onClick={() => { setLoginPromotion("reinvestment"); setReinvestmentPromoOpen(true); }}>Reinversión +5%</button>
-              </div>
-            </div>
-            <img src="/sara-ia-official-avatar.png" alt="Avatar de SARA IA" />
-          </section>}
+          {isHome && <DashboardPromotions onSelect={key => {
+            if (key === "marketing") { navigate("/dashboard/marketing"); return; }
+            setLoginPromotion(key); setReinvestmentPromoOpen(true);
+          }} />}
           <NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider>
         </main>
       </div>
