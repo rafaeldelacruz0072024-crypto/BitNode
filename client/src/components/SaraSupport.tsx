@@ -62,12 +62,12 @@ export function SaraSupport({ userId }: { userId: string }) {
   return <div className="sara-support" hidden={chatActive}>
     {!chatActive && <style>{".crisp-client { display: none !important; }"}</style>}
     {open && <section className="sara-support-panel" aria-label="SARA IA Soporte">
-      <header><img src="/sara-ia-avatar.png" alt="" /><div><strong>SARA IA</strong><small>Soporte de BitNode</small></div><button aria-label="Cerrar soporte" onClick={() => setOpen(false)}>×</button></header>
+      <header><img src="/sara-ia-official-avatar.png" alt="" /><div><strong>SARA IA</strong><small>Soporte de BitNode</small></div><button aria-label="Cerrar soporte" onClick={() => setOpen(false)}>×</button></header>
       <p>¿Necesitas ayuda con BitNode? Abre el chat para contactar al equipo de soporte.</p>
       <small>El chat es gestionado mediante Crisp. No compartas contraseñas, códigos de verificación ni frases de recuperación.</small>
       <button className="sara-support-connect" disabled={busy} onClick={() => void connect()}>{busy ? "Conectando…" : "Abrir chat de soporte"}</button>
       {error && <p role="alert">{error}</p>}
     </section>}
-    <button className="sara-support-launcher" aria-expanded={open} aria-label="SARA IA Soporte" onClick={() => setOpen(value => !value)}><img src="/sara-ia-avatar.png" alt="" /><span>SARA IA<small>Soporte</small></span></button>
+    <button className="sara-support-launcher" aria-expanded={open} aria-label="SARA IA Soporte" onClick={() => setOpen(value => !value)}><img src="/sara-ia-official-avatar.png" alt="" /><span>SARA IA<small>Soporte</small></span></button>
   </div>;
 }

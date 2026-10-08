@@ -1043,7 +1043,7 @@ export default function Dashboard() {
                 <button type="button" onClick={() => { setLoginPromotion("reinvestment"); setReinvestmentPromoOpen(true); }}>Reinversión +5%</button>
               </div>
             </div>
-            <img src="/sara-ia-avatar.png" alt="Avatar de SARA IA" />
+            <img src="/sara-ia-official-avatar.png" alt="Avatar de SARA IA" />
           </section>}
           <NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider>
         </main>

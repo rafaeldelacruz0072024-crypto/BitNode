@@ -168,7 +168,7 @@ export function SaraIaSection() {
         </div>
         <div className="sara-avatar-wrap">
           <img
-            src="/sara-ia-avatar.png"
+            src="/sara-ia-official-avatar.png"
             alt="Avatar de SARA IA, asistente BitNode"
           />
         </div>
