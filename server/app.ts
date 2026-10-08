@@ -20,6 +20,7 @@ import { registerActivationReportRoutes } from "./activationReport.js";
 import { registerDailyReconciliationRoutes } from "./dailyReconciliation.js";
 import { registerFiniteNodeCapitalRoutes } from "./finiteNodeCapital.js";
 import { registerAdminAccountView } from "./adminAccountView.js";
+import { registerAdminSaraSales } from "./adminSaraSales.js";
 
 export function createApp(): Express {
   const app = express();
@@ -45,6 +46,7 @@ export function createApp(): Express {
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);
   registerAdminAccountView(app);
+  registerAdminSaraSales(app);
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
   registerActivationReportRoutes(app);

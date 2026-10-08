@@ -1,0 +1,17 @@
+.sara-sales { border-top: 3px solid #55ddf5; min-width: 0; }
+.sara-sales-filters, .sara-sales-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.sara-sales-filters label { display:grid; gap:8px; color:#b6c5df; }
+.sara-sales-filters input,.sara-sales-filters select { width:100%; min-width:0; padding:12px; border:1px solid #364363; border-radius:10px; background:#101729; color:#fff; color-scheme:dark; }
+.sara-sales-metrics>div { padding:20px; border:1px solid #284960; border-radius:14px; background:linear-gradient(130deg,#122a39,#101629); }
+.sara-sales-metrics span { display:block; color:#adbed3; font-size:13px; }
+.sara-sales-metrics strong { display:block; margin-top:10px; color:#5cebc5; font-size:28px; }
+.sara-sales-table { max-width:100%; overflow-x:auto; margin:18px 0; }
+.sara-sales-table table { width:100%; border-collapse:collapse; }
+.sara-sales-table td,.sara-sales-table th { padding:14px; text-align:left; border-bottom:1px solid #2a3249; white-space:nowrap; }
+.sara-sales-table small { display:block; color:#96a7c1; margin-top:6px; }
+.sara-sale-status { padding:5px 9px; border-radius:8px; background:#303b51; }
+.sara-sale-status.completed { background:#123c35; color:#68efc4; }
+.sara-sale-status.review,.sara-sale-status.pending { background:#49391c; color:#ffd67b; }
+.sara-sale-status.failed { background:#48252f; color:#ffa5b3; }
+@media(max-width:900px) { .sara-sales-filters,.sara-sales-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:480px) { .sara-sales-filters,.sara-sales-metrics { grid-template-columns:1fr; } }

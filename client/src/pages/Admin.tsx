@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { AdminAccountView } from "@/components/AdminAccountView";
+import { AdminSaraSales } from "@/components/AdminSaraSales";
 import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import "@/admin-operations.css";
 import {
@@ -43,6 +44,7 @@ type SectionName =
   | "Transacciones"
   | "Comisiones"
   | "Marketing y materiales"
+  | "Ventas SARA IA"
   | "Configuración";
 
 type AdminUser = {
@@ -190,6 +192,7 @@ const sections: SectionName[] = [
   "Transacciones",
   "Comisiones",
   "Marketing y materiales",
+  "Ventas SARA IA",
   "Configuración",
 ];
 const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
@@ -205,6 +208,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Transacciones: WalletCards,
   Comisiones: BarChart3,
   "Marketing y materiales": FileClock,
+  "Ventas SARA IA": CircleDollarSign,
   Configuración: Settings2,
 };
 
@@ -2192,6 +2196,7 @@ export default function Admin() {
         )}
         {activeSection === "Resumen" && <SummarySection data={adminData} />}
         {activeSection === "Marketing y materiales" && <MarketingMaterials admin />}
+        {activeSection === "Ventas SARA IA" && <AdminSaraSales />}
         {activeSection === "Usuarios" &&
           (adminData ? (
             <UsersSection data={adminData} onUpdated={refreshData} />
