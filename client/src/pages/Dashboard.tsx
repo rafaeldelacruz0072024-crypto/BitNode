@@ -965,6 +965,7 @@ export default function Dashboard() {
                 <b>Nuevo nodo: 210 USDT</b>
               </div>
               <small>El bono se agrega al capital del nuevo nodo; no se acredita como saldo disponible para retiro. Aplican condiciones de elegibilidad.</small>
+              <p><strong>Importante:</strong> La reinversión con el bono del 5% no genera comisiones para tu patrocinador ni volumen binario. Solo las compras de paquetes de inversión nuevos generan comisiones, según las reglas vigentes.</p>
             </div>}
           </div>
         </div>
