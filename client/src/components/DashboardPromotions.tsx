@@ -44,6 +44,7 @@ export function DashboardPromotions({ onSelect }: { onSelect: (key: "support" | 
             <picture><source media="(max-width: 600px)" srcSet="/sara-support-mobile.png" /><img src="/sara-support-desktop.png" alt="¿Necesitas ayuda? Habla con SARA IA. Resuelve tus dudas o solicita atención humana. Abrir chat de soporte. Nunca compartas contraseñas ni códigos." /></picture>
           </button> : <>
             <div className="promotion-copy">
+              {item.key === "sara" && <img className="promotion-brand" src="/bitnode-logo.png" alt="BitNode" />}
               <span className="promotion-kicker">{item.label}</span>
               <h2>{item.title}</h2><p>{item.description}</p><small>{item.note}</small>
               <button className="promotion-cta" onClick={() => onSelect(item.key)}>{item.action}<ChevronRight size={18} /></button>
