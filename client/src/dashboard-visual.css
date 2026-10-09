@@ -1,4 +1,32 @@
 /* Presentation only. Scoped to the user dashboard; no shared/admin overrides. */
+@media (max-width: 700px) {
+  .dashboard-future .dashboard-sidebar {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .dashboard-future .dashboard-sidebar .dash-brand { flex-shrink: 0; }
+  .dashboard-future .dashboard-sidebar .dash-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  .dashboard-future .dashboard-sidebar .dash-nav a { flex-shrink: 0; }
+  .dashboard-future .dashboard-sidebar .logout {
+    flex-shrink: 0;
+    min-height: 52px;
+    margin-bottom: 8px;
+  }
+  .dashboard-future:has(.dashboard-sidebar.is-open) .sara-support { display: none; }
+}
 .dashboard-future {
   background:
     radial-gradient(ellipse at 75% 0%, #6374ff14, transparent 48%),
