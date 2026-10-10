@@ -6,7 +6,7 @@ describe("admin SARA sales", () => {
   let handler: any; let res: any;
   beforeEach(() => {
     vi.resetAllMocks();
-    registerAdminSaraSales({ get: (_: string, fn: any) => { handler = fn; } } as any);
+    registerAdminSaraSales({ post: vi.fn(), get: (_: string, fn: any) => { handler = fn; } } as any);
     res = { set: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() };
   });
   it.each([401, 403])("rejects unauthorized access (%s)", async status => {

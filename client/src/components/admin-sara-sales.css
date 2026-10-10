@@ -1,4 +1,7 @@
 .sara-sales { border-top: 3px solid #55ddf5; min-width: 0; }
+.sara-manual-panel { padding:20px; margin:20px 0; border:1px solid #38617a; border-radius:14px; background:linear-gradient(120deg,#12313d,#111b31); }
+.sara-manual-panel .sara-sales-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+@media(max-width:600px) { .sara-manual-panel .sara-sales-filters { grid-template-columns:1fr; } }
 .sara-sales-filters, .sara-sales-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin:20px 0; }
 .sara-sales-filters label { display:grid; gap:8px; color:#b6c5df; }
 .sara-sales-filters input,.sara-sales-filters select { width:100%; min-width:0; padding:12px; border:1px solid #364363; border-radius:10px; background:#101729; color:#fff; color-scheme:dark; }

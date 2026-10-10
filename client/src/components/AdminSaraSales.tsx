@@ -4,7 +4,7 @@ import "./admin-sara-sales.css";
 
 type Payment = { order_id: string; user_id: string; username: string; price_amount: number | string; status: string; provider_status: string; pay_currency: string; provider_payment_id: string | null; actually_paid: number | string | null; created_at: string; completed_at: string | null };
 type Subscription = { user_id: string; username: string; paid_through_at: string; hasActive21DayNode: boolean };
-type Sales = { payments: Payment[]; subscriptions: Subscription[]; generatedAt: string };
+type Sales = { payments: Payment[]; subscriptions: Subscription[]; generatedAt: string; eligibleUsers?: { user_id: string; username: string }[] };
 const labels: Record<string, string> = { completed: "Confirmado", pending: "Pendiente", failed: "Fallido", review: "En revisión" };
 const day = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
 const date = (value: string | null) => value ? new Date(value).toLocaleString("es-DO", { timeZone: "America/Santo_Domingo" }) : "—";
@@ -18,6 +18,25 @@ export function AdminSaraSales() {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [page, setPage] = useState(0);
+  const [manualUser, setManualUser] = useState("");
+  const [reason, setReason] = useState("");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [activating, setActivating] = useState(false);
+  const [manualMessage, setManualMessage] = useState("");
+  async function activate() {
+    if (!window.confirm("¿Autorizar 30 días calendario de SARA IA sin registrar un pago? Si tiene tiempo vigente, se añadirán al vencimiento actual.")) return;
+    setActivating(true); setManualMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/sara-sales/activate", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: manualUser, reason, requestId }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "No se pudo activar.");
+      setManualMessage(`Activación registrada. Vence: ${date(body.paidThroughAt)}. No se registró una venta.`);
+      setRequestId(crypto.randomUUID()); setReason(""); await load();
+    } catch (e) { setManualMessage(e instanceof Error ? e.message : "Error de conexión. Reintenta con la misma solicitud."); }
+    finally { setActivating(false); }
+  }
   async function load() {
     setLoading(true); setError("");
     try {
@@ -46,9 +65,19 @@ export function AdminSaraSales() {
   return <article className="admin-card admin-card-full sara-sales">
     <div className="card-heading"><div><p className="admin-kicker">SARA IA / CONTROL COMERCIAL</p><h2>Ventas de SARA IA</h2></div>
       <button type="button" className="admin-refresh" disabled={loading} onClick={() => void load()}>{loading ? "Cargando…" : "Actualizar"}</button></div>
-    <p>Plan de $25 USD por 30 días calendarios. Solo los pagos confirmados cuentan como ventas. No se modifican pagos ni suscripciones desde este apartado.</p>
+    <p>Plan de $25 USD por 30 días calendarios. Solo los pagos confirmados cuentan como ventas; las activaciones manuales no generan ingresos.</p>
     {error && <p role="alert">{error}</p>}
     {data && <>
+      <section className="sara-manual-panel" aria-label="Activación manual de SARA IA">
+        <h3>Activar SARA IA manualmente</h3>
+        <p>30 días calendario. Requiere nodo de 21 días activo. Se conserva el tiempo vigente y se registra el administrador y el motivo.</p>
+        <div className="sara-sales-filters">
+          <label>Usuario elegible<select disabled={activating} value={manualUser} onChange={e => { setManualUser(e.target.value); setRequestId(crypto.randomUUID()); }}><option value="">Seleccionar usuario</option>{(data.eligibleUsers || []).map(u => <option key={u.user_id} value={u.user_id}>{u.username}</option>)}</select></label>
+          <label>Motivo<input disabled={activating} value={reason} maxLength={500} onChange={e => { setReason(e.target.value); setRequestId(crypto.randomUUID()); }} placeholder="Cortesía, ajuste o incidencia de soporte" /></label>
+        </div>
+        <button className="admin-refresh" disabled={activating || !manualUser || reason.trim().length < 5} onClick={() => void activate()}>{activating ? "Activando…" : "Autorizar 30 días"}</button>
+        {manualMessage && <p role="status">{manualMessage}</p>}
+      </section>
       <div className="sara-sales-filters">
         <label>Buscar usuario u orden<input value={query} onChange={e => setQuery(e.target.value)} placeholder="Usuario, ID u orden" /></label>
         <label>Estado<select value={status} onChange={e => setStatus(e.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
