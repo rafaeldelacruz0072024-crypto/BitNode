@@ -554,6 +554,9 @@ export default function Dashboard() {
   const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
   const hydratedUserId = useRef<string | null>(null);
+  const activationInFlight = useRef(false);
+  const activationRequest = useRef<{ key: string; id: string } | null>(null);
+  const [activatingNode, setActivatingNode] = useState(false);
   const [commissionSummary, setCommissionSummary] =
     useState<CommissionSummary | null>(null);
   const [commissionLoading, setCommissionLoading] = useState(false);
@@ -765,14 +768,22 @@ export default function Dashboard() {
     }
   };
   const activate = async (item: (typeof catalog)[number], amount: number) => {
+    if (activationInFlight.current) return;
     if (!Number.isFinite(amount) || amount < item.min)
       return showNotice(`El monto mínimo es ${money(item.min)}.`);
     if (user.balance < amount)
       return showNotice(
         `No tienes suficiente balance para activar ${money(amount)}.`
       );
+    if (!window.confirm(`Crear ${item.name} por ${money(amount)} usando tu balance disponible. Se descontará ese monto y comenzará un ciclo nuevo. ¿Continuar?`)) return;
+    const requestKey = `${authUserId}:${item.id}:${amount}`;
+    if (activationRequest.current?.key !== requestKey) {
+      activationRequest.current = { key: requestKey, id: `NODE-${crypto.randomUUID()}` };
+    }
+    activationInFlight.current = true;
+    setActivatingNode(true);
     const contract: Contract = {
-      id: newId("NODE"),
+      id: activationRequest.current.id,
       name: item.name,
       rate: item.rate,
       amount,
@@ -780,27 +791,17 @@ export default function Dashboard() {
       createdAt: new Date().toLocaleDateString("es-MX"),
       duration: item.duration,
     };
-    const movement = {
-      id: contract.id,
-      type: "contract" as const,
-      label: `Activación ${item.name}`,
-      amount: -amount,
-      status: "completed" as const,
-      date: new Date().toISOString(),
-    };
     try {
       const result = await activateContractAndCommissions({
         contractId: contract.id,
         planId: item.id,
         amount,
       });
-      setUser(prev => ({
-        ...prev,
-        balance: prev.balance - amount,
-        totalInvested: prev.totalInvested + amount,
-        contracts: [contract, ...prev.contracts],
-        movements: [movement, ...prev.movements],
-      }));
+      // Never subtract locally: a successful retry can be a duplicate.
+      const summary = await fetchAccountSummary();
+      if (!summary) throw new Error("La solicitud fue procesada, pero no se pudo actualizar el balance. Reintenta para consultar el mismo nodo sin duplicarlo.");
+      setUser(prev => ({ ...prev, ...summary.ledger, contracts: summary.contracts, movements: summary.movements }));
+      activationRequest.current = null;
       fetchCommissionSummary()
         .then(summary => {
           if (summary) setCommissionSummary(summary);
@@ -809,7 +810,7 @@ export default function Dashboard() {
       showNotice(
         result.status === "duplicate"
           ? `${item.name} ya estaba activado.`
-          : `${item.name} activado y comisión liquidada.`
+          : `${item.name} creado usando tu balance disponible.`
       );
       navigate("/dashboard/nodes");
     } catch (error) {
@@ -818,6 +819,9 @@ export default function Dashboard() {
           ? error.message
           : "No se pudo activar el contrato."
       );
+    } finally {
+      activationInFlight.current = false;
+      setActivatingNode(false);
     }
   };
   const reward = (
@@ -889,6 +893,7 @@ export default function Dashboard() {
       showNotice={showNotice}
       withdraw={mutateWithdraw}
       activate={activate}
+      activatingNode={activatingNode}
       reward={reward}
     />
   );
@@ -1261,6 +1266,7 @@ function SectionPanel({
   showNotice,
   withdraw,
   activate,
+  activatingNode,
   reward,
 }: {
   section: string;
@@ -1282,6 +1288,7 @@ function SectionPanel({
     result: { id: string; fee: number; netAmount: number; balance: number }
   ) => void;
   activate: (item: (typeof catalog)[number], amount: number) => void;
+  activatingNode: boolean;
   reward: (
     rewards: DailyNodeReward[],
     fallback?: { amount: number; transactionId?: string }
@@ -1295,7 +1302,7 @@ function SectionPanel({
     activate: [
       "CONTRATOS DISPONIBLES",
       "Activar nodos",
-      "Elige el ritmo de generación que mejor encaja con tu estrategia.",
+      "Crea un nodo nuevo usando tu balance disponible, sin realizar otro depósito. Cada nodo comienza su propio ciclo.",
     ],
     tasks: [
       "ACTIVACIÓN DIARIA",
@@ -1367,7 +1374,7 @@ function SectionPanel({
                 <h3>{item.name}</h3>
                 <strong className="rate-private">Rendimiento variable</strong>
                 <p>
-                  Generación de lunes a viernes. Mínimo local: {money(item.min)}
+                  Generación de lunes a viernes. Mínimo: {money(item.min)}
                   .
                 </p>
                 <label className="activation-amount">
@@ -1378,6 +1385,7 @@ function SectionPanel({
                     max={user.balance}
                     step="0.01"
                     inputMode="decimal"
+                    disabled={activatingNode}
                     value={rawAmount}
                     aria-invalid={!valid}
                     onChange={event =>
@@ -1391,11 +1399,11 @@ function SectionPanel({
                 </label>
                 <button
                   className="dash-primary"
-                  disabled={!valid}
+                  disabled={!valid || activatingNode}
                   onClick={() => activate(item, amount)}
                 >
-                  {amount >= item.min && Number.isFinite(amount)
-                    ? `Activar por ${money(amount)}`
+                  {activatingNode ? "Procesando…" : amount >= item.min && Number.isFinite(amount)
+                    ? `Crear nodo con mi balance · ${money(amount)}`
                     : `Mínimo ${money(item.min)}`}{" "}
                   <Zap size={15} />
                 </button>
