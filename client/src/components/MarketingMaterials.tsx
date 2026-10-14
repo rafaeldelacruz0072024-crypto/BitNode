@@ -49,10 +49,10 @@ export function MarketingMaterials({ admin = false }: { admin?: boolean }) {
       if (authError || !auth.user) throw new Error("Inicia sesión como administrador.");
       const path = `${auth.user.id}/${crypto.randomUUID()}.${extension}`;
       const { error: storageError } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
-      if (storageError) throw new Error("No se pudo subir el archivo. Verifica tu rol administrador y el bucket de Marketing.");
+      if (storageError) throw new Error(`No se pudo subir el archivo: ${storageError.message}. Si supera el límite del almacenamiento, revisa el límite global de Storage y aplica la migración que elimina los 20 MB del bucket de Marketing.`);
       uploadedPath = path;
       const { error: metadataError } = await supabase.from("marketing_materials").insert({ title: title.trim(), description: description.trim(), category, file_path: path, file_name: file.name, mime_type: file.type, size_bytes: file.size, uploaded_by: auth.user.id });
-      if (metadataError) throw new Error("No se pudo registrar el material en la biblioteca.");
+      if (metadataError) throw new Error("No se pudo registrar el material en la biblioteca. Verifica que esté aplicada la migración que elimina el límite de 20 MB de Marketing.");
       saved = true;
       setTitle(""); setDescription(""); if (fileInput.current) fileInput.current.value = "";
       await refresh(); setNotice("Material publicado. Los usuarios ya pueden verlo y descargarlo.");
@@ -76,7 +76,7 @@ export function MarketingMaterials({ admin = false }: { admin?: boolean }) {
       <label>Título<input required maxLength={120} value={title} onChange={e => setTitle(e.target.value)} /></label>
       <label>Categoría<select value={category} onChange={e => setCategory(e.target.value)}>{MATERIAL_CATEGORIES.map(name => <option key={name}>{name}</option>)}</select></label>
       <label className="marketing-wide">Descripción<textarea maxLength={2000} value={description} onChange={e => setDescription(e.target.value)} /></label>
-      <label className="marketing-wide">Archivo · máximo 20 MB<input ref={fileInput} type="file" required accept=".jpg,.jpeg,.png,.webp,.pdf,.pptx,.docx,.zip,.mp4" /></label>
+      <label className="marketing-wide">Archivo · sujeto al límite del almacenamiento<input ref={fileInput} type="file" required accept=".jpg,.jpeg,.png,.webp,.pdf,.pptx,.docx,.zip,.mp4" /></label>
       <button disabled={busy} type="submit">{busy ? "Procesando…" : "Subir y publicar material"}</button>
       <small>JPG, PNG, WEBP, PDF, PPTX, DOCX, ZIP o MP4. No se permiten archivos ejecutables.</small>
     </form>}
