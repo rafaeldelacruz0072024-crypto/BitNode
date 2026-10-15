@@ -36,6 +36,7 @@ import { SaraIaSection } from "@/components/SaraIaSection";
 import { SaraSupport } from "@/components/SaraSupport";
 import { DashboardPromotions } from "@/components/DashboardPromotions";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
+import { PromotionsSection } from "@/components/PromotionsSection";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
@@ -425,6 +426,7 @@ const nav = [
   ["Tareas diarias", "/dashboard/tasks", CheckCircle2],
   ["SARA IA", "/dashboard/sara-ia", Bot],
   ["Marketing y materiales", "/dashboard/marketing", Box],
+  ["Promociones y novedades", "/dashboard/promotions", Sparkles],
   ["Mis nodos", "/dashboard/nodes", Box],
   ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
@@ -1041,6 +1043,7 @@ export default function Dashboard() {
           {isHome && <DashboardPromotions onSelect={key => {
             if (key === "support") { window.dispatchEvent(new Event("bitnode:open-support")); return; }
             if (key === "marketing") { navigate("/dashboard/marketing"); return; }
+            if (key === "promotions") { navigate("/dashboard/promotions"); return; }
             setLoginPromotion(key); setReinvestmentPromoOpen(true);
           }} />}
           <NodeCycleProvider key={authUserId} userId={authUserId}>{cycleNotifications.panel}{content}</NodeCycleProvider>
@@ -1298,6 +1301,7 @@ function SectionPanel({
     Record<string, string>
   >(() => Object.fromEntries(catalog.map(item => [item.id, String(item.min)])));
   const labels: Record<string, [string, string, string]> = {
+    promotions: ["PRE-POSICIONAMIENTO LATAM", "Promociones y novedades", "Tu esfuerzo, tu progreso y los premios de BitNode."],
     "sara-ia": ["ASISTENTE DE TAREAS", "SARA IA", "Automatiza tus cuatro tareas de lunes a viernes."],
     activate: [
       "CONTRATOS DISPONIBLES",
@@ -1417,6 +1421,7 @@ function SectionPanel({
     return <DailyTasksPanel user={user} onRewards={reward} />;
   if (section === "sara-ia") return <SaraIaSection />;
   if (section === "marketing") return <MarketingMaterials />;
+  if (section === "promotions") return <PromotionsSection />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} />;
   if (section === "withdraw")

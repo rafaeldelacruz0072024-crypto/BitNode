@@ -3,13 +3,14 @@ import { Bot, ChevronLeft, ChevronRight, Gift, Image, Pause, Play } from "lucide
 import "./dashboard-promotions.css";
 
 const slides = [
+  { key: "promotions", label: "PRE-POSICIONAMIENTO LATAM", title: "Tu esfuerzo te lleva a Cartagena", description: "15,000 USDT directos · 10 cupos · Primeros 3: iPhone + viaje.", note: "16 oct. al 25 nov. 2026 · Hora Ciudad de México · Solo facturación elegible validada.", action: "Ver progreso y premios", Icon: Gift },
   { key: "support", label: "SOPORTE BITNODE", title: "Habla con SARA IA", description: "Resuelve tus dudas o solicita atención humana.", note: "Nunca compartas contraseñas ni códigos.", action: "Abrir chat de soporte", Icon: Bot },
   { key: "sara", label: "TU ASISTENTE INTELIGENTE", title: "SARA IA trabaja por ti", description: "Tus 4 tareas en automático, de lunes a viernes.", note: "25 USD / 30 días calendario · Requiere nodo de 21 días activo", action: "SARA IA", Icon: Bot },
   { key: "reinvestment", label: "PROMOCIÓN DE REINVERSIÓN", title: "Tu próximo ciclo, con +5%", description: "Reinvierte tu capital y recibe un 5% de capital adicional.", note: "La reinversión promocional no genera comisiones para el patrocinador.", action: "Ver promoción", Icon: Gift },
   { key: "marketing", label: "NOVEDADES · BITNODE", title: "Todo para compartir BitNode", description: "Encuentra imágenes, PDF y materiales en un solo lugar.", note: "Explora los recursos disponibles en Marketing y materiales.", action: "Explorar materiales", Icon: Image },
 ] as const;
 
-export function DashboardPromotions({ onSelect }: { onSelect: (key: "support" | "sara" | "reinvestment" | "marketing") => void }) {
+export function DashboardPromotions({ onSelect }: { onSelect: (key: "support" | "sara" | "reinvestment" | "marketing" | "promotions") => void }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [interacting, setInteracting] = useState(false);

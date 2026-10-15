@@ -2269,6 +2269,79 @@ function registerAdminSaraSales(app2) {
   });
 }
 
+// server/promotions.ts
+import { createClient as createClient10 } from "@supabase/supabase-js";
+function registerPromotionRoutes(app2) {
+  app2.get("/api/promotions/latam", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const token4 = req.headers.authorization?.replace(/^Bearer /i, "") || "";
+      if (!token4)
+        return res.status(401).json({ error: "Inicia sesi\xF3n para consultar tu progreso." });
+      const client = createClient10(
+        process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+        process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+        { auth: { persistSession: false } }
+      );
+      const { data: auth, error: failure } = await client.auth.getUser(token4);
+      if (failure || !auth.user)
+        return res.status(401).json({ error: "Sesi\xF3n no v\xE1lida." });
+      const isAdmin = req.query.admin === "1";
+      if (isAdmin) {
+        const admin4 = await authenticatedAdmin(req);
+        if (admin4.error)
+          return res.status(admin4.status || 403).json({ error: admin4.error });
+      }
+      const { data, error } = await client.rpc("get_latam_promotion", {
+        p_user_id: auth.user.id,
+        p_admin: isAdmin
+      });
+      if (error)
+        return res.status(503).json({
+          error: "Progreso no disponible. Falta verificar la migraci\xF3n de Promociones en Supabase."
+        });
+      return res.json(data);
+    } catch {
+      return res.status(503).json({
+        error: "No se pudo consultar la promoci\xF3n. No se muestran cifras estimadas."
+      });
+    }
+  });
+  app2.post("/api/admin/promotions/latam/validate", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if (admin4.error)
+        return res.status(admin4.status || 403).json({ error: admin4.error });
+      const { contractId, depositId, amount: amount2, reason, revoke, realSale } = req.body || {};
+      if (typeof contractId !== "string" || contractId.length > 160 || typeof depositId !== "string" || depositId.length > 160 || typeof reason !== "string" || reason.trim().length < 10 || reason.length > 500 || typeof amount2 !== "number" || !Number.isFinite(amount2) || amount2 <= 0 || realSale !== true || typeof revoke !== "boolean")
+        return res.status(400).json({
+          error: "Completa nodo, dep\xF3sito, importe, motivo y confirmaci\xF3n de venta real."
+        });
+      const { data, error } = await admin4.client.rpc(
+        "admin_validate_latam_sale",
+        {
+          p_admin_id: admin4.userId,
+          p_contract_id: contractId,
+          p_deposit_id: depositId,
+          p_amount: amount2,
+          p_reason: reason.trim(),
+          p_revoke: revoke
+        }
+      );
+      if (error)
+        return res.status(error.code === "P0001" || error.code === "23505" ? 409 : 503).json({
+          error: error.code === "P0001" ? error.message : error.code === "23505" ? "Esta operaci\xF3n ya fue registrada. No se duplic\xF3 la facturaci\xF3n." : "Validaci\xF3n no disponible. Revisa la migraci\xF3n de Promociones."
+        });
+      return res.json(data);
+    } catch {
+      return res.status(503).json({
+        error: "No se pudo guardar. Actualiza el listado antes de reintentar."
+      });
+    }
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();

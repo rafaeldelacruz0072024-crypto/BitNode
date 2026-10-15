@@ -21,6 +21,7 @@ import { registerDailyReconciliationRoutes } from "./dailyReconciliation.js";
 import { registerFiniteNodeCapitalRoutes } from "./finiteNodeCapital.js";
 import { registerAdminAccountView } from "./adminAccountView.js";
 import { registerAdminSaraSales } from "./adminSaraSales.js";
+import { registerPromotionRoutes } from "./promotions.js";
 
 export function createApp(): Express {
   const app = express();
@@ -47,6 +48,7 @@ export function createApp(): Express {
   registerAdminWithdrawalRoutes(app);
   registerAdminAccountView(app);
   registerAdminSaraSales(app);
+  registerPromotionRoutes(app);
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
   registerActivationReportRoutes(app);

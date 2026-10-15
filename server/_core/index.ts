@@ -21,6 +21,7 @@ import { registerActivationReportRoutes } from "../activationReport";
 import { registerDailyReconciliationRoutes } from "../dailyReconciliation";
 import { registerFiniteNodeCapitalRoutes } from "../finiteNodeCapital";
 import { registerEmailSecurityRoutes } from "../emailSecurity";
+import { registerPromotionRoutes } from "../promotions";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -66,6 +67,7 @@ async function startServer() {
   registerActivationReportRoutes(app);
   registerDailyReconciliationRoutes(app);
   registerEmailSecurityRoutes(app);
+  registerPromotionRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

@@ -1,0 +1,293 @@
+.latam-promotions {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  color: #edf3ff;
+}
+.latam-promotions article,
+.latam-hero {
+  border: 1px solid #28405e;
+  border-radius: 22px;
+  padding: clamp(20px, 3vw, 36px);
+  background: linear-gradient(135deg, #0b172b, #090d19);
+  min-width: 0;
+}
+.latam-hero {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at right bottom, #143b52, transparent 65%), #091225;
+}
+.latam-logo {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  margin-bottom: 20px;
+}
+.latam-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: #6aeaff;
+  font-weight: 700;
+}
+.latam-promotions h2 {
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: 1.1;
+  margin: 16px 0;
+}
+.latam-promotions h2 span,
+.latam-promotions h3 span {
+  color: #b0ff2e;
+}
+.latam-promotions h3 {
+  font-size: 24px;
+  line-height: 1.35;
+  margin: 10px 0 16px;
+}
+.latam-promotions p {
+  line-height: 1.7;
+  margin: 12px 0;
+  color: #bacce4;
+}
+.latam-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.latam-tags span {
+  border: 1px solid #31516b;
+  border-radius: 30px;
+  padding: 8px 12px;
+  color: #aaffde;
+  font-size: 13px;
+}
+.latam-date {
+  font-size: 13px;
+}
+.latam-trip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid #31516b;
+  padding-left: 28px;
+}
+.latam-trip > span {
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  color: #6aeaff;
+}
+.latam-trip strong {
+  font-size: clamp(26px, 3.3vw, 44px);
+  color: #fff;
+  margin: 20px 0 0;
+  overflow-wrap: anywhere;
+}
+.latam-trip small {
+  color: #c1d1e7;
+}
+.latam-rewards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.latam-phone img {
+  width: 100%;
+  height: 210px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 14px;
+  margin: 18px 0 8px;
+}
+.latam-phone > small {
+  display: block;
+  color: #a5b6cf;
+  font-size: 11px;
+}
+.latam-ticket {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 90px;
+  color: #b0ff2e;
+  font-weight: 800;
+  margin-top: 30px;
+}
+.latam-ticket span {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: #d7e5f8;
+}
+.latam-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.latam-progress > strong {
+  font-size: 32px;
+  display: block;
+  margin: 15px 0;
+}
+.latam-progress small {
+  font-size: 16px;
+  color: #a4b7cf;
+}
+.latam-progress progress {
+  width: 100%;
+  height: 18px;
+  accent-color: #adff2f;
+}
+.latam-progress progress::-webkit-progress-bar {
+  background: #25354e;
+  border-radius: 15px;
+}
+.latam-progress progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #45d9f4, #adff2f);
+  border-radius: 15px;
+}
+.latam-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+.latam-slots li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #263d59;
+  border-radius: 12px;
+  min-width: 0;
+}
+.latam-position {
+  color: #6aeaff;
+  font-size: 22px;
+}
+.latam-slots li > div {
+  flex: 1;
+  min-width: 0;
+}
+.latam-slots strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.latam-slots small {
+  display: block;
+  color: #a5b8d1;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.latam-slots li > span:last-child {
+  font-size: 10px;
+  color: #b0ff2e;
+  max-width: 90px;
+}
+.latam-rules ul {
+  padding-left: 20px;
+  line-height: 1.9;
+  color: #bdcde3;
+}
+.latam-promotions button {
+  border: 1px solid #3d8ab5;
+  background: #11314c;
+  color: #b4f2ff;
+  border-radius: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+}
+.latam-promotions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.latam-promotions button:focus-visible,
+.latam-promotions input:focus-visible,
+.latam-promotions select:focus-visible,
+.latam-promotions textarea:focus-visible {
+  outline: 2px solid #aaff2e;
+  outline-offset: 3px;
+}
+.latam-error {
+  border: 1px solid #b84d66;
+  padding: 16px;
+  border-radius: 12px;
+  color: #ffc0cf !important;
+}
+.latam-admin {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 24px 0;
+}
+.latam-admin label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.latam-admin input,
+.latam-admin select,
+.latam-admin textarea {
+  border: 1px solid #35516d;
+  border-radius: 8px;
+  padding: 12px;
+  background: #090f1f;
+  color: #fff;
+  width: 100%;
+  min-width: 0;
+}
+.latam-admin textarea {
+  min-height: 90px;
+}
+.latam-wide {
+  grid-column: 1/-1;
+}
+.latam-admin .latam-check {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.6;
+}
+.latam-check input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 4px;
+}
+.latam-history {
+  max-height: 380px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.latam-history p {
+  border-bottom: 1px solid #28405e;
+  padding: 10px 0;
+  font-size: 13px;
+}
+@media (max-width: 720px) {
+  .latam-hero,
+  .latam-rewards,
+  .latam-slots,
+  .latam-admin {
+    grid-template-columns: 1fr;
+  }
+  .latam-trip {
+    border-left: 0;
+    border-top: 1px solid #31516b;
+    padding: 22px 0 0;
+  }
+  .latam-slots li {
+    padding: 14px;
+  }
+  .latam-progress > strong {
+    font-size: 26px;
+  }
+  .latam-promotions {
+    gap: 16px;
+  }
+  .latam-promotions article,
+  .latam-hero {
+    border-radius: 16px;
+  }
+}

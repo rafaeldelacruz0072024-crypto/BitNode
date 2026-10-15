@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { BrandMark } from "@/components/BrandMark";
 import { MonthlyRoiControl } from "@/components/MonthlyRoiControl";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
+import { PromotionsSection } from "@/components/PromotionsSection";
 import { AdminAccountView } from "@/components/AdminAccountView";
 import { AdminSaraSales } from "@/components/AdminSaraSales";
 import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
@@ -44,6 +45,7 @@ type SectionName =
   | "Transacciones"
   | "Comisiones"
   | "Marketing y materiales"
+  | "Promociones y novedades"
   | "Ventas SARA IA"
   | "Configuración";
 
@@ -192,6 +194,7 @@ const sections: SectionName[] = [
   "Transacciones",
   "Comisiones",
   "Marketing y materiales",
+  "Promociones y novedades",
   "Ventas SARA IA",
   "Configuración",
 ];
@@ -208,6 +211,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   Transacciones: WalletCards,
   Comisiones: BarChart3,
   "Marketing y materiales": FileClock,
+  "Promociones y novedades": BarChart3,
   "Ventas SARA IA": CircleDollarSign,
   Configuración: Settings2,
 };
@@ -2228,6 +2232,7 @@ export default function Admin() {
         )}
         {activeSection === "Resumen" && <SummarySection data={adminData} />}
         {activeSection === "Marketing y materiales" && <MarketingMaterials admin />}
+        {activeSection === "Promociones y novedades" && <PromotionsSection admin />}
         {activeSection === "Ventas SARA IA" && <AdminSaraSales />}
         {activeSection === "Usuarios" &&
           (adminData ? (
