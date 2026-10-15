@@ -45,7 +45,7 @@ begin
  -- Serializes allocations across deposits AND contracts, preventing double counting.
  perform pg_advisory_xact_lock(731590022);
  if p_revoke then
-  update public.latam_promotion_sales set revoked_at=now() where contract_id=p_contract_id and deposit_id=p_deposit_id and revoked_at is null;
+  update public.latam_promotion_sales set revoked_at=now() where contract_id=p_contract_id and deposit_id=p_deposit_id and revoked_at is null returning amount into p_amount;
   if not found then raise exception 'Validación no encontrada o ya revocada'; end if;
  else
   select * into c from public.contracts where id=p_contract_id for update;
