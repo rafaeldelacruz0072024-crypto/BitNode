@@ -3,7 +3,12 @@ import { supabase } from "@/lib/supabaseClient";
 import "./promotions-section.css";
 
 type Snapshot = {
+  rulesVersion: "latam-trip-raffle-v2";
   total: number;
+  raffleEligible: boolean;
+  raffleParticipantCount: number;
+  raffleDrawStatus: "pending";
+  raffleParticipants: { userId: string; username: string; total: number }[];
   winners: { position: number; username: string; qualifiedAt: string }[];
   validations: {
     id: string;
@@ -46,9 +51,15 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
     setLoading(true);
     setError("");
     try {
-      setSnapshot(
-        await request(`/api/promotions/latam${admin ? "?admin=1" : ""}`)
+      const result = await request(
+        `/api/promotions/latam${admin ? "?admin=1" : ""}`
       );
+      if (result.rulesVersion !== "latam-trip-raffle-v2") {
+        throw new Error(
+          "La configuración actualizada de premios todavía no está disponible. Intenta actualizar de nuevo."
+        );
+      }
+      setSnapshot(result);
     } catch (cause) {
       setSnapshot(null);
       setError(
@@ -138,15 +149,16 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
       <div className="latam-rewards">
         <article className="latam-phone">
           <div>
-            <p className="latam-eyebrow">PRIMEROS 3 SOCIOS</p>
+            <p className="latam-eyebrow">SORTEO · 3 EQUIPOS</p>
             <h3>
-              iPhone 18 Pro Max
+              iPhone 18 Pro
               <br />
-              <span>+ viaje a Cartagena</span>
+              <span>Desde 10,000 y menos de 15,000 USDT</span>
             </h3>
             <p>
-              Un iPhone para cada uno de los primeros tres clasificados. Tres
-              equipos en total.
+              Quienes al cierre alcancen 10,000 USDT de facturación directa
+              elegible y no lleguen a 15,000 participan en el sorteo de tres
+              iPhone 18 Pro: uno por ganador. No es un premio automático.
             </p>
           </div>
           <img
@@ -159,22 +171,24 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
           </small>
         </article>
         <article>
-          <p className="latam-eyebrow">SIGUIENTES 7 SOCIOS</p>
+          <p className="latam-eyebrow">PRIMEROS 10 SOCIOS · SOLO VIAJE</p>
           <h3>
             Tu lugar en el
             <br />
             <span>Bootcamp Cartagena</span>
           </h3>
           <p>
-            Los lugares 4 al 10 reciben el viaje. La misma meta para todos:{" "}
-            <strong>15,000 USDT de facturación directa elegible.</strong>
+            Los primeros 10 socios que alcancen{" "}
+            <strong>15,000 USDT de facturación directa elegible</strong>{" "}
+            obtienen solo el viaje. Al alcanzar esta meta ya no participan en el
+            sorteo de iPhone.
           </p>
           <div className="latam-ticket">
-            07{" "}
+            10{" "}
             <span>
               VIAJES
               <br />
-              PARA LOS SIGUIENTES LÍDERES
+              PARA LOS PRIMEROS EN CUMPLIR LA META
             </span>
           </div>
         </article>
@@ -216,9 +230,47 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      <article className="latam-progress">
+        <h3>Tu participación en el sorteo de iPhone</h3>
+        <p>
+          Tres iPhone 18 Pro, uno por ganador, entre quienes terminen la
+          promoción con 10,000 a menos de 15,000 USDT de facturación directa
+          elegible.
+        </p>
+        {snapshot && !error ? (
+          <>
+            <progress
+              aria-label="Progreso hacia el mínimo del sorteo"
+              max={10000}
+              value={Math.min(Number(snapshot.total), 10000)}
+            />
+            <p>
+              {snapshot.raffleEligible
+                ? "Cumples provisionalmente el rango del sorteo. Si alcanzas 15,000 USDT, dejas de participar y compites por uno de los 10 viajes."
+                : Number(snapshot.total) >= 15000
+                  ? "Alcanzaste 15,000 USDT: solo clasificas para el viaje según los cupos disponibles; no participas en el sorteo."
+                  : `Faltan ${format(Math.max(10000 - Number(snapshot.total), 0))} USDT para alcanzar el mínimo del sorteo.`}
+            </p>
+            <p>
+              Participantes provisionales:{" "}
+              <strong>{format(snapshot.raffleParticipantCount)}</strong>.
+            </p>
+          </>
+        ) : (
+          <p>
+            Participación pendiente de consulta; no se muestran datos sin
+            verificar.
+          </p>
+        )}
+        <p>
+          El sorteo está pendiente de realizarse después del cierre y la
+          verificación final de los participantes. La elegibilidad se recalcula
+          si cambia o se revoca una venta.
+        </p>
+      </article>
       <article>
         <p className="latam-eyebrow">COMPETENCIA INTERNA</p>
-        <h3>Los 10 lugares de LATAM</h3>
+        <h3>Los 10 lugares para el viaje a Cartagena</h3>
         <p>
           Orden por momento de alcanzar la meta con ventas validadas.
           Clasificación provisional: una revocación puede cambiar los lugares.
@@ -238,9 +290,7 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
                     {winner?.username ||
                       (snapshot ? "Lugar disponible" : "Pendiente de consulta")}
                   </strong>
-                  <small>
-                    {i < 3 ? "iPhone + viaje" : "Viaje Bootcamp Cartagena"}
-                  </small>
+                  <small>Solo viaje Bootcamp Cartagena</small>
                 </div>
                 <span>{winner ? "META CUMPLIDA" : "15,000 USDT"}</span>
               </li>
@@ -267,12 +317,18 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
           elegibles.
         </p>
         <p>
-          <strong>Primeros 3 clasificados:</strong> un iPhone 18 Pro Max por
-          persona más viaje al Bootcamp Cartagena.
+          <strong>Viaje:</strong> los primeros 10 socios que alcancen 15,000
+          USDT de facturación directa elegible reciben solo el viaje al Bootcamp
+          Cartagena.
         </p>
         <p>
-          <strong>Siguientes 7 clasificados:</strong> viaje al Bootcamp
-          Cartagena.
+          <strong>Sorteo:</strong> quienes al cierre lleguen a 10,000 USDT y no
+          alcancen 15,000 USDT participan por tres iPhone 18 Pro, uno por
+          ganador.
+        </p>
+        <p>
+          Al alcanzar 15,000 USDT se deja de participar en el sorteo de iPhone.
+          No se acumulan ambos premios.
         </p>
         <p>
           Vigencia:{" "}
@@ -280,13 +336,38 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
           las 11:59:59 p. m., hora de Ciudad de México.
         </p>
         <p>
-          Cupo limitado a <strong>10 ganadores</strong>.
+          Cupo limitado a <strong>10 viajes</strong> y{" "}
+          <strong>3 iPhone 18 Pro por sorteo</strong>.
         </p>
         <p>
           La clasificación y entrega de premios están sujetas a verificación
           final.
         </p>
       </article>
+      {admin && (
+        <article>
+          <h3>Participantes provisionales del sorteo</h3>
+          <p>
+            Rango: desde 10,000 y menos de 15,000 USDT. La lista cambia con las
+            validaciones y revocaciones; no representa ganadores.
+          </p>
+          <div className="latam-history">
+            {snapshot?.raffleParticipants.map(item => (
+              <p key={item.userId}>
+                <strong>{item.username}</strong> · {format(Number(item.total))}{" "}
+                USDT
+              </p>
+            ))}
+          </div>
+          {snapshot?.raffleParticipants.length === 0 && (
+            <p>No hay participantes elegibles registrados.</p>
+          )}
+          <p>
+            Sorteo pendiente. No se han seleccionado ni asignado ganadores de
+            iPhone.
+          </p>
+        </article>
+      )}
       {admin && (
         <article>
           <h3>Validar una venta real</h3>

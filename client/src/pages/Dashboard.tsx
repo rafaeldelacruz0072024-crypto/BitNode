@@ -89,7 +89,7 @@ const DAILY_TASKS = [
 ] as const;
 
 const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
-const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:login-promotions-v3-latam-seen";
+const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:login-promotions-v4-trip-raffle-seen";
 
 function CashbackCountdown({ now }: { now: number }) {
   const totalSeconds = Math.max(0, Math.ceil((DEPOSIT_CASHBACK_END - now) / 1000));

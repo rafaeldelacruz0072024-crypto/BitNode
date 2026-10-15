@@ -10,7 +10,9 @@
 
 ## Reglas
 
-- Meta única: 15,000 USDT. Tres primeros clasificados reciben **un** iPhone 18 Pro Max cada uno + viaje. Lugares 4–10 reciben solo viaje Bootcamp Cartagena.
+- Viaje: los primeros 10 socios en completar 15,000 USDT validados reciben solo viaje Bootcamp Cartagena, sin iPhone.
+- Sorteo: quienes terminen con al menos 10,000 y menos de 15,000 USDT validados participan por 3 iPhone 18 Pro, uno por ganador. A 15,000 dejan el grupo del sorteo. No se acumulan los premios. Participación provisional hasta revisión final; este cambio no realiza un sorteo ni asigna ganadores.
+- Aplicar también `supabase/migrations/20261015235040_latam_trip_and_iphone_raffle.sql`; agrega los campos de elegibilidad, contador y listado administrativo privado sin modificar ventas, saldos o comisiones.
 - Período fijo: `[2026-10-16 00:00, 2026-11-26 00:00)` en America/Mexico_City. Incluye completo el 25 de noviembre. Tanto depósito como inversión deben estar dentro del período; el depósito no puede ser posterior al nodo.
 - Fuente: NP con ID de proveedor y estado confirmed/finished; o ADMIN con marcador admin_manual y revisión explícita de cobro real. Excluye devoluciones de capital, cashback, bonos y reinversiones identificadas por prefijo, ledger o elección de capital.
 - Estado actual de contrato y ambas transacciones se comprueba al consultar. Si una reversión se registra fuera de esos estados, revocar también su validación promocional. No se ha creado un reconciliador externo de devoluciones del proveedor.

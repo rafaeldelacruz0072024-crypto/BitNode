@@ -28,14 +28,14 @@ export function LatamLoginFlyer({ onView }: { onView: () => void }) {
         />
         <div>
           <p>
-            <strong>Primeros 3 socios</strong>
+            <strong>Desde 10,000 y menos de 15,000 USDT</strong>
             <br />
-            Un iPhone 18 Pro Max cada uno + viaje
+            Participa en el sorteo de 3 iPhone 18 Pro
           </p>
           <p>
-            <strong>Siguientes 7 socios</strong>
+            <strong>15,000 USDT · Primeros 10 socios</strong>
             <br />
-            Viaje al Bootcamp Cartagena
+            Solo viaje al Bootcamp Cartagena · sin iPhone
           </p>
         </div>
       </div>
@@ -55,7 +55,10 @@ export function LatamLoginFlyer({ onView }: { onView: () => void }) {
       <button type="button" onClick={onView}>
         Ver progreso y premios <span aria-hidden="true">→</span>
       </button>
-      <small>Clasificación y entrega sujetas a verificación final.</small>
+      <small>
+        No se acumulan ambos premios. Participación en el sorteo sujeta al rango
+        al cierre; sorteo pendiente de realizarse y verificación final.
+      </small>
     </div>
   );
 }

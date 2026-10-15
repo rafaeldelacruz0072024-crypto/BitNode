@@ -20,6 +20,12 @@ try {
       "utf8"
     )
   );
+  const prizeMigration = await readFile(
+    "supabase/migrations/20261015235040_latam_trip_and_iphone_raffle.sql",
+    "utf8"
+  );
+  await db.exec(prizeMigration);
+  await db.exec(prizeMigration); // Reapplying this update must not reset sales.
   const seed = async (
     id,
     deposit,
@@ -47,9 +53,13 @@ try {
       `select admin_validate_latam_sale($1,$2,$3,$4,'Pago real confirmado y conciliado',$5)`,
       [who, id, deposit, amount, revoke]
     );
-  const snapshot = async () =>
-    (await db.query(`select get_latam_promotion($1,false) data`, [sponsor]))
-      .rows[0].data;
+  const snapshot = async (userId = sponsor, adminMode = false) =>
+    (
+      await db.query(`select get_latam_promotion($1,$2) data`, [
+        userId,
+        adminMode,
+      ])
+    ).rows[0].data;
   await seed("NODE-1", "NP-1");
   await assert.rejects(
     validate("NODE-1", "NP-1", 15000, buyer),
@@ -58,6 +68,9 @@ try {
   await validate("NODE-1", "NP-1");
   assert.equal(Number((await snapshot()).total), 15000);
   assert.equal((await snapshot()).winners[0].username, "lider");
+  assert.equal((await snapshot()).winners[0].prize, "trip");
+  assert.equal((await snapshot()).raffleEligible, false);
+  assert.equal((await snapshot()).rulesVersion, "latam-trip-raffle-v2");
   await assert.rejects(validate("NODE-1", "NP-1"), /supera|duplicate/);
   await db.exec(`update transactions set status='reversed' where id='NP-1'`);
   assert.equal(Number((await snapshot()).total), 0);
@@ -83,10 +96,14 @@ try {
   );
   await validate("MANUAL", "ADMIN-REAL", 14999);
   assert.equal((await snapshot()).winners.length, 0);
+  assert.equal((await snapshot()).raffleEligible, true);
+  assert.equal(Number((await snapshot()).raffleParticipantCount), 1);
   await seed("NODE-EXTRA", "NP-EXTRA", "2026-11-26T05:59:59Z", "finished", 1);
   await validate("NODE-EXTRA", "NP-EXTRA", 1);
   assert.equal((await snapshot()).winners.length, 1);
   assert.equal(Number((await snapshot()).total), 15000);
+  assert.equal((await snapshot()).raffleEligible, false);
+  assert.equal(Number((await snapshot()).raffleParticipantCount), 0);
   const privileges = await db.query(
     `select has_function_privilege('authenticated','public.admin_validate_latam_sale(uuid,text,text,numeric,text,boolean)','execute') allowed`
   );
@@ -115,8 +132,43 @@ try {
   assert.equal(board.winners[0].position, 1);
   assert.equal(board.winners[9].position, 10);
   assert.equal(board.validations.length, 0);
+  assert.equal(
+    board.winners.every(w => w.prize === "trip"),
+    true
+  );
+  const raffleUser = "00000000-0000-0000-0000-000000000100";
+  await db.query(`insert into profiles values($1,'sorteo','user',null)`, [
+    raffleUser,
+  ]);
+  await db.query(`update profiles set sponsor_id=$1 where id=$2`, [
+    raffleUser,
+    buyer,
+  ]);
+  for (const [id, amount, eligible] of [
+    ["RAFFLE-BASE", 9999.99, false],
+    ["RAFFLE-MIN", 0.01, true],
+    ["RAFFLE-UPPER", 4999.99, true],
+    ["RAFFLE-TRIP", 0.01, false],
+  ]) {
+    await seed(id, `NP-${id}`, "2026-10-16T06:00:00Z", "confirmed", amount);
+    await validate(id, `NP-${id}`, amount);
+    assert.equal((await snapshot(raffleUser)).raffleEligible, eligible);
+  }
+  await db.exec(
+    `update transactions set status='reversed' where id='RAFFLE-TRIP'`
+  );
+  assert.equal(Number((await snapshot(raffleUser)).total), 14999.99);
+  assert.equal((await snapshot(raffleUser)).raffleEligible, true);
+  assert.equal((await snapshot(raffleUser)).raffleDrawStatus, "pending");
+  assert.equal((await snapshot(raffleUser)).raffleParticipants.length, 0);
+  const adminBoard = await snapshot(admin, true);
+  assert.equal(adminBoard.raffleParticipants[0].username, "sorteo");
+  assert.equal(Number(adminBoard.raffleParticipantCount), 1);
+  await assert.rejects(snapshot(raffleUser, true), /Administrador/);
+  await validate("RAFFLE-BASE", "NP-RAFFLE-BASE", 9999.99, admin, true);
+  assert.equal((await snapshot(raffleUser)).raffleEligible, false);
   console.log(
-    "PASS: exact target, Mexico boundaries, crypto/manual, no bonus/reinvestment, reversals/revocation, duplicates, authorization, audit."
+    "PASS: 10,000 inclusive / 15,000 exclusive raffle, trips-only top ten, privacy, pending draw, reversals/revocation, Mexico dates, funding, duplicates and audit."
   );
 } finally {
   await db.close();

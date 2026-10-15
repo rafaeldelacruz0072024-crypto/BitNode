@@ -8,7 +8,7 @@ const slides = [
     label: "PRE-POSICIONAMIENTO LATAM",
     title: "Tu esfuerzo te lleva a Cartagena",
     description:
-      "15,000 USDT directos · 10 cupos · Primeros 3: iPhone + viaje.",
+      "15,000 USDT: solo viaje · 10 cupos. Desde 10,000 y menos de 15,000: sorteo de 3 iPhone 18 Pro.",
     note: "16 oct. al 25 nov. 2026 · Hora Ciudad de México · Solo facturación elegible validada.",
     action: "Ver progreso y premios",
   },
