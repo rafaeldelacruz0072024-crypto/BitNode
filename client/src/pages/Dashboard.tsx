@@ -37,6 +37,7 @@ import { SaraSupport } from "@/components/SaraSupport";
 import { DashboardPromotions } from "@/components/DashboardPromotions";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { PromotionsSection } from "@/components/PromotionsSection";
+import { LatamLoginFlyer } from "@/components/LatamLoginFlyer";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
@@ -88,7 +89,7 @@ const DAILY_TASKS = [
 ] as const;
 
 const CASHBACK_PROMO_SESSION_KEY = "bitnode:cashback-promo-seen";
-const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:login-promotions-v2-seen";
+const REINVESTMENT_PROMO_SESSION_KEY = "bitnode:login-promotions-v3-latam-seen";
 
 function CashbackCountdown({ now }: { now: number }) {
   const totalSeconds = Math.max(0, Math.ceil((DEPOSIT_CASHBACK_END - now) / 1000));
@@ -551,7 +552,7 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [cashbackPromoOpen, setCashbackPromoOpen] = useState(false);
   const [reinvestmentPromoOpen, setReinvestmentPromoOpen] = useState(false);
-  const [loginPromotion, setLoginPromotion] = useState<"reinvestment" | "sara">("sara");
+  const [loginPromotion, setLoginPromotion] = useState<"reinvestment" | "sara" | "latam">("latam");
   const [liveNodes, setLiveNodes] = useState(15014);
   const [now, setNow] = useState(() => Date.now());
   const [user, setUser] = useState<LocalUserState>(() => loadLocalUser());
@@ -933,7 +934,7 @@ export default function Dashboard() {
           className="cashback-login-overlay reinvestment-promo-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="Promociones de SARA IA y reinversión"
+          aria-label="Promociones LATAM, SARA IA y reinversión"
           onMouseDown={event => {
             if (event.target === event.currentTarget) closeReinvestmentPromo();
           }}
@@ -948,10 +949,11 @@ export default function Dashboard() {
               <X aria-hidden="true" />
             </button>
             <div className="login-promo-switch" aria-label="Elegir promoción">
+              <button className="login-latam-tab" type="button" aria-pressed={loginPromotion === "latam"} onClick={() => setLoginPromotion("latam")}>Premios LATAM</button>
               <button type="button" aria-pressed={loginPromotion === "sara"} onClick={() => setLoginPromotion("sara")}>SARA IA</button>
               <button type="button" aria-pressed={loginPromotion === "reinvestment"} onClick={() => setLoginPromotion("reinvestment")}>Reinversión +5%</button>
             </div>
-            {loginPromotion === "sara" ? <div className="sara-login-flyer">
+            {loginPromotion === "latam" ? <LatamLoginFlyer onView={() => { closeReinvestmentPromo(); navigate("/dashboard/promotions"); }} /> : loginPromotion === "sara" ? <div className="sara-login-flyer">
               <img src="/sara-ia-launch-flyer.png" alt="SARA IA de BitNode: automatiza tus cuatro tareas de lunes a viernes por 25 dólares al mes. Lanzamiento este lunes." />
               <p>Exclusivo para usuarios con un nodo de 21 días activo.</p>
               <button type="button" onClick={() => { closeReinvestmentPromo(); navigate("/dashboard/sara-ia"); }}>Conocer SARA IA</button>

@@ -1,0 +1,152 @@
+.reinvestment-promo-modal .login-promo-switch {
+  flex-wrap: wrap;
+  align-items: center;
+  padding-right: 64px;
+}
+.login-promo-switch button.login-latam-tab {
+  border-color: #f9d354;
+  color: #ffe990;
+  box-shadow: 0 0 10px #f5b90026;
+}
+.login-promo-switch button.login-latam-tab[aria-pressed="true"] {
+  background: #ffe052;
+  border-color: #ffe052;
+  color: #171202;
+}
+.latam-login-flyer {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 10px clamp(18px, 5vw, 36px) 26px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 35%, #8d690d26, transparent 70%);
+  color: #eff5ff;
+  min-width: 0;
+}
+.latam-login-flyer .latam-login-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 0;
+}
+.latam-login-kicker {
+  color: #ffe16a;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+}
+.latam-login-flyer h2 {
+  font-size: clamp(27px, 6vw, 37px);
+  line-height: 1.15;
+  margin: 2px 0;
+  max-width: 430px;
+}
+.latam-login-flyer h2 strong {
+  display: block;
+  color: #ffe16a;
+}
+.latam-login-flyer p {
+  margin: 0;
+  color: #d9e7f9;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.latam-login-target {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  padding: 16px 10px;
+  border: 1px solid #d9b84575;
+  border-radius: 14px;
+  background: #dfaf0710;
+}
+.latam-login-target > strong {
+  font-size: 38px;
+  line-height: 1.1;
+  color: #ffe16a;
+}
+.latam-login-target > strong span {
+  font-size: 17px;
+}
+.latam-login-target small {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #f1dda0;
+}
+.latam-login-prizes {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+.latam-login-prizes > img {
+  width: 130px;
+  height: 135px;
+  object-fit: contain;
+  background: white;
+  border-radius: 12px;
+}
+.latam-login-prizes > div {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.latam-login-prizes strong {
+  color: #ffe16a;
+}
+.latam-login-flyer > small {
+  font-size: 11px;
+  color: #b4c6df;
+  line-height: 1.6;
+}
+.latam-login-flyer .latam-login-reference {
+  font-size: 9px;
+  color: #9facc3;
+}
+.latam-login-flyer .latam-login-dates {
+  font-size: 12px;
+  color: #f6df95;
+}
+.latam-login-flyer > button {
+  width: 100%;
+  border: 1px solid #ffe052;
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: #ffe052;
+  color: #171202;
+  font-weight: 800;
+  cursor: pointer;
+  min-height: 48px;
+}
+.latam-login-flyer > button:hover {
+  background: #ffec91;
+}
+.latam-login-flyer > button:focus-visible,
+.login-promo-switch .login-latam-tab:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+@media (max-width: 400px) {
+  .latam-login-prizes {
+    grid-template-columns: 90px 1fr;
+    gap: 12px;
+  }
+  .latam-login-prizes > img {
+    width: 90px;
+    height: 110px;
+  }
+  .latam-login-prizes p {
+    font-size: 12px;
+  }
+  .latam-login-target > strong {
+    font-size: 32px;
+  }
+  .latam-login-flyer {
+    gap: 10px;
+  }
+  .login-promo-switch .login-latam-tab {
+    font-size: 12px;
+  }
+}
