@@ -308,3 +308,38 @@
 .deposit-cashback-promo.is-expired .cashback-countdown strong {
   color: #a8b6d4;
 }
+
+/* A steady golden glow draws attention without flashing or moving the menu. */
+.dashboard-future .dash-nav a.promotions-highlight {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 52px;
+  padding-block: 10px;
+  color: #fff4bb;
+  font-weight: 650;
+  line-height: 1.4;
+  background: linear-gradient(110deg, rgba(255, 196, 0, .24), rgba(255, 220, 45, .07));
+  border: 1px solid rgba(255, 215, 0, .65);
+  border-left: 3px solid #ffe342;
+  box-shadow: 0 0 13px rgba(255, 207, 0, .23), inset 0 0 16px rgba(255, 196, 0, .08);
+}
+.dashboard-future .dash-nav a.promotions-highlight svg {
+  flex-shrink: 0;
+  color: #ffe642;
+  filter: drop-shadow(0 0 4px rgba(255, 220, 0, .55));
+}
+.dashboard-future .dash-nav a.promotions-highlight span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dashboard-future .dash-nav a.promotions-highlight:hover,
+.dashboard-future .dash-nav a.promotions-highlight.active {
+  color: #fff9d6;
+  border-color: #ffe642;
+  background: linear-gradient(110deg, rgba(255, 196, 0, .34), rgba(255, 220, 45, .13));
+  box-shadow: 0 0 15px rgba(255, 207, 0, .34), inset 0 0 18px rgba(255, 196, 0, .1);
+}
+.dashboard-future .dash-nav a.promotions-highlight:focus-visible {
+  outline: 2px solid #fff4a0;
+  outline-offset: 3px;
+}

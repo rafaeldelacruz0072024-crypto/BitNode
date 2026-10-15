@@ -985,7 +985,7 @@ export default function Dashboard() {
             <Link
               key={href}
               href={href}
-              className={`${location === href ? "active" : ""}${href === "/dashboard/tasks" ? " daily-tasks-link" : ""}`.trim()}
+              className={`${location === href ? "active" : ""}${href === "/dashboard/tasks" ? " daily-tasks-link" : ""}${href === "/dashboard/promotions" ? " promotions-highlight" : ""}`.trim()}
               onClick={() => setMobileOpen(false)}
             >
               <Icon size={19} />
