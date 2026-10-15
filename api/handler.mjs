@@ -2367,6 +2367,7 @@ function createApp() {
   registerAdminWithdrawalRoutes(app2);
   registerAdminAccountView(app2);
   registerAdminSaraSales(app2);
+  registerPromotionRoutes(app2);
   registerAdminMonthlyRoiRoutes(app2);
   registerAdminNodeControlRoutes(app2);
   registerActivationReportRoutes(app2);
