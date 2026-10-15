@@ -249,34 +249,43 @@ export function PromotionsSection({ admin = false }: { admin?: boolean }) {
         </ol>
       </article>
       <article className="latam-rules">
-        <h3>Reglas de oro</h3>
-        <ul>
-          <li>
-            Solo inversiones nuevas de referidos directos: crypto confirmado y
-            activaciones reales del administrador.
-          </li>
-          <li>
-            Depósito y nodo dentro del período promocional. No basta con
-            depositar: debe existir una inversión nueva.
-          </li>
-          <li>
-            No aplican reinversiones, bonos ni operaciones revertidas. Cada
-            depósito solo puede contabilizarse hasta su importe real.
-          </li>
-          <li>
-            La vinculación del depósito con la venta se revisa
-            administrativamente para evitar contabilizar saldo reciclado. El
-            progreso aparece después de su validación.
-          </li>
-          <li>
-            Meta única de 15,000 USDT. Diez cupos: los primeros tres reciben un
-            iPhone cada uno más viaje; los otros siete, solo viaje.
-          </li>
-          <li>
-            Todo el período usa America/Mexico_City. La clasificación no
-            acredita dinero ni registra entrega automática de premios.
-          </li>
-        </ul>
+        <h3>Condiciones de la promoción</h3>
+        <p>
+          Acumula{" "}
+          <strong>
+            15,000 USDT en inversiones nuevas de tus referidos directos
+          </strong>{" "}
+          durante la promoción.
+        </p>
+        <p>Participan inversiones pagadas con crypto confirmado.</p>
+        <p>
+          No cuentan reinversiones, bonos binarios ni operaciones canceladas o
+          revertidas.
+        </p>
+        <p>
+          Tu progreso se actualizará después de validar las inversiones
+          elegibles.
+        </p>
+        <p>
+          <strong>Primeros 3 clasificados:</strong> un iPhone 18 Pro Max por
+          persona más viaje al Bootcamp Cartagena.
+        </p>
+        <p>
+          <strong>Siguientes 7 clasificados:</strong> viaje al Bootcamp
+          Cartagena.
+        </p>
+        <p>
+          Vigencia:{" "}
+          <strong>del 16 de octubre al 25 de noviembre de 2026</strong>, hasta
+          las 11:59:59 p. m., hora de Ciudad de México.
+        </p>
+        <p>
+          Cupo limitado a <strong>10 ganadores</strong>.
+        </p>
+        <p>
+          La clasificación y entrega de premios están sujetas a verificación
+          final.
+        </p>
       </article>
       {admin && (
         <article>
