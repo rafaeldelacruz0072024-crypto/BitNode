@@ -47,7 +47,7 @@ const slides = [
 ] as const;
 
 const artwork = {
-  promotions: "/promotions/slider-cartagena-v1.webp",
+  promotions: "/promotions/iphone-18-pro-official.jpg",
   sara: "/sara-ia-official-avatar.png",
   reinvestment: "/promotions/slider-reinvestment-v1.webp",
   marketing: "/promotions/slider-marketing-v1.webp",
@@ -174,8 +174,13 @@ export function DashboardPromotions({
                     <img
                       src={artwork[item.key]}
                       alt=""
-                      width={1024}
-                      height={1024}
+                      width={item.key === "promotions" ? 1440 : 1024}
+                      height={item.key === "promotions" ? 760 : 1024}
+                      style={
+                        item.key === "promotions"
+                          ? { objectPosition: "right center", objectFit: "cover" }
+                          : undefined
+                      }
                       loading={position === index ? "eager" : "lazy"}
                       decoding="async"
                     />
