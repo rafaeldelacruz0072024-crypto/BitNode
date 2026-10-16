@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import "@/home-mobile.css";
+import { LandingUpdates } from "@/components/LandingUpdates";
 import {
   ArrowRight, BadgePercent, BarChart3, Bot, BrainCircuit, CalendarDays, Check,
   ChevronDown, Clock3, GitBranch, Globe2, LineChart, Menu, Megaphone,
@@ -23,7 +24,7 @@ const plans = [
 
 const benefits = [
   { icon: WalletCards, kicker: "Rendimiento pasivo", value: "Según tu nodo", text: "Completa cuatro tareas dentro de cada periodo de 24 horas para mantener el avance del ciclo." },
-  { icon: UsersRound, kicker: "Bono directo", value: "10%", text: "Recibe el diez por ciento cuando una persona referida directamente activa un nodo." },
+  { icon: UsersRound, kicker: "Bono directo", value: "10%", text: "Sobre inversiones nuevas elegibles de referidos directos. La reinversión promocional no genera comisión al patrocinador." },
   { icon: GitBranch, kicker: "Bono binario", value: "8%", text: "Se calcula sobre el nuevo volumen emparejado entre las ramas izquierda y derecha." },
 ];
 
@@ -37,6 +38,8 @@ const rules = [
 ];
 
 const faqs = [
+  ["¿Qué incluye SARA IA?", "Por 25 USDT obtienes 30 días calendario de automatización de las cuatro tareas, solo de lunes a viernes. Requiere un nodo de 21 días activo. La renovación es manual y, al vencer, debes volver a completar las tareas personalmente."],
+  ["¿Dónde encuentro promociones y materiales?", "En tu backoffice: Promociones y novedades muestra las condiciones y el progreso validado. Marketing y materiales reúne los recursos publicados por el equipo. El chat SARA IA Soporte permite resolver dudas generales o solicitar atención humana."],
   ["¿Cómo se elige el rendimiento?", "El porcentaje se calcula según la configuración vigente del nodo. La administración puede definir porcentajes mensuales para pagos futuros, siempre de lunes a viernes."],
   ["¿Qué pasa si no completo las tareas?", "El avance y los días procesados reinician a cero. El capital colocado en el nodo se mantiene."],
   ["¿Cuándo puedo solicitar un retiro?", "Bonos binario/rango y ROI de nodos de 7, 14 y 21 días: miércoles de 8:00 AM a 3:00 PM, hora de Ciudad de México. La comisión directa madura a las 24 horas y el ROI del Nodo Diario no espera al miércoles. El retiro aplica un fee de 5%."],
@@ -58,7 +61,7 @@ export default function Home() {
           <a href="#inicio" onClick={closeMenu}><BrandMark /></a>
           <nav className={menuOpen ? "bn-navlinks is-open" : "bn-navlinks"} aria-label="Navegación principal">
             <a href="#ecosistema" onClick={closeMenu}>Ecosistema</a><a href="#nodos" onClick={closeMenu}>Nodos</a>
-            <a href="#beneficios" onClick={closeMenu}>Beneficios</a><a href="#reglas" onClick={closeMenu}>Reglas</a>
+            <a href="#beneficios" onClick={closeMenu}>Beneficios</a><a href="#novedades" onClick={closeMenu}>SARA IA y novedades</a><a href="#reglas" onClick={closeMenu}>Reglas</a>
             <Link href="/auth" className="bn-login" onClick={closeMenu}>Ingresar <ArrowRight size={16} /></Link>
           </nav>
           <Link href="/auth" className="bn-login-mobile" onClick={closeMenu}>Ingresar</Link>
@@ -103,6 +106,8 @@ export default function Home() {
           <div className="bn-binary-note"><GitBranch /><div><strong>Balance binario cada 60 días</strong><span>Los puntos acumulados en la pierna de mayor volumen se reinician al completar cada periodo de 60 días.</span></div></div>
         </div>
       </section>
+
+      <LandingUpdates />
 
       <section className="bn-products" id="productos">
         <div className="bn-container">
