@@ -15,4 +15,4 @@ El importe de la elección es la base **de esta operación**, no el importe del 
 
 Prueba aislada: `node scripts/test-reinvestment-binary-base-sql.mjs <pglite-module-path>`.
 
-Aplicar y verificar la migración en producción antes de considerar operativa la nueva regla. Publicar el frontend no instala funciones de Supabase.
+Instalación verificada en producción el 20 de octubre de 2026: motor v2, base autoritativa, exclusión directa, identidad canónica, trigger binario habilitado y trigger del bono conservado. No se ejecutaron reinversiones de prueba ni backfill con fondos reales. Las pruebas de cálculo y reintentos se ejecutaron en PostgreSQL aislado.
