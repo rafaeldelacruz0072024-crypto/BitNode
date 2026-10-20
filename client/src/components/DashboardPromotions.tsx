@@ -33,7 +33,7 @@ const slides = [
     label: "PROMOCIÓN DE REINVERSIÓN",
     title: "Tu próximo ciclo, con +5%",
     description: "Reinvierte tu capital y recibe un 5% de capital adicional.",
-    note: "La reinversión promocional no genera comisiones para el patrocinador.",
+    note: "Solo el capital base suma puntos binarios; el 5% no cuenta. Sin comisión directa por reinversión.",
     action: "Ver promoción",
   },
   {

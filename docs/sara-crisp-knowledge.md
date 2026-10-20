@@ -28,7 +28,7 @@ No inventar porcentajes, promociones vigentes, garantías de rentabilidad ni tie
 - `client/src/pages/Home.tsx`: reglas publicadas de nodos, bonos y ventanas.
 - `server/withdrawals.ts`, `shared/withdrawalFee.ts`: red, límites y fee.
 - `client/src/components/SaraSupport.tsx`: chat Crisp separado de automatización, reinicio de sesión al cambiar cuenta.
-- `supabase/migrations/20261008165422_reinvestment_no_commissions.sql`: regla de reinversión sin comisiones (su presencia local no prueba aplicación remota).
+- `supabase/migrations/20261020155501_reinvestment_binary_base_only.sql`: nueva regla preparada: reinversión sin comisión directa; solo capital base suma volumen binario, no el 5% promocional. Confirmar aplicación remota antes de anunciarla como activa. Sustituye la exclusión total de comisiones de `20261008165422_reinvestment_no_commissions.sql`.
 
 ## Mantenimiento
 

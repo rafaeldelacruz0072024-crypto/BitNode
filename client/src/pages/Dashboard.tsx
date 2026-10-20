@@ -968,7 +968,7 @@ export default function Dashboard() {
                 <b>Nuevo nodo: 210 USDT</b>
               </div>
               <small>El bono se agrega al capital del nuevo nodo; no se acredita como saldo disponible para retiro. Aplican condiciones de elegibilidad.</small>
-              <p><strong>Importante:</strong> La reinversión con el bono del 5% no genera comisiones para tu patrocinador ni volumen binario. Solo las compras de paquetes de inversión nuevos generan comisiones, según las reglas vigentes.</p>
+              <p><strong>Regla de oro:</strong> La reinversión suma puntos al binario únicamente por el capital base reinvertido y puede generar comisión binaria según el emparejamiento y la elegibilidad vigentes. El bono promocional del 5% no suma puntos ni comisiones. La reinversión no genera comisión por indicación directa; esa comisión conserva su regla para inversiones nuevas.</p>
             </div>}
           </div>
         </div>

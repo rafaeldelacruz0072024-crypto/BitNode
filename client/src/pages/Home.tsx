@@ -24,7 +24,7 @@ const plans = [
 
 const benefits = [
   { icon: WalletCards, kicker: "Rendimiento pasivo", value: "Según tu nodo", text: "Completa cuatro tareas dentro de cada periodo de 24 horas para mantener el avance del ciclo." },
-  { icon: UsersRound, kicker: "Bono directo", value: "10%", text: "Sobre inversiones nuevas elegibles de referidos directos. La reinversión promocional no genera comisión al patrocinador." },
+  { icon: UsersRound, kicker: "Bono directo", value: "10%", text: "Sobre inversiones nuevas elegibles de referidos directos. La reinversión no genera comisión directa; solo suma al binario por el capital base, sin incluir el 5% promocional." },
   { icon: GitBranch, kicker: "Bono binario", value: "8%", text: "Se calcula sobre el nuevo volumen emparejado entre las ramas izquierda y derecha." },
 ];
 
