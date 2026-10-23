@@ -22,6 +22,7 @@ import { registerFiniteNodeCapitalRoutes } from "./finiteNodeCapital.js";
 import { registerAdminAccountView } from "./adminAccountView.js";
 import { registerAdminSaraSales } from "./adminSaraSales.js";
 import { registerPromotionRoutes } from "./promotions.js";
+import { registerInfluencerRoutes } from "./influencers.js";
 
 export function createApp(): Express {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp(): Express {
   registerAdminAccountView(app);
   registerAdminSaraSales(app);
   registerPromotionRoutes(app);
+  registerInfluencerRoutes(app);
   registerAdminMonthlyRoiRoutes(app);
   registerAdminNodeControlRoutes(app);
   registerActivationReportRoutes(app);

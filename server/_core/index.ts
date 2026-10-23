@@ -22,6 +22,7 @@ import { registerDailyReconciliationRoutes } from "../dailyReconciliation";
 import { registerFiniteNodeCapitalRoutes } from "../finiteNodeCapital";
 import { registerEmailSecurityRoutes } from "../emailSecurity";
 import { registerPromotionRoutes } from "../promotions";
+import { registerInfluencerRoutes } from "../influencers";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -68,6 +69,7 @@ async function startServer() {
   registerDailyReconciliationRoutes(app);
   registerEmailSecurityRoutes(app);
   registerPromotionRoutes(app);
+  registerInfluencerRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

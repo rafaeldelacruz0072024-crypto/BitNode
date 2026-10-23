@@ -7,6 +7,7 @@ import Dashboard from "@/pages/Dashboard";
 import AuthPage from "@/pages/AuthPage";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { InfluencerSection } from "./components/InfluencerSection";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 
@@ -19,6 +20,7 @@ function Router() {
       <Route path={"/dashboard/:section"} component={Dashboard} />
       <Route path={"/r/:referralCode/:side"} component={AuthPage} />
       <Route path={"/auth"} component={AuthPage} />
+      {import.meta.env.DEV && <Route path={"/__preview/influencers"}><main style={{maxWidth:1500,margin:"0 auto",padding:24}}><InfluencerSection preview /></main></Route>}
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

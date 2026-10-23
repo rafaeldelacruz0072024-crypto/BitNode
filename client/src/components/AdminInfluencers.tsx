@@ -1,0 +1,29 @@
+import { useEffect, useState } from "react";
+import { CheckCircle2, ExternalLink, Megaphone, RefreshCw, XCircle } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import "@/influencers.css";
+
+type PackageRow = { id:string; user_id:string; status:string; price:number; earned_total:number; reward_cap:number; created_at:string; profiles?:{username?:string;email?:string}|null };
+type SubmissionRow = { id:string; status:string; platform:string; story_url:string; campaign_code:string; reported_views:number; submitted_at:string; evidence_url:string|null; profiles?:{username?:string;email?:string}|null };
+
+async function adminApi(path:string, init?:RequestInit) {
+  const session=(await supabase?.auth.getSession())?.data.session;
+  if(!session) throw new Error("Sesión administrativa no disponible.");
+  const response=await fetch(path,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${session.access_token}`,...(init?.headers||{})}});
+  const body=await response.json().catch(()=>({})); if(!response.ok) throw new Error(body.error||"No se pudo completar la operación."); return body;
+}
+
+export function AdminInfluencers() {
+  const [packages,setPackages]=useState<PackageRow[]>([]); const [submissions,setSubmissions]=useState<SubmissionRow[]>([]); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(""); const [message,setMessage]=useState("");
+  const load=async()=>{setLoading(true);try{const data=await adminApi("/api/admin/influencers");setPackages(data.packages||[]);setSubmissions(data.submissions||[]);setMessage("");}catch(e){setMessage(e instanceof Error?e.message:"No se pudo cargar.");}finally{setLoading(false);}};
+  useEffect(()=>{void load();},[]);
+  async function activate(id:string){setBusy(id);try{await adminApi("/api/admin/influencers/activate",{method:"POST",body:JSON.stringify({packageId:id})});setMessage("Paquete activado por 120 días.");await load();}catch(e){setMessage(e instanceof Error?e.message:"No se pudo activar.");}finally{setBusy("");}}
+  async function review(row:SubmissionRow,decision:"approved"|"rejected") { const views=decision==="approved"?Number(window.prompt("Vistas verificadas",String(row.reported_views))):0; if(!Number.isInteger(views)||views<0)return; const note=window.prompt("Nota de auditoría",decision==="approved"?"Evidencia y métricas verificadas.":"Evidencia no válida o insuficiente."); if(!note)return; setBusy(row.id);try{await adminApi("/api/admin/influencers/review",{method:"POST",body:JSON.stringify({submissionId:row.id,decision,verifiedViews:views,note})});setMessage(`Evidencia ${decision==="approved"?"aprobada":"rechazada"}.`);await load();}catch(e){setMessage(e instanceof Error?e.message:"No se pudo revisar.");}finally{setBusy("");}}
+  return <div className="admin-influencers">
+    <div className="admin-section-heading"><div><p className="admin-kicker">CREATOR OPERATIONS</p><h2><Megaphone size={22}/> Programa Influencers</h2><p>Activa paquetes y audita capturas. Aprobar evidencia acumula recompensa pendiente; no acredita el balance automáticamente.</p></div><button className="admin-refresh" onClick={load}><RefreshCw size={16}/></button></div>
+    <div className="influencer-admin-summary"><article><span>Paquetes</span><strong>{packages.length}</strong></article><article><span>Pendientes de activar</span><strong>{packages.filter(p=>p.status==="pending").length}</strong></article><article><span>Evidencias por revisar</span><strong>{submissions.filter(s=>s.status==="pending").length}</strong></article></div>
+    <section className="admin-influencer-block"><h3>Solicitudes de paquete</h3>{packages.length===0?<p>Sin solicitudes.</p>:packages.map(row=><div className="admin-influencer-row" key={row.id}><div><b>{row.profiles?.username||row.profiles?.email||row.user_id}</b><small>{new Date(row.created_at).toLocaleString("es-419")}</small></div><span className={`admin-status ${row.status}`}>{row.status}</span><strong>${Number(row.earned_total).toFixed(2)} / ${Number(row.reward_cap).toFixed(2)}</strong>{row.status==="pending"&&<button disabled={busy===row.id} onClick={()=>activate(row.id)}>Activar 120 días</button>}</div>)}</section>
+    <section className="admin-influencer-block"><h3>Cola de auditoría</h3>{loading?<p>Cargando…</p>:submissions.length===0?<p>Sin evidencias.</p>:submissions.map(row=><article className="admin-evidence-card" key={row.id}>{row.evidence_url?<a href={row.evidence_url} target="_blank" rel="noreferrer"><img src={row.evidence_url} alt="Evidencia enviada"/></a>:<div className="evidence-placeholder">Sin vista previa</div>}<div><span>{row.platform.toUpperCase()} · {row.campaign_code}</span><h4>{row.profiles?.username||row.profiles?.email||"Usuario"}</h4><p>{row.reported_views.toLocaleString("es-419")} vistas reportadas · {new Date(row.submitted_at).toLocaleString("es-419")}</p><a href={row.story_url} target="_blank" rel="noreferrer">Abrir historia <ExternalLink size={13}/></a></div><div className="admin-review-actions"><span className={`admin-status ${row.status}`}>{row.status}</span>{row.status==="pending"&&<><button disabled={busy===row.id} onClick={()=>review(row,"approved")}><CheckCircle2 size={15}/> Aprobar</button><button className="danger" disabled={busy===row.id} onClick={()=>review(row,"rejected")}><XCircle size={15}/> Rechazar</button></>}</div></article>)}</section>
+    {message&&<div className="admin-data-error" role="status">{message}</div>}
+  </div>;
+}

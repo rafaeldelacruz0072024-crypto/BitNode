@@ -2228,6 +2228,27 @@ function registerAdminAccountView(app2) {
 
 // server/adminSaraSales.ts
 function registerAdminSaraSales(app2) {
+  app2.post("/api/admin/sara-sales/activate", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+      const { userId, requestId, reason } = req.body || {};
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (typeof userId !== "string" || !uuid.test(userId) || typeof requestId !== "string" || !uuid.test(requestId) || typeof reason !== "string" || reason.trim().length < 5 || reason.trim().length > 500)
+        return res.status(400).json({ error: "Selecciona un usuario y escribe un motivo de 5 a 500 caracteres." });
+      const { data, error } = await admin4.client.rpc("admin_activate_sara_ia", {
+        p_admin_id: admin4.userId,
+        p_user_id: userId,
+        p_request_id: requestId,
+        p_reason: reason.trim()
+      });
+      if (error) return res.status(error.code === "P0001" ? 409 : 503).json({ error: error.code === "P0001" ? error.message : "Activaci\xF3n manual no disponible. Verifica que la migraci\xF3n de SARA est\xE9 aplicada." });
+      return res.json(data);
+    } catch {
+      return res.status(503).json({ error: "No se pudo activar SARA IA. Conserva la solicitud para reintentar." });
+    }
+  });
   app2.get("/api/admin/sara-sales", async (req, res) => {
     res.set("Cache-Control", "no-store");
     try {
@@ -2255,6 +2276,7 @@ function registerAdminSaraSales(app2) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       return res.json({
         generatedAt: now,
+        eligibleUsers: profiles.filter((p) => eligibleUsers.has(p.id)).map((p) => ({ user_id: p.id, username: p.username || p.id })),
         payments: payments.map((p) => ({ ...p, username: names.get(p.user_id) || p.user_id })),
         subscriptions: subscriptions.map((s) => ({
           ...s,
@@ -2342,6 +2364,121 @@ function registerPromotionRoutes(app2) {
   });
 }
 
+// server/influencers.ts
+import { createClient as createClient11 } from "@supabase/supabase-js";
+var BUCKET = "influencer-evidence";
+var MAX_FILE_SIZE = 10 * 1024 * 1024;
+var MIME_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+function serviceClient2() {
+  return createClient11(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "", { auth: { persistSession: false } });
+}
+async function authenticatedUser2(req) {
+  const token4 = req.headers.authorization?.replace(/^Bearer /i, "") || "";
+  if (!token4) return { error: "Inicia sesi\xF3n para continuar.", status: 401 };
+  const client = serviceClient2();
+  const { data, error } = await client.auth.getUser(token4);
+  if (error || !data.user) return { error: "Sesi\xF3n no v\xE1lida.", status: 401 };
+  return { client, userId: data.user.id, email: data.user.email || null };
+}
+function safeExtension(name) {
+  const ext = name.toLowerCase().match(/\.(jpg|jpeg|png|webp|pdf)$/)?.[1];
+  return ext === "jpeg" ? "jpg" : ext || "bin";
+}
+function mexicoWeekStart(value = /* @__PURE__ */ new Date()) {
+  const local = new Date(value.toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
+  const day = local.getDay() || 7;
+  local.setDate(local.getDate() - day + 1);
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+}
+function registerInfluencerRoutes(app2) {
+  app2.get("/api/influencers/status", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { data: packageRow, error } = await auth.client.from("influencer_packages").select("*").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) return res.status(503).json({ error: "El programa a\xFAn no est\xE1 disponible en la base de datos." });
+    const { data: submissions } = packageRow ? await auth.client.from("influencer_submissions").select("id,platform,story_url,campaign_code,story_published_at,submitted_at,status,reported_views,verified_views,reward_amount,review_note").eq("package_id", packageRow.id).order("submitted_at", { ascending: false }).limit(30) : { data: [] };
+    const weekStart = mexicoWeekStart();
+    const weekly = (submissions || []).filter((row) => String(row.submitted_at) >= `${weekStart}T00:00:00`).reduce((sum, row) => sum + Number(row.reward_amount || 0), 0);
+    return res.json({ package: packageRow || null, submissions: submissions || [], weekStart, weeklyReward: weekly });
+  });
+  app2.post("/api/influencers/request", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { data: existing } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).maybeSingle();
+    if (existing) return res.json({ package: existing });
+    const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId }).select("id,status").single();
+    if (error) return res.status(503).json({ error: error.code === "23505" ? "Ya tienes una solicitud abierta." : "No se pudo registrar la solicitud." });
+    return res.status(201).json({ package: data });
+  });
+  app2.post("/api/influencers/evidence-url", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { fileName, mimeType, size } = req.body || {};
+    if (typeof fileName !== "string" || fileName.length > 180 || !MIME_TYPES.has(mimeType) || !Number.isFinite(size) || size < 1 || size > MAX_FILE_SIZE) return res.status(400).json({ error: "Adjunta una imagen o PDF de hasta 10 MB." });
+    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
+    if (!packageRow) return res.status(409).json({ error: "Necesitas un paquete Influencers activo." });
+    const path = `${auth.userId}/${packageRow.id}/${crypto.randomUUID()}.${safeExtension(fileName)}`;
+    const { data, error } = await auth.client.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (error || !data) return res.status(503).json({ error: "No se pudo preparar la carga de evidencia." });
+    return res.json({ path, token: data.token });
+  });
+  app2.post("/api/influencers/submissions", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { platform, storyUrl, evidencePath, campaignCode, publishedAt, reportedViews } = req.body || {};
+    if (!["instagram", "facebook"].includes(platform) || typeof storyUrl !== "string" || storyUrl.length < 10 || storyUrl.length > 500 || typeof evidencePath !== "string" || !evidencePath.startsWith(`${auth.userId}/`) || typeof campaignCode !== "string" || campaignCode.length < 3 || campaignCode.length > 60 || !Number.isInteger(reportedViews) || reportedViews < 0 || reportedViews > 1e7) return res.status(400).json({ error: "Revisa la red, enlace, c\xF3digo, evidencia y vistas reportadas." });
+    const published = new Date(publishedAt);
+    if (Number.isNaN(published.getTime()) || published.getTime() > Date.now() + 5 * 6e4 || published.getTime() < Date.now() - 30 * 60 * 6e4) return res.status(400).json({ error: "La historia debe haberse publicado durante las \xFAltimas 24 horas." });
+    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status,starts_at,ends_at").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
+    if (!packageRow || packageRow.ends_at && new Date(packageRow.ends_at) <= /* @__PURE__ */ new Date()) return res.status(409).json({ error: "No tienes un paquete Influencers activo." });
+    const dayStart = new Date(Date.now() - 30 * 60 * 6e4).toISOString();
+    const { count } = await auth.client.from("influencer_submissions").select("id", { count: "exact", head: true }).eq("package_id", packageRow.id).gte("story_published_at", dayStart);
+    if ((count || 0) >= 3) return res.status(409).json({ error: "Alcanzaste el m\xE1ximo de 3 historias dentro de 24 horas." });
+    const { data, error } = await auth.client.from("influencer_submissions").insert({ package_id: packageRow.id, user_id: auth.userId, platform, story_url: storyUrl.trim(), evidence_path: evidencePath, campaign_code: campaignCode.trim().toUpperCase(), story_published_at: published.toISOString(), reported_views: reportedViews }).select("id,status").single();
+    if (error) return res.status(error.code === "23505" ? 409 : 503).json({ error: error.code === "23505" ? "Esta evidencia ya fue registrada." : "No se pudo registrar la evidencia." });
+    return res.status(201).json({ submission: data });
+  });
+  app2.get("/api/admin/influencers", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { data: packages, error } = await admin4.client.from("influencer_packages").select("*").order("created_at", { ascending: false }).limit(250);
+    if (error) return res.status(503).json({ error: "Falta aplicar la migraci\xF3n del programa Influencers." });
+    const { data: submissions } = await admin4.client.from("influencer_submissions").select("*").order("submitted_at", { ascending: false }).limit(250);
+    const userIds = Array.from(/* @__PURE__ */ new Set([...(packages || []).map((row) => row.user_id), ...(submissions || []).map((row) => row.user_id)]));
+    const { data: profiles } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
+    const profileMap = new Map((profiles || []).map((row) => [row.id, row]));
+    const enriched = await Promise.all((submissions || []).map(async (row) => {
+      const { data } = await admin4.client.storage.from(BUCKET).createSignedUrl(row.evidence_path, 900);
+      return { ...row, profiles: profileMap.get(row.user_id) || null, evidence_url: data?.signedUrl || null };
+    }));
+    return res.json({ packages: (packages || []).map((row) => ({ ...row, profiles: profileMap.get(row.user_id) || null })), submissions: enriched });
+  });
+  app2.post("/api/admin/influencers/activate", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { packageId } = req.body || {};
+    if (typeof packageId !== "string") return res.status(400).json({ error: "Paquete inv\xE1lido." });
+    const startsAt = /* @__PURE__ */ new Date();
+    const endsAt = new Date(startsAt.getTime() + 120 * 864e5);
+    const { data, error } = await admin4.client.from("influencer_packages").update({ status: "active", starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), activated_by: admin4.userId, activated_at: startsAt.toISOString(), updated_at: startsAt.toISOString() }).eq("id", packageId).eq("status", "pending").select("id,user_id,status").single();
+    if (error) return res.status(409).json({ error: "El paquete ya no est\xE1 pendiente o no pudo activarse." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: "activate_influencer_package", targetType: "influencer_package", targetId: packageId, details: { userId: data.user_id, durationDays: 120 } });
+    return res.json({ package: data });
+  });
+  app2.post("/api/admin/influencers/review", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { submissionId, decision, verifiedViews, note } = req.body || {};
+    if (typeof submissionId !== "string" || !["approved", "rejected"].includes(decision) || !Number.isInteger(verifiedViews) || verifiedViews < 0 || verifiedViews > 1e7 || typeof note !== "string" || note.trim().length < 3 || note.length > 1e3) return res.status(400).json({ error: "Completa decisi\xF3n, vistas verificadas y nota." });
+    const { data, error } = await admin4.client.rpc("admin_review_influencer_submission", { p_admin_id: admin4.userId, p_submission_id: submissionId, p_decision: decision, p_verified_views: verifiedViews, p_note: note.trim() });
+    if (error) return res.status(409).json({ error: error.message || "La evidencia cambi\xF3 mientras la revisabas. Actualiza el listado." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: `influencer_submission_${decision}`, targetType: "influencer_submission", targetId: submissionId, details: { verifiedViews, rewardAmount: Number(data?.reward_amount || 0), note: note.trim() } });
+    return res.json({ submission: data });
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -2368,6 +2505,7 @@ function createApp() {
   registerAdminAccountView(app2);
   registerAdminSaraSales(app2);
   registerPromotionRoutes(app2);
+  registerInfluencerRoutes(app2);
   registerAdminMonthlyRoiRoutes(app2);
   registerAdminNodeControlRoutes(app2);
   registerActivationReportRoutes(app2);

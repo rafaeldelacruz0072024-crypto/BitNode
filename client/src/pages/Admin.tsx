@@ -9,6 +9,7 @@ import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { PromotionsSection } from "@/components/PromotionsSection";
 import { AdminAccountView } from "@/components/AdminAccountView";
 import { AdminSaraSales } from "@/components/AdminSaraSales";
+import { AdminInfluencers } from "@/components/AdminInfluencers";
 import { withdrawalSource, withdrawalSourceLabel } from "@shared/withdrawalSource";
 import "@/admin-operations.css";
 import {
@@ -21,6 +22,7 @@ import {
   LayoutDashboard,
   LockKeyhole,
   Menu,
+  Megaphone,
   RefreshCw,
   Search,
   Server,
@@ -47,6 +49,7 @@ type SectionName =
   | "Marketing y materiales"
   | "Promociones y novedades"
   | "Ventas SARA IA"
+  | "Influencers"
   | "Configuración";
 
 type AdminUser = {
@@ -196,6 +199,7 @@ const sections: SectionName[] = [
   "Marketing y materiales",
   "Promociones y novedades",
   "Ventas SARA IA",
+  "Influencers",
   "Configuración",
 ];
 const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
@@ -213,6 +217,7 @@ const sectionIcons: Record<SectionName, typeof LayoutDashboard> = {
   "Marketing y materiales": FileClock,
   "Promociones y novedades": BarChart3,
   "Ventas SARA IA": CircleDollarSign,
+  Influencers: Megaphone,
   Configuración: Settings2,
 };
 
@@ -2234,6 +2239,7 @@ export default function Admin() {
         {activeSection === "Marketing y materiales" && <MarketingMaterials admin />}
         {activeSection === "Promociones y novedades" && <PromotionsSection admin />}
         {activeSection === "Ventas SARA IA" && <AdminSaraSales />}
+        {activeSection === "Influencers" && <AdminInfluencers />}
         {activeSection === "Usuarios" &&
           (adminData ? (
             <UsersSection data={adminData} onUpdated={refreshData} />

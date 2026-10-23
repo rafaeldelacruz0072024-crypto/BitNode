@@ -22,6 +22,7 @@ import {
   Home,
   LogOut,
   Menu,
+  Megaphone,
   Plus,
   RefreshCw,
   Settings,
@@ -37,6 +38,7 @@ import { SaraSupport } from "@/components/SaraSupport";
 import { DashboardPromotions } from "@/components/DashboardPromotions";
 import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { PromotionsSection } from "@/components/PromotionsSection";
+import { InfluencerSection } from "@/components/InfluencerSection";
 import { LatamLoginFlyer } from "@/components/LatamLoginFlyer";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
@@ -428,6 +430,7 @@ const nav = [
   ["SARA IA", "/dashboard/sara-ia", Bot],
   ["Marketing y materiales", "/dashboard/marketing", Box],
   ["Promociones y novedades", "/dashboard/promotions", Sparkles],
+  ["Influencers", "/dashboard/influencers", Megaphone],
   ["Mis nodos", "/dashboard/nodes", Box],
   ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
@@ -1304,6 +1307,7 @@ function SectionPanel({
   >(() => Object.fromEntries(catalog.map(item => [item.id, String(item.min)])));
   const labels: Record<string, [string, string, string]> = {
     promotions: ["PRE-POSICIONAMIENTO LATAM", "Promociones y novedades", "Tu esfuerzo, tu progreso y los premios de BitNode."],
+    influencers: ["BITNODE CREATORS", "Influencers", "Publica contenido, documenta el alcance y recibe recompensas por vistas verificadas."],
     "sara-ia": ["ASISTENTE DE TAREAS", "SARA IA", "Automatiza tus cuatro tareas de lunes a viernes."],
     activate: [
       "CONTRATOS DISPONIBLES",
@@ -1424,6 +1428,7 @@ function SectionPanel({
   if (section === "sara-ia") return <SaraIaSection />;
   if (section === "marketing") return <MarketingMaterials />;
   if (section === "promotions") return <PromotionsSection />;
+  if (section === "influencers") return <InfluencerSection />;
   if (section === "deposit")
     return <DepositPanel title={title} copy={copy} />;
   if (section === "withdraw")
