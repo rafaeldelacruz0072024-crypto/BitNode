@@ -145,7 +145,7 @@ function DailyTasksPanel({
   const [tasksAvailable, setTasksAvailable] = useState(true);
   const [tasksAvailableAt, setTasksAvailableAt] = useState<number | null>(null);
   const [isWeekend, setIsWeekend] = useState(() => ["Sat", "Sun"].includes(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/Santo_Domingo", weekday: "short" }).format(new Date())
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/Mexico_City", weekday: "short" }).format(new Date())
   ));
   const hasActiveContracts = user.contracts.some(
     contract => contract.status === "active"
@@ -199,7 +199,7 @@ function DailyTasksPanel({
   useEffect(() => {
     const tick = () => {
       setIsWeekend(["Sat", "Sun"].includes(
-        new Intl.DateTimeFormat("en-US", { timeZone: "America/Santo_Domingo", weekday: "short" }).format(new Date())
+        new Intl.DateTimeFormat("en-US", { timeZone: "America/Mexico_City", weekday: "short" }).format(new Date())
       ));
       const target = !tasksAvailable && tasksAvailableAt ? tasksAvailableAt : deadline;
       if (!target) return setTimeLeft("Listo para iniciar");
