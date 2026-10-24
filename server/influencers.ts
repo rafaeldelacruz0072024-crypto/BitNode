@@ -42,15 +42,20 @@ export function registerInfluencerRoutes(app: Express) {
     const { data: submissions } = packageRow ? await auth.client.from("influencer_submissions").select("id,platform,story_url,campaign_code,story_published_at,submitted_at,status,reported_views,verified_views,reward_amount,review_note").eq("package_id", packageRow.id).order("submitted_at", { ascending: false }).limit(30) : { data: [] };
     const weekStart = mexicoWeekStart();
     const weekly = (submissions || []).filter(row => String(row.submitted_at) >= `${weekStart}T00:00:00`).reduce((sum, row) => sum + Number(row.reward_amount || 0), 0);
-    return res.json({ package: packageRow || null, submissions: submissions || [], weekStart, weeklyReward: weekly });
+    const { data: plans } = await auth.client.from("influencer_plans").select("code,name,price,reward_cap,weekly_cap,reward_rate,duration_days").eq("active", true).order("sort_order");
+    return res.json({ package: packageRow || null, plans: plans || [], submissions: submissions || [], weekStart, weeklyReward: weekly });
   });
 
   app.post("/api/influencers/request", async (req, res) => {
     const auth = await authenticatedUser(req);
     if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { planCode } = req.body || {};
+    if (typeof planCode !== "string") return res.status(400).json({ error: "Selecciona un paquete válido." });
+    const { data: plan } = await auth.client.from("influencer_plans").select("*").eq("code", planCode).eq("active", true).maybeSingle();
+    if (!plan) return res.status(400).json({ error: "El paquete seleccionado no está disponible." });
     const { data: existing } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).maybeSingle();
     if (existing) return res.json({ package: existing });
-    const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId }).select("id,status").single();
+    const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
     if (error) return res.status(503).json({ error: error.code === "23505" ? "Ya tienes una solicitud abierta." : "No se pudo registrar la solicitud." });
     return res.status(201).json({ package: data });
   });
