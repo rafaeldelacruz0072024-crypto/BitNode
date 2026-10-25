@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync("supabase/migrations/20261023231902_influencer_program.sql", "utf8");
 const plans = readFileSync("supabase/migrations/20261024001725_influencer_plan_catalog.sql", "utf8");
 const completion = readFileSync("supabase/migrations/20261025113942_complete_influencer_program.sql", "utf8");
+const nowPayments = readFileSync("supabase/migrations/20261025125207_influencer_nowpayments_checkout.sql", "utf8");
 const route = readFileSync("server/influencers.ts", "utf8");
 
 describe("programa Influencers", () => {
@@ -38,5 +39,16 @@ describe("programa Influencers", () => {
     expect(route).toContain("/api/influencers/purchase");
     expect(route).toContain("/api/admin/influencers/maintenance");
     expect(route).not.toContain("uploadToSignedUrl");
+  });
+
+  it("activa NOWPayments solo al finalizar un pago USDT exacto", () => {
+    expect(nowPayments).toContain("complete_influencer_nowpayment");
+    expect(nowPayments).toContain("v_payment.status='completed'");
+    expect(nowPayments).toContain("p_actually_paid,0)+0.00000001<v_payment.pay_amount");
+    expect(nowPayments).toContain("purchase_method='crypto'");
+    expect(nowPayments).toContain("unique(package_id)");
+    expect(route).toContain('/api/payments/nowpayments/influencer');
+    expect(route).toContain('providerStatus === "finished"');
+    expect(route).not.toContain('providerStatus === "confirmed"');
   });
 });

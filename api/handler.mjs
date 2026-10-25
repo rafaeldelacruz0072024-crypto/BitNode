@@ -554,7 +554,7 @@ async function createContext(opts) {
 
 // server/nowpayments.ts
 import crypto3 from "node:crypto";
-import { createClient as createClient2 } from "@supabase/supabase-js";
+import { createClient as createClient4 } from "@supabase/supabase-js";
 
 // shared/depositCashback.ts
 var DEPOSIT_CASHBACK_TIERS = [
@@ -811,14 +811,447 @@ async function processSaraIaIpn(admin4, body) {
   return { handled: true, ok: true };
 }
 
-// server/nowpayments.ts
+// server/influencers.ts
+import { createClient as createClient3 } from "@supabase/supabase-js";
+
+// server/adminWithdrawals.ts
+import { createClient as createClient2 } from "@supabase/supabase-js";
+
+// server/adminAudit.ts
+async function recordAdminOperation(client, entry) {
+  try {
+    if (!client || typeof client.from !== "function") return;
+    const table = client.from("admin_operation_audit_log");
+    if (!table || typeof table.insert !== "function") return;
+    const value = {
+      admin_id: entry.adminId,
+      admin_email: entry.adminEmail || null,
+      admin_username: entry.adminUsername || null,
+      action: entry.action,
+      target_type: entry.targetType,
+      target_id: entry.targetId || null,
+      details: entry.details || {}
+    };
+    const { error } = await table.insert(value);
+    if (!error) return;
+    const fallback = client.from("platform_settings");
+    if (typeof fallback.upsert !== "function") return console.error("[admin-audit]", error.message || error);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const result = await fallback.upsert({ key: `admin_audit:${suffix}`, value, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "key" });
+    if (result.error) console.error("[admin-audit-fallback]", result.error.message || result.error);
+  } catch (error) {
+    console.error("[admin-audit]", error);
+  }
+}
+
+// server/adminWithdrawals.ts
+function serviceClient() {
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
+  return createClient2(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+function token(req) {
+  const header = req.header("authorization") || "";
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+async function authenticatedAdmin(req) {
+  const client = serviceClient();
+  const accessToken = token(req);
+  if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
+  const { data, error } = await client.auth.getUser(accessToken);
+  if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
+  const { data: profile, error: profileError } = await client.from("profiles").select("role,username").eq("id", data.user.id).maybeSingle();
+  if (profileError || profile?.role !== "admin") {
+    return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
+  }
+  return { client, userId: data.user.id, email: data.user.email || null, username: profile.username || null };
+}
+async function withdrawalWindow(client) {
+  const { data } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
+  return data?.value && typeof data.value === "object" && data.value.enabled === true;
+}
+var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
+function registerAdminWithdrawalRoutes(app2) {
+  app2.get("/api/admin/audit-log", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const { data, error } = await admin4.client.from("admin_operation_audit_log").select("id,admin_id,admin_email,admin_username,action,target_type,target_id,details,created_at").order("created_at", { ascending: false }).limit(300);
+      if (error && (error.code === "42P01" || error.code === "PGRST205")) {
+        const { data: fallback, error: fallbackError } = await admin4.client.from("platform_settings").select("key,value,updated_at").like("key", "admin_audit:%").order("updated_at", { ascending: false }).limit(300);
+        if (fallbackError) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+        const entries = (fallback || []).map((row) => ({ id: row.key, ...row.value || {}, created_at: row.updated_at }));
+        return res.status(200).json({ entries, storage: "compatibility" });
+      }
+      if (error) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
+      return res.status(200).json({ entries: data || [] });
+    } catch (error) {
+      console.error("[admin-audit-log]", error);
+      return res.status(503).json({ error: "El historial administrativo no est\xE1 disponible." });
+    }
+  });
+  app2.get("/api/support/whatsapp", async (_req, res) => {
+    try {
+      const client = serviceClient();
+      const { data } = await client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+      const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
+      return res.status(200).json({ number });
+    } catch {
+      return res.status(200).json({ number: "" });
+    }
+  });
+  app2.get("/api/admin/support-whatsapp", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const { data } = await admin4.client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
+    const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
+    return res.status(200).json({ number });
+  });
+  app2.patch("/api/admin/support-whatsapp", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+    const number = String(req.body?.number || "").replace(/\D/g, "");
+    if (number.length < 8 || number.length > 15) return res.status(400).json({ error: "Introduce el n\xFAmero con c\xF3digo de pa\xEDs." });
+    const { error } = await admin4.client.from("platform_settings").upsert({
+      key: "support_whatsapp",
+      value: { number, updated_by: admin4.userId },
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }, { onConflict: "key" });
+    if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: "support_whatsapp_updated", targetType: "platform_setting", targetId: "support_whatsapp", details: { numberEnding: number.slice(-4) } });
+    return res.status(200).json({ number });
+  });
+  app2.get("/api/admin/withdrawal-window", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      return res.status(200).json({ enabled: await withdrawalWindow(admin4.client) });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "No se pudo consultar la ventana de retiros." });
+    }
+  });
+  app2.patch("/api/admin/withdrawal-window", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const enabled = req.body?.enabled === true;
+      const { error } = await admin4.client.from("platform_settings").upsert({
+        key: "withdrawal_window",
+        value: { enabled, mode: "scheduled_mexico", updated_by: (await admin4.client.auth.getUser(token(req))).data.user?.id || null },
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }, { onConflict: "key" });
+      if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
+      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: enabled ? "withdrawal_window_enabled" : "withdrawal_window_disabled", targetType: "platform_setting", targetId: "withdrawal_window" });
+      return res.status(200).json({ enabled });
+    } catch (error) {
+      console.error("[admin-withdrawal-window]", error);
+      return res.status(503).json({ error: "La configuraci\xF3n de retiros no est\xE1 disponible." });
+    }
+  });
+  app2.get("/api/admin/withdrawals", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,direct_commission_spent,weekly_bonus_spent,node_roi_spent,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
+      if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
+      const { data: capitalClaims, error: claimsError } = await admin4.client.from("finite_node_capital_choices").select("contract_id,user_id,amount,fee,net_amount,wallet,status,requested_at,payable_at").eq("action", "claim").order("requested_at", { ascending: false }).limit(200);
+      if (claimsError && claimsError.code !== "PGRST205") return res.status(500).json({ error: "No se pudo cargar la cola de retiros de capital." });
+      const userIds = Array.from(new Set((capitalClaims || []).map((row) => row.user_id)));
+      const { data: owners } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
+      const names = new Map((owners || []).map((row) => [row.id, row.username]));
+      const claims = (capitalClaims || []).map((row) => ({
+        id: `CAPITAL-CLAIM-${row.contract_id}`,
+        user_id: row.user_id,
+        username: names.get(row.user_id) || null,
+        label: `Capital del nodo ${row.contract_id}`,
+        amount: -Number(row.amount),
+        fee: row.fee,
+        net_amount: row.net_amount,
+        status: row.status,
+        network: "BNB Chain",
+        wallet: row.wallet,
+        provider_status: "retiro_capital_nodo",
+        created_at: row.requested_at,
+        payable_at: row.payable_at
+      }));
+      return res.status(200).json({ withdrawals: [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at))) });
+    } catch (error) {
+      console.error("[admin-withdrawals]", error);
+      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
+    }
+  });
+  app2.post("/api/admin/withdrawals", async (req, res) => {
+    try {
+      const admin4 = await authenticatedAdmin(req);
+      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
+      const id = String(req.body?.id || "").trim().slice(0, 160);
+      const action = String(req.body?.action || "").trim();
+      if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
+      if (id.startsWith("CAPITAL-CLAIM-")) {
+        const reference = cleanReference(req.body?.reference);
+        const { data, error } = await admin4.client.rpc("manage_finite_node_claim", {
+          p_contract_id: id.slice("CAPITAL-CLAIM-".length),
+          p_action: action,
+          p_admin_id: admin4.userId,
+          p_reference: reference || null
+        });
+        if (error) return res.status(error.code === "P0001" ? 409 : 500).json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
+        await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `capital_withdrawal_${action}`, targetType: "finite_node_capital_claim", targetId: id, details: { reference: reference || null, status: data.status } });
+        return res.status(200).json({ id, status: data.status });
+      }
+      const { data: withdrawal, error: lookupError } = await admin4.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
+      if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
+      const status = String(withdrawal.status);
+      const ref = cleanReference(req.body?.reference);
+      const transitions = {
+        approve: { from: ["pending"], to: "approved", provider: "manual_approved" },
+        mark_paid: { from: ["approved"], to: "completed", provider: ref ? `manual_paid:${ref}` : "manual_paid" },
+        reject: { from: ["pending", "approved"], to: "rejected", provider: ref ? `manual_rejected:${ref}` : "manual_rejected" }
+      };
+      const transition = transitions[action];
+      if (!transition.from.includes(status)) return res.status(409).json({ error: "La solicitud no permite esta acci\xF3n en su estado actual." });
+      const { data: updated, error: updateError } = await admin4.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
+      if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
+      if (!updated) return res.status(409).json({ error: "El retiro cambi\xF3 de estado. Actualiza la lista." });
+      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `withdrawal_${action}`, targetType: "transaction", targetId: id, details: { fromStatus: status, toStatus: transition.to, reference: ref || null } });
+      return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
+    } catch (error) {
+      console.error("[admin-withdrawals]", error);
+      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
+    }
+  });
+}
+
+// server/influencers.ts
+var BUCKET = "influencer-evidence";
+var MAX_FILE_SIZE = 10 * 1024 * 1024;
+var MIME_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 var NOWPAYMENTS_API_URL2 = "https://api.nowpayments.io/v1";
+var INFLUENCER_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
+function requestOrigin(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0];
+  return `${proto}://${req.get("host")}`;
+}
+function serviceClient2() {
+  return createClient3(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "", { auth: { persistSession: false } });
+}
+async function authenticatedUser2(req) {
+  const token4 = req.headers.authorization?.replace(/^Bearer /i, "") || "";
+  if (!token4) return { error: "Inicia sesi\xF3n para continuar.", status: 401 };
+  const client = serviceClient2();
+  const { data, error } = await client.auth.getUser(token4);
+  if (error || !data.user) return { error: "Sesi\xF3n no v\xE1lida.", status: 401 };
+  return { client, userId: data.user.id, email: data.user.email || null };
+}
+function safeExtension(name) {
+  const ext = name.toLowerCase().match(/\.(jpg|jpeg|png|webp|pdf)$/)?.[1];
+  return ext === "jpeg" ? "jpg" : ext || "bin";
+}
+function validStoryUrl(platform, value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+    return platform === "instagram" ? host === "instagram.com" || host.endsWith(".instagram.com") : host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.watch";
+  } catch {
+    return false;
+  }
+}
+function mexicoWeekStart(value = /* @__PURE__ */ new Date()) {
+  const local = new Date(value.toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
+  const day = local.getDay() || 7;
+  local.setDate(local.getDate() - day + 1);
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+}
+async function processInfluencerIpn(admin4, body) {
+  const orderId = String(body.order_id || "");
+  if (!orderId.startsWith("INFLUENCER-")) return { handled: false };
+  const { data: payment, error } = await admin4.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,status").eq("order_id", orderId).maybeSingle();
+  if (error || !payment) return { handled: true, error: "Pago Influencers no encontrado." };
+  if (payment.status === "completed") return { handled: true, ok: true };
+  const providerStatus = String(body.payment_status || "unknown").toLowerCase();
+  const paymentId = String(body.payment_id || "");
+  const payCurrency = String(body.pay_currency || "").toLowerCase();
+  const priceCurrency = String(body.price_currency || "").toLowerCase();
+  const priceAmount = Number(body.price_amount);
+  const payAmount = Number(body.pay_amount);
+  const actuallyPaid = Number(body.actually_paid || 0);
+  const mismatch = !paymentId || paymentId !== payment.provider_payment_id || payCurrency !== payment.pay_currency || priceCurrency !== "usd" || !Number.isFinite(priceAmount) || Math.abs(priceAmount - Number(payment.price_amount)) > 1e-3 || !Number.isFinite(payAmount) || Math.abs(payAmount - Number(payment.pay_amount)) > 1e-8;
+  if (mismatch) {
+    await admin4.from("influencer_payments").update({ status: "review", provider_status: providerStatus, actually_paid: Number.isFinite(actuallyPaid) ? actuallyPaid : null, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("order_id", orderId).neq("status", "completed");
+    return { handled: true, ok: true };
+  }
+  if (providerStatus === "finished") {
+    if (!Number.isFinite(actuallyPaid) || actuallyPaid + 1e-8 < Number(payment.pay_amount)) {
+      await admin4.from("influencer_payments").update({ status: "review", provider_status: providerStatus, actually_paid: actuallyPaid, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("order_id", orderId).neq("status", "completed");
+      return { handled: true, ok: true };
+    }
+    const { error: completionError } = await admin4.rpc("complete_influencer_nowpayment", { p_order_id: orderId, p_payment_id: paymentId, p_pay_currency: payCurrency, p_price_amount: priceAmount, p_pay_amount: payAmount, p_actually_paid: actuallyPaid });
+    return completionError ? { handled: true, error: completionError.message || "No se pudo activar el paquete." } : { handled: true, ok: true };
+  }
+  const failed = ["failed", "expired", "refunded"].includes(providerStatus);
+  await admin4.from("influencer_payments").update({ status: failed ? "failed" : "pending", provider_status: providerStatus, actually_paid: Number.isFinite(actuallyPaid) ? actuallyPaid : null, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("order_id", orderId).neq("status", "completed");
+  return { handled: true, ok: true };
+}
+function registerInfluencerRoutes(app2) {
+  app2.get("/api/influencers/status", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { data: packageRow, error } = await auth.client.from("influencer_packages").select("*").eq("user_id", auth.userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) return res.status(503).json({ error: "El programa a\xFAn no est\xE1 disponible en la base de datos." });
+    const { data: submissions } = packageRow ? await auth.client.from("influencer_submissions").select("id,platform,story_url,campaign_code,story_published_at,submitted_at,status,reported_views,verified_views,reward_amount,review_note").eq("package_id", packageRow.id).order("submitted_at", { ascending: false }).limit(30) : { data: [] };
+    const weekStart = mexicoWeekStart();
+    const weekly = (submissions || []).filter((row) => String(row.submitted_at) >= `${weekStart}T00:00:00`).reduce((sum, row) => sum + Number(row.reward_amount || 0), 0);
+    const { data: plans } = await auth.client.from("influencer_plans").select("code,name,price,reward_cap,weekly_cap,reward_rate,duration_days").eq("active", true).order("sort_order");
+    const { data: payouts } = await auth.client.from("influencer_weekly_payouts").select("id,week_start,week_end,verified_views,amount,status,transaction_id,credited_at").eq("user_id", auth.userId).order("week_start", { ascending: false }).limit(12);
+    const { data: payment } = packageRow ? await auth.client.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").eq("package_id", packageRow.id).maybeSingle() : { data: null };
+    return res.json({ package: packageRow || null, payment: payment || null, plans: plans || [], submissions: submissions || [], payouts: payouts || [], weekStart, weeklyReward: weekly });
+  });
+  app2.post("/api/influencers/purchase", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { planCode, requestId } = req.body || {};
+    if (typeof planCode !== "string" || typeof requestId !== "string" || !/^[0-9a-f-]{36}$/i.test(requestId)) return res.status(400).json({ error: "Solicitud de compra inv\xE1lida." });
+    const { data, error } = await auth.client.rpc("purchase_influencer_plan_from_balance", { p_user_id: auth.userId, p_plan_code: planCode, p_request_id: requestId });
+    if (error) return res.status(409).json({ error: error.message || "No se pudo comprar el paquete." });
+    return res.status(201).json({ package: data });
+  });
+  app2.post("/api/influencers/request", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { planCode } = req.body || {};
+    if (typeof planCode !== "string") return res.status(400).json({ error: "Selecciona un paquete v\xE1lido." });
+    const { data: plan } = await auth.client.from("influencer_plans").select("*").eq("code", planCode).eq("active", true).maybeSingle();
+    if (!plan) return res.status(400).json({ error: "El paquete seleccionado no est\xE1 disponible." });
+    const { data: existing } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).maybeSingle();
+    if (existing) return res.json({ package: existing });
+    const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
+    if (error) return res.status(503).json({ error: error.code === "23505" ? "Ya tienes una solicitud abierta." : "No se pudo registrar la solicitud." });
+    return res.status(201).json({ package: data });
+  });
+  app2.post("/api/payments/nowpayments/influencer", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const apiKey2 = process.env.NOWPAYMENTS_API_KEY;
+    if (!apiKey2) return res.status(503).json({ error: "NOWPayments no est\xE1 configurado." });
+    const { planCode } = req.body || {};
+    const payCurrency = String(req.body?.payCurrency || "usdtbsc").toLowerCase();
+    if (typeof planCode !== "string" || !INFLUENCER_CURRENCIES.has(payCurrency)) return res.status(400).json({ error: "Selecciona un paquete y una red USDT v\xE1lida." });
+    const { data: plan } = await auth.client.from("influencer_plans").select("code,name,price,reward_rate,weekly_cap,reward_cap").eq("code", planCode).eq("active", true).maybeSingle();
+    if (!plan) return res.status(400).json({ error: "El paquete seleccionado no est\xE1 disponible." });
+    let { data: packageRow } = await auth.client.from("influencer_packages").select("id,status,plan_code").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).maybeSingle();
+    if (packageRow && packageRow.status !== "pending") return res.status(409).json({ error: "Ya tienes un paquete Influencers activo o pausado." });
+    if (packageRow && packageRow.plan_code !== plan.code) return res.status(409).json({ error: "Tu solicitud pendiente corresponde a otro paquete. Administraci\xF3n debe cancelarla antes de cambiar el plan." });
+    if (!packageRow) {
+      const created = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
+      if (created.error || !created.data) return res.status(409).json({ error: "No se pudo reservar el paquete Influencers." });
+      packageRow = created.data;
+    }
+    const { data: existing } = await auth.client.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").eq("package_id", packageRow.id).maybeSingle();
+    if (existing) return res.json({ payment: existing, reused: true });
+    const orderId = `INFLUENCER-${crypto.randomUUID()}`;
+    const response = await fetch(`${NOWPAYMENTS_API_URL2}/payment`, { method: "POST", headers: { "x-api-key": apiKey2, "Content-Type": "application/json" }, body: JSON.stringify({ price_amount: Number(plan.price), price_currency: "usd", pay_currency: payCurrency, order_id: orderId, order_description: `BitNode Influencers ${plan.code}`, ipn_callback_url: `${requestOrigin(req)}/api/payments/nowpayments/ipn`, is_fixed_rate: true }) });
+    const provider = await response.json().catch(() => ({}));
+    if (!response.ok || !provider.payment_id || !provider.pay_address || !provider.pay_amount || String(provider.pay_currency || "").toLowerCase() !== payCurrency) return res.status(502).json({ error: "NOWPayments no confirm\xF3 los datos de pago USDT esperados." });
+    const payment = { order_id: orderId, package_id: packageRow.id, user_id: auth.userId, provider_payment_id: String(provider.payment_id), price_amount: Number(plan.price), pay_amount: Number(provider.pay_amount), pay_currency: payCurrency, pay_address: String(provider.pay_address), provider_status: String(provider.payment_status || "waiting") };
+    const { data, error } = await auth.client.from("influencer_payments").insert(payment).select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").single();
+    if (error || !data) return res.status(500).json({ error: "El pago fue creado, pero no pudo registrarse. No env\xEDes fondos y contacta a soporte." });
+    return res.status(201).json({ payment: data });
+  });
+  app2.post("/api/influencers/evidence-url", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { fileName, mimeType, size } = req.body || {};
+    if (typeof fileName !== "string" || fileName.length > 180 || !MIME_TYPES.has(mimeType) || !Number.isFinite(size) || size < 1 || size > MAX_FILE_SIZE) return res.status(400).json({ error: "Adjunta una imagen o PDF de hasta 10 MB." });
+    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
+    if (!packageRow) return res.status(409).json({ error: "Necesitas un paquete Influencers activo." });
+    const path = `${auth.userId}/${packageRow.id}/${crypto.randomUUID()}.${safeExtension(fileName)}`;
+    const { data, error } = await auth.client.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (error || !data) return res.status(503).json({ error: "No se pudo preparar la carga de evidencia." });
+    return res.json({ path, token: data.token });
+  });
+  app2.post("/api/influencers/submissions", async (req, res) => {
+    const auth = await authenticatedUser2(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const { platform, storyUrl, evidencePath, campaignCode, publishedAt, reportedViews } = req.body || {};
+    if (!["instagram", "facebook"].includes(platform) || typeof storyUrl !== "string" || storyUrl.length < 10 || storyUrl.length > 500 || !validStoryUrl(platform, storyUrl) || typeof evidencePath !== "string" || !evidencePath.startsWith(`${auth.userId}/`) || typeof campaignCode !== "string" || campaignCode.length < 3 || campaignCode.length > 60 || !Number.isInteger(reportedViews) || reportedViews < 0 || reportedViews > 1e7) return res.status(400).json({ error: "Revisa la red, enlace, c\xF3digo, evidencia y vistas reportadas." });
+    const published = new Date(publishedAt);
+    if (Number.isNaN(published.getTime()) || published.getTime() > Date.now() + 5 * 6e4 || published.getTime() < Date.now() - 30 * 60 * 6e4) return res.status(400).json({ error: "La historia debe haberse publicado durante las \xFAltimas 24 horas." });
+    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status,starts_at,ends_at").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
+    if (!packageRow || packageRow.ends_at && new Date(packageRow.ends_at) <= /* @__PURE__ */ new Date()) return res.status(409).json({ error: "No tienes un paquete Influencers activo." });
+    const { error: evidenceError } = await auth.client.storage.from(BUCKET).createSignedUrl(evidencePath, 60);
+    if (evidenceError) return res.status(409).json({ error: "La evidencia no existe o no termin\xF3 de cargarse." });
+    const { data, error } = await auth.client.rpc("create_influencer_submission", { p_user_id: auth.userId, p_platform: platform, p_story_url: storyUrl.trim(), p_evidence_path: evidencePath, p_campaign_code: campaignCode.trim().toUpperCase(), p_published_at: published.toISOString(), p_reported_views: reportedViews });
+    if (error) return res.status(error.code === "23505" ? 409 : 503).json({ error: error.code === "23505" ? "Esta evidencia ya fue registrada." : error.message || "No se pudo registrar la evidencia." });
+    return res.status(201).json({ submission: data });
+  });
+  app2.get("/api/admin/influencers", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { data: packages, error } = await admin4.client.from("influencer_packages").select("*").order("created_at", { ascending: false }).limit(250);
+    if (error) return res.status(503).json({ error: "Falta aplicar la migraci\xF3n del programa Influencers." });
+    const { data: submissions } = await admin4.client.from("influencer_submissions").select("*").order("submitted_at", { ascending: false }).limit(250);
+    const { data: payouts } = await admin4.client.from("influencer_weekly_payouts").select("*").order("week_start", { ascending: false }).limit(250);
+    const userIds = Array.from(/* @__PURE__ */ new Set([...(packages || []).map((row) => row.user_id), ...(submissions || []).map((row) => row.user_id)]));
+    const { data: profiles } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
+    const profileMap = new Map((profiles || []).map((row) => [row.id, row]));
+    const enriched = await Promise.all((submissions || []).map(async (row) => {
+      const { data } = await admin4.client.storage.from(BUCKET).createSignedUrl(row.evidence_path, 900);
+      return { ...row, profiles: profileMap.get(row.user_id) || null, evidence_url: data?.signedUrl || null };
+    }));
+    return res.json({ packages: (packages || []).map((row) => ({ ...row, profiles: profileMap.get(row.user_id) || null })), submissions: enriched, payouts: (payouts || []).map((row) => ({ ...row, profiles: profileMap.get(row.user_id) || null })) });
+  });
+  app2.post("/api/admin/influencers/activate", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { packageId, paymentMethod, paymentReference } = req.body || {};
+    if (typeof packageId !== "string" || !["manual", "crypto"].includes(paymentMethod) || typeof paymentReference !== "string" || paymentReference.trim().length < 6) return res.status(400).json({ error: "Paquete, m\xE9todo y referencia de pago son obligatorios." });
+    const { data, error } = await admin4.client.rpc("admin_activate_influencer_package", { p_admin_id: admin4.userId, p_package_id: packageId, p_payment_method: paymentMethod, p_payment_reference: paymentReference.trim() });
+    if (error) return res.status(409).json({ error: "El paquete ya no est\xE1 pendiente o no pudo activarse." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: "activate_influencer_package", targetType: "influencer_package", targetId: packageId, details: { userId: data.user_id, durationDays: data.duration_days, paymentMethod, paymentReference: paymentReference.trim() } });
+    return res.json({ package: data });
+  });
+  app2.post("/api/admin/influencers/maintenance", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { data, error } = await admin4.client.rpc("settle_due_influencer_payouts");
+    if (error) return res.status(409).json({ error: error.message || "No se pudo cerrar la n\xF3mina semanal." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: "settle_influencer_payouts", targetType: "influencer_weekly_payout", targetId: null, details: data || {} });
+    return res.json({ result: data });
+  });
+  app2.post("/api/admin/influencers/package-status", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { packageId, status, reason } = req.body || {};
+    if (typeof packageId !== "string" || !["active", "paused", "cancelled"].includes(status) || status === "cancelled" && (typeof reason !== "string" || reason.trim().length < 5)) return res.status(400).json({ error: "Cambio de estado inv\xE1lido." });
+    const allowedFrom = status === "paused" ? ["active"] : status === "active" ? ["paused"] : ["pending", "active", "paused"];
+    const { data, error } = await admin4.client.from("influencer_packages").update({ status, cancel_reason: status === "cancelled" ? reason.trim() : null, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", packageId).in("status", allowedFrom).select("id,user_id,status").single();
+    if (error) return res.status(409).json({ error: "El paquete cambi\xF3 de estado o no admite esa operaci\xF3n." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: `influencer_package_${status}`, targetType: "influencer_package", targetId: packageId, details: { userId: data.user_id, reason: status === "cancelled" ? reason.trim() : null } });
+    return res.json({ package: data });
+  });
+  app2.post("/api/admin/influencers/review", async (req, res) => {
+    const admin4 = await authenticatedAdmin(req);
+    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
+    const { submissionId, decision, verifiedViews, note } = req.body || {};
+    if (typeof submissionId !== "string" || !["approved", "rejected"].includes(decision) || !Number.isInteger(verifiedViews) || verifiedViews < 0 || verifiedViews > 1e7 || typeof note !== "string" || note.trim().length < 3 || note.length > 1e3) return res.status(400).json({ error: "Completa decisi\xF3n, vistas verificadas y nota." });
+    const { data, error } = await admin4.client.rpc("admin_review_influencer_submission", { p_admin_id: admin4.userId, p_submission_id: submissionId, p_decision: decision, p_verified_views: verifiedViews, p_note: note.trim() });
+    if (error) return res.status(409).json({ error: error.message || "La evidencia cambi\xF3 mientras la revisabas. Actualiza el listado." });
+    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: `influencer_submission_${decision}`, targetType: "influencer_submission", targetId: submissionId, details: { verifiedViews, rewardAmount: Number(data?.reward_amount || 0), note: note.trim() } });
+    return res.json({ submission: data });
+  });
+}
+
+// server/nowpayments.ts
+var NOWPAYMENTS_API_URL3 = "https://api.nowpayments.io/v1";
 var SUPPORTED_DEPOSIT_CURRENCIES = /* @__PURE__ */ new Set(["usdttrc20", "usdtbsc"]);
 var supabaseUrl = process.env.VITE_SUPABASE_URL;
 var serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 function adminClient2() {
   if (!supabaseUrl || !serviceRoleKey) return null;
-  return createClient2(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient4(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 function origin(req) {
   const forwardedProto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0];
@@ -870,7 +1303,7 @@ function registerNowPaymentsRoutes(app2) {
       if (!payCurrency) return res.status(400).json({ error: "Solo se permiten dep\xF3sitos USDT por TRC20 o BEP20." });
       const transactionId = `NP-${crypto3.randomUUID()}`;
       const callbackUrl = `${origin(req)}/api/payments/nowpayments/ipn`;
-      const response = await fetch(`${NOWPAYMENTS_API_URL2}/payment`, {
+      const response = await fetch(`${NOWPAYMENTS_API_URL3}/payment`, {
         method: "POST",
         headers: { "x-api-key": apiKey2, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -931,6 +1364,17 @@ function registerNowPaymentsRoutes(app2) {
         return res.status(500).json({ error: "No se pudo procesar el pago de SARA IA." });
       }
     }
+    if (orderId.startsWith("INFLUENCER-")) {
+      try {
+        const result = await processInfluencerIpn(admin4, body);
+        if (!result.handled) return res.status(404).json({ error: "Orden no encontrada." });
+        if (result.error) return res.status(500).json({ error: result.error });
+        return res.json({ received: Boolean(result.ok) });
+      } catch (error) {
+        console.error("[INFLUENCERS] IPN processing failed", error);
+        return res.status(500).json({ error: "No se pudo procesar el pago Influencers." });
+      }
+    }
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";
     const status = ["finished", "confirmed"].includes(providerStatus) ? "completed" : ["failed", "expired", "refunded"].includes(providerStatus) ? "failed" : "pending";
     if (orderId) {
@@ -959,15 +1403,15 @@ function registerNowPaymentsRoutes(app2) {
 
 // server/withdrawals.ts
 import crypto4 from "node:crypto";
-import { createClient as createClient3 } from "@supabase/supabase-js";
+import { createClient as createClient5 } from "@supabase/supabase-js";
 var NETWORKS = /* @__PURE__ */ new Set(["BNB Chain"]);
 var LIMIT = 1e3;
 function admin() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient3(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient5(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function token(req) {
+function token2(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -988,7 +1432,7 @@ function validateWithdrawalInput(amount2, network, wallet, usedToday) {
 function registerWithdrawalRoutes(app2) {
   app2.post("/api/withdrawals/request", async (req, res) => {
     const client = admin();
-    const accessToken = token(req);
+    const accessToken = token2(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
@@ -1036,11 +1480,11 @@ function registerWithdrawalRoutes(app2) {
 }
 
 // server/commissions.ts
-import { createClient as createClient4 } from "@supabase/supabase-js";
+import { createClient as createClient6 } from "@supabase/supabase-js";
 function adminClient3() {
   const url = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && serviceRoleKey2 ? createClient4(url, serviceRoleKey2, {
+  return url && serviceRoleKey2 ? createClient6(url, serviceRoleKey2, {
     auth: { persistSession: false, autoRefreshToken: false }
   }) : null;
 }
@@ -1280,11 +1724,11 @@ function registerCommissionRoutes(app2) {
 }
 
 // server/secureCommissionEndpoint.ts
-import { createClient as createClient5 } from "@supabase/supabase-js";
+import { createClient as createClient7 } from "@supabase/supabase-js";
 function adminClient4() {
   const url = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && serviceRoleKey2 ? createClient5(url, serviceRoleKey2, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && serviceRoleKey2 ? createClient7(url, serviceRoleKey2, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function bearer4(req) {
   const value = req.header("authorization") || "";
@@ -1334,13 +1778,13 @@ function registerSecureCommissionRoutes(app2) {
 
 // server/deposits.ts
 import crypto5 from "node:crypto";
-import { createClient as createClient6 } from "@supabase/supabase-js";
+import { createClient as createClient8 } from "@supabase/supabase-js";
 function admin2() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient6(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient8(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
-function token2(req) {
+function token3(req) {
   const value = req.header("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
@@ -1351,7 +1795,7 @@ function validateManualDeposit(amount2) {
 function registerDepositRoutes(app2) {
   app2.post("/api/deposits/request", async (req, res) => {
     const client = admin2();
-    const accessToken = token2(req);
+    const accessToken = token3(req);
     if (!client || !accessToken) return res.status(401).json({ error: "Sesi\xF3n Supabase requerida." });
     const { data, error: authError } = await client.auth.getUser(accessToken);
     if (authError || !data.user) return res.status(401).json({ error: "Sesi\xF3n Supabase inv\xE1lida." });
@@ -1372,216 +1816,6 @@ function registerDepositRoutes(app2) {
     });
     if (error) return res.status(500).json({ error: "No se pudo registrar el dep\xF3sito pendiente." });
     return res.status(201).json({ id, status: "pending", credited: false, message: "Dep\xF3sito registrado para confirmaci\xF3n." });
-  });
-}
-
-// server/adminWithdrawals.ts
-import { createClient as createClient7 } from "@supabase/supabase-js";
-
-// server/adminAudit.ts
-async function recordAdminOperation(client, entry) {
-  try {
-    if (!client || typeof client.from !== "function") return;
-    const table = client.from("admin_operation_audit_log");
-    if (!table || typeof table.insert !== "function") return;
-    const value = {
-      admin_id: entry.adminId,
-      admin_email: entry.adminEmail || null,
-      admin_username: entry.adminUsername || null,
-      action: entry.action,
-      target_type: entry.targetType,
-      target_id: entry.targetId || null,
-      details: entry.details || {}
-    };
-    const { error } = await table.insert(value);
-    if (!error) return;
-    const fallback = client.from("platform_settings");
-    if (typeof fallback.upsert !== "function") return console.error("[admin-audit]", error.message || error);
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const result = await fallback.upsert({ key: `admin_audit:${suffix}`, value, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "key" });
-    if (result.error) console.error("[admin-audit-fallback]", result.error.message || result.error);
-  } catch (error) {
-    console.error("[admin-audit]", error);
-  }
-}
-
-// server/adminWithdrawals.ts
-function serviceClient() {
-  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!url || !key) throw new Error("Las credenciales administrativas no est\xE1n configuradas.");
-  return createClient7(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-function token3(req) {
-  const header = req.header("authorization") || "";
-  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-}
-async function authenticatedAdmin(req) {
-  const client = serviceClient();
-  const accessToken = token3(req);
-  if (!accessToken) return { client, error: "Sesi\xF3n requerida.", status: 401 };
-  const { data, error } = await client.auth.getUser(accessToken);
-  if (error || !data.user) return { client, error: "La sesi\xF3n no es v\xE1lida.", status: 401 };
-  const { data: profile, error: profileError } = await client.from("profiles").select("role,username").eq("id", data.user.id).maybeSingle();
-  if (profileError || profile?.role !== "admin") {
-    return { client, error: "No tienes permisos para gestionar retiros.", status: 403 };
-  }
-  return { client, userId: data.user.id, email: data.user.email || null, username: profile.username || null };
-}
-async function withdrawalWindow(client) {
-  const { data } = await client.from("platform_settings").select("value").eq("key", "withdrawal_window").maybeSingle();
-  return data?.value && typeof data.value === "object" && data.value.enabled === true;
-}
-var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
-function registerAdminWithdrawalRoutes(app2) {
-  app2.get("/api/admin/audit-log", async (req, res) => {
-    try {
-      const admin4 = await authenticatedAdmin(req);
-      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const { data, error } = await admin4.client.from("admin_operation_audit_log").select("id,admin_id,admin_email,admin_username,action,target_type,target_id,details,created_at").order("created_at", { ascending: false }).limit(300);
-      if (error && (error.code === "42P01" || error.code === "PGRST205")) {
-        const { data: fallback, error: fallbackError } = await admin4.client.from("platform_settings").select("key,value,updated_at").like("key", "admin_audit:%").order("updated_at", { ascending: false }).limit(300);
-        if (fallbackError) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
-        const entries = (fallback || []).map((row) => ({ id: row.key, ...row.value || {}, created_at: row.updated_at }));
-        return res.status(200).json({ entries, storage: "compatibility" });
-      }
-      if (error) return res.status(500).json({ error: "No se pudo cargar el historial administrativo." });
-      return res.status(200).json({ entries: data || [] });
-    } catch (error) {
-      console.error("[admin-audit-log]", error);
-      return res.status(503).json({ error: "El historial administrativo no est\xE1 disponible." });
-    }
-  });
-  app2.get("/api/support/whatsapp", async (_req, res) => {
-    try {
-      const client = serviceClient();
-      const { data } = await client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
-      const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
-      return res.status(200).json({ number });
-    } catch {
-      return res.status(200).json({ number: "" });
-    }
-  });
-  app2.get("/api/admin/support-whatsapp", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-    const { data } = await admin4.client.from("platform_settings").select("value").eq("key", "support_whatsapp").maybeSingle();
-    const number = data?.value && typeof data.value === "object" ? String(data.value.number || "") : "";
-    return res.status(200).json({ number });
-  });
-  app2.patch("/api/admin/support-whatsapp", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-    const number = String(req.body?.number || "").replace(/\D/g, "");
-    if (number.length < 8 || number.length > 15) return res.status(400).json({ error: "Introduce el n\xFAmero con c\xF3digo de pa\xEDs." });
-    const { error } = await admin4.client.from("platform_settings").upsert({
-      key: "support_whatsapp",
-      value: { number, updated_by: admin4.userId },
-      updated_at: (/* @__PURE__ */ new Date()).toISOString()
-    }, { onConflict: "key" });
-    if (error) return res.status(500).json({ error: "No se pudo guardar el WhatsApp de soporte." });
-    await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: "support_whatsapp_updated", targetType: "platform_setting", targetId: "support_whatsapp", details: { numberEnding: number.slice(-4) } });
-    return res.status(200).json({ number });
-  });
-  app2.get("/api/admin/withdrawal-window", async (req, res) => {
-    try {
-      const admin4 = await authenticatedAdmin(req);
-      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      return res.status(200).json({ enabled: await withdrawalWindow(admin4.client) });
-    } catch (error) {
-      console.error("[admin-withdrawal-window]", error);
-      return res.status(503).json({ error: "No se pudo consultar la ventana de retiros." });
-    }
-  });
-  app2.patch("/api/admin/withdrawal-window", async (req, res) => {
-    try {
-      const admin4 = await authenticatedAdmin(req);
-      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const enabled = req.body?.enabled === true;
-      const { error } = await admin4.client.from("platform_settings").upsert({
-        key: "withdrawal_window",
-        value: { enabled, mode: "scheduled_mexico", updated_by: (await admin4.client.auth.getUser(token3(req))).data.user?.id || null },
-        updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }, { onConflict: "key" });
-      if (error) return res.status(500).json({ error: "No se pudo actualizar la ventana de retiros." });
-      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: enabled ? "withdrawal_window_enabled" : "withdrawal_window_disabled", targetType: "platform_setting", targetId: "withdrawal_window" });
-      return res.status(200).json({ enabled });
-    } catch (error) {
-      console.error("[admin-withdrawal-window]", error);
-      return res.status(503).json({ error: "La configuraci\xF3n de retiros no est\xE1 disponible." });
-    }
-  });
-  app2.get("/api/admin/withdrawals", async (req, res) => {
-    try {
-      const admin4 = await authenticatedAdmin(req);
-      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const { data, error } = await admin4.client.from("transactions").select("id,user_id,username,label,amount,status,network,wallet,fee,net_amount,provider_status,direct_commission_spent,weekly_bonus_spent,node_roi_spent,created_at").eq("type", "withdraw").order("created_at", { ascending: false }).limit(200);
-      if (error) return res.status(500).json({ error: "No se pudo cargar la cola de retiros." });
-      const { data: capitalClaims, error: claimsError } = await admin4.client.from("finite_node_capital_choices").select("contract_id,user_id,amount,fee,net_amount,wallet,status,requested_at,payable_at").eq("action", "claim").order("requested_at", { ascending: false }).limit(200);
-      if (claimsError && claimsError.code !== "PGRST205") return res.status(500).json({ error: "No se pudo cargar la cola de retiros de capital." });
-      const userIds = Array.from(new Set((capitalClaims || []).map((row) => row.user_id)));
-      const { data: owners } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
-      const names = new Map((owners || []).map((row) => [row.id, row.username]));
-      const claims = (capitalClaims || []).map((row) => ({
-        id: `CAPITAL-CLAIM-${row.contract_id}`,
-        user_id: row.user_id,
-        username: names.get(row.user_id) || null,
-        label: `Capital del nodo ${row.contract_id}`,
-        amount: -Number(row.amount),
-        fee: row.fee,
-        net_amount: row.net_amount,
-        status: row.status,
-        network: "BNB Chain",
-        wallet: row.wallet,
-        provider_status: "retiro_capital_nodo",
-        created_at: row.requested_at,
-        payable_at: row.payable_at
-      }));
-      return res.status(200).json({ withdrawals: [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at))) });
-    } catch (error) {
-      console.error("[admin-withdrawals]", error);
-      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
-    }
-  });
-  app2.post("/api/admin/withdrawals", async (req, res) => {
-    try {
-      const admin4 = await authenticatedAdmin(req);
-      if ("error" in admin4) return res.status(admin4.status ?? 500).json({ error: admin4.error });
-      const id = String(req.body?.id || "").trim().slice(0, 160);
-      const action = String(req.body?.action || "").trim();
-      if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
-      if (id.startsWith("CAPITAL-CLAIM-")) {
-        const reference = cleanReference(req.body?.reference);
-        const { data, error } = await admin4.client.rpc("manage_finite_node_claim", {
-          p_contract_id: id.slice("CAPITAL-CLAIM-".length),
-          p_action: action,
-          p_admin_id: admin4.userId,
-          p_reference: reference || null
-        });
-        if (error) return res.status(error.code === "P0001" ? 409 : 500).json({ error: error.code === "P0001" ? error.message : "No se pudo actualizar el retiro de capital." });
-        await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `capital_withdrawal_${action}`, targetType: "finite_node_capital_claim", targetId: id, details: { reference: reference || null, status: data.status } });
-        return res.status(200).json({ id, status: data.status });
-      }
-      const { data: withdrawal, error: lookupError } = await admin4.client.from("transactions").select("id,status,type").eq("id", id).maybeSingle();
-      if (lookupError || !withdrawal || withdrawal.type !== "withdraw") return res.status(404).json({ error: "Solicitud de retiro no encontrada." });
-      const status = String(withdrawal.status);
-      const ref = cleanReference(req.body?.reference);
-      const transitions = {
-        approve: { from: ["pending"], to: "approved", provider: "manual_approved" },
-        mark_paid: { from: ["approved"], to: "completed", provider: ref ? `manual_paid:${ref}` : "manual_paid" },
-        reject: { from: ["pending", "approved"], to: "rejected", provider: ref ? `manual_rejected:${ref}` : "manual_rejected" }
-      };
-      const transition = transitions[action];
-      if (!transition.from.includes(status)) return res.status(409).json({ error: "La solicitud no permite esta acci\xF3n en su estado actual." });
-      const { data: updated, error: updateError } = await admin4.client.from("transactions").update({ status: transition.to, provider_status: transition.provider }).eq("id", id).eq("status", status).select("id").maybeSingle();
-      if (updateError) return res.status(500).json({ error: "No se pudo actualizar el retiro." });
-      if (!updated) return res.status(409).json({ error: "El retiro cambi\xF3 de estado. Actualiza la lista." });
-      await recordAdminOperation(admin4.client, { adminId: admin4.userId, adminEmail: admin4.email, adminUsername: admin4.username, action: `withdrawal_${action}`, targetType: "transaction", targetId: id, details: { fromStatus: status, toStatus: transition.to, reference: ref || null } });
-      return res.status(200).json({ id, status: transition.to, providerStatus: transition.provider });
-    } catch (error) {
-      console.error("[admin-withdrawals]", error);
-      return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
-    }
   });
 }
 
@@ -1762,12 +1996,12 @@ function createFinancialRateLimiter(overrides = {}) {
 
 // server/emailSecurity.ts
 import crypto6 from "node:crypto";
-import { createClient as createClient8 } from "@supabase/supabase-js";
+import { createClient as createClient9 } from "@supabase/supabase-js";
 var CODE_TTL_MS = 10 * 60 * 1e3;
 function admin3() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return url && key ? createClient8(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  return url && key ? createClient9(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function bearer5(req) {
   const value = req.header("authorization") || "";
@@ -2107,7 +2341,7 @@ function registerDailyReconciliationRoutes(app2) {
 }
 
 // server/finiteNodeCapital.ts
-import { createClient as createClient9 } from "@supabase/supabase-js";
+import { createClient as createClient10 } from "@supabase/supabase-js";
 function registerFiniteNodeCapitalRoutes(app2) {
   app2.post("/api/nodes/capital-choice", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -2122,7 +2356,7 @@ function registerFiniteNodeCapitalRoutes(app2) {
     if (!contractId || contractId.length > 120 || !["claim", "reinvest"].includes(action))
       return res.status(400).json({ error: "Elecci\xF3n de capital inv\xE1lida." });
     try {
-      const client = createClient9(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const client = createClient10(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data: auth, error: authError } = await client.auth.getUser(token4);
       if (authError || !auth.user) return res.status(401).json({ error: "Sesi\xF3n inv\xE1lida." });
       const { data, error } = await client.rpc("choose_finite_node_capital", {
@@ -2292,7 +2526,7 @@ function registerAdminSaraSales(app2) {
 }
 
 // server/promotions.ts
-import { createClient as createClient10 } from "@supabase/supabase-js";
+import { createClient as createClient11 } from "@supabase/supabase-js";
 function registerPromotionRoutes(app2) {
   app2.get("/api/promotions/latam", async (req, res) => {
     res.set("Cache-Control", "no-store");
@@ -2300,7 +2534,7 @@ function registerPromotionRoutes(app2) {
       const token4 = req.headers.authorization?.replace(/^Bearer /i, "") || "";
       if (!token4)
         return res.status(401).json({ error: "Inicia sesi\xF3n para consultar tu progreso." });
-      const client = createClient10(
+      const client = createClient11(
         process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
         process.env.SUPABASE_SERVICE_ROLE_KEY || "",
         { auth: { persistSession: false } }
@@ -2364,161 +2598,6 @@ function registerPromotionRoutes(app2) {
   });
 }
 
-// server/influencers.ts
-import { createClient as createClient11 } from "@supabase/supabase-js";
-var BUCKET = "influencer-evidence";
-var MAX_FILE_SIZE = 10 * 1024 * 1024;
-var MIME_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-function serviceClient2() {
-  return createClient11(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "", { auth: { persistSession: false } });
-}
-async function authenticatedUser2(req) {
-  const token4 = req.headers.authorization?.replace(/^Bearer /i, "") || "";
-  if (!token4) return { error: "Inicia sesi\xF3n para continuar.", status: 401 };
-  const client = serviceClient2();
-  const { data, error } = await client.auth.getUser(token4);
-  if (error || !data.user) return { error: "Sesi\xF3n no v\xE1lida.", status: 401 };
-  return { client, userId: data.user.id, email: data.user.email || null };
-}
-function safeExtension(name) {
-  const ext = name.toLowerCase().match(/\.(jpg|jpeg|png|webp|pdf)$/)?.[1];
-  return ext === "jpeg" ? "jpg" : ext || "bin";
-}
-function validStoryUrl(platform, value) {
-  try {
-    const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
-    return platform === "instagram" ? host === "instagram.com" || host.endsWith(".instagram.com") : host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.watch";
-  } catch {
-    return false;
-  }
-}
-function mexicoWeekStart(value = /* @__PURE__ */ new Date()) {
-  const local = new Date(value.toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
-  const day = local.getDay() || 7;
-  local.setDate(local.getDate() - day + 1);
-  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
-}
-function registerInfluencerRoutes(app2) {
-  app2.get("/api/influencers/status", async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    const auth = await authenticatedUser2(req);
-    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
-    const { data: packageRow, error } = await auth.client.from("influencer_packages").select("*").eq("user_id", auth.userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (error) return res.status(503).json({ error: "El programa a\xFAn no est\xE1 disponible en la base de datos." });
-    const { data: submissions } = packageRow ? await auth.client.from("influencer_submissions").select("id,platform,story_url,campaign_code,story_published_at,submitted_at,status,reported_views,verified_views,reward_amount,review_note").eq("package_id", packageRow.id).order("submitted_at", { ascending: false }).limit(30) : { data: [] };
-    const weekStart = mexicoWeekStart();
-    const weekly = (submissions || []).filter((row) => String(row.submitted_at) >= `${weekStart}T00:00:00`).reduce((sum, row) => sum + Number(row.reward_amount || 0), 0);
-    const { data: plans } = await auth.client.from("influencer_plans").select("code,name,price,reward_cap,weekly_cap,reward_rate,duration_days").eq("active", true).order("sort_order");
-    const { data: payouts } = await auth.client.from("influencer_weekly_payouts").select("id,week_start,week_end,verified_views,amount,status,transaction_id,credited_at").eq("user_id", auth.userId).order("week_start", { ascending: false }).limit(12);
-    return res.json({ package: packageRow || null, plans: plans || [], submissions: submissions || [], payouts: payouts || [], weekStart, weeklyReward: weekly });
-  });
-  app2.post("/api/influencers/purchase", async (req, res) => {
-    const auth = await authenticatedUser2(req);
-    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
-    const { planCode, requestId } = req.body || {};
-    if (typeof planCode !== "string" || typeof requestId !== "string" || !/^[0-9a-f-]{36}$/i.test(requestId)) return res.status(400).json({ error: "Solicitud de compra inv\xE1lida." });
-    const { data, error } = await auth.client.rpc("purchase_influencer_plan_from_balance", { p_user_id: auth.userId, p_plan_code: planCode, p_request_id: requestId });
-    if (error) return res.status(409).json({ error: error.message || "No se pudo comprar el paquete." });
-    return res.status(201).json({ package: data });
-  });
-  app2.post("/api/influencers/request", async (req, res) => {
-    const auth = await authenticatedUser2(req);
-    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
-    const { planCode } = req.body || {};
-    if (typeof planCode !== "string") return res.status(400).json({ error: "Selecciona un paquete v\xE1lido." });
-    const { data: plan } = await auth.client.from("influencer_plans").select("*").eq("code", planCode).eq("active", true).maybeSingle();
-    if (!plan) return res.status(400).json({ error: "El paquete seleccionado no est\xE1 disponible." });
-    const { data: existing } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).in("status", ["pending", "active", "paused"]).maybeSingle();
-    if (existing) return res.json({ package: existing });
-    const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
-    if (error) return res.status(503).json({ error: error.code === "23505" ? "Ya tienes una solicitud abierta." : "No se pudo registrar la solicitud." });
-    return res.status(201).json({ package: data });
-  });
-  app2.post("/api/influencers/evidence-url", async (req, res) => {
-    const auth = await authenticatedUser2(req);
-    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
-    const { fileName, mimeType, size } = req.body || {};
-    if (typeof fileName !== "string" || fileName.length > 180 || !MIME_TYPES.has(mimeType) || !Number.isFinite(size) || size < 1 || size > MAX_FILE_SIZE) return res.status(400).json({ error: "Adjunta una imagen o PDF de hasta 10 MB." });
-    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
-    if (!packageRow) return res.status(409).json({ error: "Necesitas un paquete Influencers activo." });
-    const path = `${auth.userId}/${packageRow.id}/${crypto.randomUUID()}.${safeExtension(fileName)}`;
-    const { data, error } = await auth.client.storage.from(BUCKET).createSignedUploadUrl(path);
-    if (error || !data) return res.status(503).json({ error: "No se pudo preparar la carga de evidencia." });
-    return res.json({ path, token: data.token });
-  });
-  app2.post("/api/influencers/submissions", async (req, res) => {
-    const auth = await authenticatedUser2(req);
-    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
-    const { platform, storyUrl, evidencePath, campaignCode, publishedAt, reportedViews } = req.body || {};
-    if (!["instagram", "facebook"].includes(platform) || typeof storyUrl !== "string" || storyUrl.length < 10 || storyUrl.length > 500 || !validStoryUrl(platform, storyUrl) || typeof evidencePath !== "string" || !evidencePath.startsWith(`${auth.userId}/`) || typeof campaignCode !== "string" || campaignCode.length < 3 || campaignCode.length > 60 || !Number.isInteger(reportedViews) || reportedViews < 0 || reportedViews > 1e7) return res.status(400).json({ error: "Revisa la red, enlace, c\xF3digo, evidencia y vistas reportadas." });
-    const published = new Date(publishedAt);
-    if (Number.isNaN(published.getTime()) || published.getTime() > Date.now() + 5 * 6e4 || published.getTime() < Date.now() - 30 * 60 * 6e4) return res.status(400).json({ error: "La historia debe haberse publicado durante las \xFAltimas 24 horas." });
-    const { data: packageRow } = await auth.client.from("influencer_packages").select("id,status,starts_at,ends_at").eq("user_id", auth.userId).eq("status", "active").maybeSingle();
-    if (!packageRow || packageRow.ends_at && new Date(packageRow.ends_at) <= /* @__PURE__ */ new Date()) return res.status(409).json({ error: "No tienes un paquete Influencers activo." });
-    const { error: evidenceError } = await auth.client.storage.from(BUCKET).createSignedUrl(evidencePath, 60);
-    if (evidenceError) return res.status(409).json({ error: "La evidencia no existe o no termin\xF3 de cargarse." });
-    const { data, error } = await auth.client.rpc("create_influencer_submission", { p_user_id: auth.userId, p_platform: platform, p_story_url: storyUrl.trim(), p_evidence_path: evidencePath, p_campaign_code: campaignCode.trim().toUpperCase(), p_published_at: published.toISOString(), p_reported_views: reportedViews });
-    if (error) return res.status(error.code === "23505" ? 409 : 503).json({ error: error.code === "23505" ? "Esta evidencia ya fue registrada." : error.message || "No se pudo registrar la evidencia." });
-    return res.status(201).json({ submission: data });
-  });
-  app2.get("/api/admin/influencers", async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    const admin4 = await authenticatedAdmin(req);
-    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
-    const { data: packages, error } = await admin4.client.from("influencer_packages").select("*").order("created_at", { ascending: false }).limit(250);
-    if (error) return res.status(503).json({ error: "Falta aplicar la migraci\xF3n del programa Influencers." });
-    const { data: submissions } = await admin4.client.from("influencer_submissions").select("*").order("submitted_at", { ascending: false }).limit(250);
-    const { data: payouts } = await admin4.client.from("influencer_weekly_payouts").select("*").order("week_start", { ascending: false }).limit(250);
-    const userIds = Array.from(/* @__PURE__ */ new Set([...(packages || []).map((row) => row.user_id), ...(submissions || []).map((row) => row.user_id)]));
-    const { data: profiles } = userIds.length ? await admin4.client.from("profiles").select("id,username").in("id", userIds) : { data: [] };
-    const profileMap = new Map((profiles || []).map((row) => [row.id, row]));
-    const enriched = await Promise.all((submissions || []).map(async (row) => {
-      const { data } = await admin4.client.storage.from(BUCKET).createSignedUrl(row.evidence_path, 900);
-      return { ...row, profiles: profileMap.get(row.user_id) || null, evidence_url: data?.signedUrl || null };
-    }));
-    return res.json({ packages: (packages || []).map((row) => ({ ...row, profiles: profileMap.get(row.user_id) || null })), submissions: enriched, payouts: (payouts || []).map((row) => ({ ...row, profiles: profileMap.get(row.user_id) || null })) });
-  });
-  app2.post("/api/admin/influencers/activate", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
-    const { packageId, paymentMethod, paymentReference } = req.body || {};
-    if (typeof packageId !== "string" || !["manual", "crypto"].includes(paymentMethod) || typeof paymentReference !== "string" || paymentReference.trim().length < 6) return res.status(400).json({ error: "Paquete, m\xE9todo y referencia de pago son obligatorios." });
-    const { data, error } = await admin4.client.rpc("admin_activate_influencer_package", { p_admin_id: admin4.userId, p_package_id: packageId, p_payment_method: paymentMethod, p_payment_reference: paymentReference.trim() });
-    if (error) return res.status(409).json({ error: "El paquete ya no est\xE1 pendiente o no pudo activarse." });
-    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: "activate_influencer_package", targetType: "influencer_package", targetId: packageId, details: { userId: data.user_id, durationDays: data.duration_days, paymentMethod, paymentReference: paymentReference.trim() } });
-    return res.json({ package: data });
-  });
-  app2.post("/api/admin/influencers/maintenance", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
-    const { data, error } = await admin4.client.rpc("settle_due_influencer_payouts");
-    if (error) return res.status(409).json({ error: error.message || "No se pudo cerrar la n\xF3mina semanal." });
-    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: "settle_influencer_payouts", targetType: "influencer_weekly_payout", targetId: null, details: data || {} });
-    return res.json({ result: data });
-  });
-  app2.post("/api/admin/influencers/package-status", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
-    const { packageId, status, reason } = req.body || {};
-    if (typeof packageId !== "string" || !["active", "paused", "cancelled"].includes(status) || status === "cancelled" && (typeof reason !== "string" || reason.trim().length < 5)) return res.status(400).json({ error: "Cambio de estado inv\xE1lido." });
-    const allowedFrom = status === "paused" ? ["active"] : status === "active" ? ["paused"] : ["pending", "active", "paused"];
-    const { data, error } = await admin4.client.from("influencer_packages").update({ status, cancel_reason: status === "cancelled" ? reason.trim() : null, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", packageId).in("status", allowedFrom).select("id,user_id,status").single();
-    if (error) return res.status(409).json({ error: "El paquete cambi\xF3 de estado o no admite esa operaci\xF3n." });
-    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: `influencer_package_${status}`, targetType: "influencer_package", targetId: packageId, details: { userId: data.user_id, reason: status === "cancelled" ? reason.trim() : null } });
-    return res.json({ package: data });
-  });
-  app2.post("/api/admin/influencers/review", async (req, res) => {
-    const admin4 = await authenticatedAdmin(req);
-    if (admin4.error) return res.status(admin4.status || 403).json({ error: admin4.error });
-    const { submissionId, decision, verifiedViews, note } = req.body || {};
-    if (typeof submissionId !== "string" || !["approved", "rejected"].includes(decision) || !Number.isInteger(verifiedViews) || verifiedViews < 0 || verifiedViews > 1e7 || typeof note !== "string" || note.trim().length < 3 || note.length > 1e3) return res.status(400).json({ error: "Completa decisi\xF3n, vistas verificadas y nota." });
-    const { data, error } = await admin4.client.rpc("admin_review_influencer_submission", { p_admin_id: admin4.userId, p_submission_id: submissionId, p_decision: decision, p_verified_views: verifiedViews, p_note: note.trim() });
-    if (error) return res.status(409).json({ error: error.message || "La evidencia cambi\xF3 mientras la revisabas. Actualiza el listado." });
-    await recordAdminOperation(admin4.client, { adminId: admin4.userId, action: `influencer_submission_${decision}`, targetType: "influencer_submission", targetId: submissionId, details: { verifiedViews, rewardAmount: Number(data?.reward_amount || 0), note: note.trim() } });
-    return res.json({ submission: data });
-  });
-}
-
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -2529,7 +2608,7 @@ function createApp() {
   app2.use(express.urlencoded({ limit: "64kb", extended: true }));
   app2.use("/api", createApiRateLimiter());
   app2.use(
-    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia"],
+    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia", "/api/payments/nowpayments/influencer"],
     createFinancialRateLimiter()
   );
   registerStorageProxy(app2);

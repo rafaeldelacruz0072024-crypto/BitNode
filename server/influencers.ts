@@ -6,6 +6,13 @@ import { recordAdminOperation } from "./adminAudit.js";
 const BUCKET = "influencer-evidence";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
+const INFLUENCER_CURRENCIES = new Set(["usdttrc20", "usdtbsc"]);
+
+function requestOrigin(req: Request) {
+  const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0];
+  return `${proto}://${req.get("host")}`;
+}
 
 function serviceClient() {
   return createClient(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "", { auth: { persistSession: false } });
@@ -39,6 +46,37 @@ function mexicoWeekStart(value = new Date()) {
   return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
 }
 
+export async function processInfluencerIpn(admin: ReturnType<typeof serviceClient>, body: Record<string, unknown>) {
+  const orderId = String(body.order_id || "");
+  if (!orderId.startsWith("INFLUENCER-")) return { handled:false } as const;
+  const { data: payment, error } = await admin.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,status").eq("order_id", orderId).maybeSingle();
+  if (error || !payment) return { handled:true, error:"Pago Influencers no encontrado." } as const;
+  if (payment.status === "completed") return { handled:true, ok:true } as const;
+  const providerStatus = String(body.payment_status || "unknown").toLowerCase();
+  const paymentId = String(body.payment_id || "");
+  const payCurrency = String(body.pay_currency || "").toLowerCase();
+  const priceCurrency = String(body.price_currency || "").toLowerCase();
+  const priceAmount = Number(body.price_amount);
+  const payAmount = Number(body.pay_amount);
+  const actuallyPaid = Number(body.actually_paid || 0);
+  const mismatch = !paymentId || paymentId !== payment.provider_payment_id || payCurrency !== payment.pay_currency || priceCurrency !== "usd" || !Number.isFinite(priceAmount) || Math.abs(priceAmount-Number(payment.price_amount)) > .001 || !Number.isFinite(payAmount) || Math.abs(payAmount-Number(payment.pay_amount)) > .00000001;
+  if (mismatch) {
+    await admin.from("influencer_payments").update({ status:"review", provider_status:providerStatus, actually_paid:Number.isFinite(actuallyPaid)?actuallyPaid:null, updated_at:new Date().toISOString() }).eq("order_id",orderId).neq("status","completed");
+    return { handled:true, ok:true } as const;
+  }
+  if (providerStatus === "finished") {
+    if (!Number.isFinite(actuallyPaid) || actuallyPaid + .00000001 < Number(payment.pay_amount)) {
+      await admin.from("influencer_payments").update({ status:"review",provider_status:providerStatus,actually_paid:actuallyPaid,updated_at:new Date().toISOString() }).eq("order_id",orderId).neq("status","completed");
+      return { handled:true,ok:true } as const;
+    }
+    const { error: completionError } = await admin.rpc("complete_influencer_nowpayment", { p_order_id:orderId,p_payment_id:paymentId,p_pay_currency:payCurrency,p_price_amount:priceAmount,p_pay_amount:payAmount,p_actually_paid:actuallyPaid });
+    return completionError ? { handled:true,error:completionError.message || "No se pudo activar el paquete." } as const : { handled:true,ok:true } as const;
+  }
+  const failed = ["failed","expired","refunded"].includes(providerStatus);
+  await admin.from("influencer_payments").update({ status:failed?"failed":"pending",provider_status:providerStatus,actually_paid:Number.isFinite(actuallyPaid)?actuallyPaid:null,updated_at:new Date().toISOString() }).eq("order_id",orderId).neq("status","completed");
+  return { handled:true,ok:true } as const;
+}
+
 export function registerInfluencerRoutes(app: Express) {
   app.get("/api/influencers/status", async (req, res) => {
     res.set("Cache-Control", "no-store");
@@ -51,7 +89,8 @@ export function registerInfluencerRoutes(app: Express) {
     const weekly = (submissions || []).filter(row => String(row.submitted_at) >= `${weekStart}T00:00:00`).reduce((sum, row) => sum + Number(row.reward_amount || 0), 0);
     const { data: plans } = await auth.client.from("influencer_plans").select("code,name,price,reward_cap,weekly_cap,reward_rate,duration_days").eq("active", true).order("sort_order");
     const { data: payouts } = await auth.client.from("influencer_weekly_payouts").select("id,week_start,week_end,verified_views,amount,status,transaction_id,credited_at").eq("user_id", auth.userId).order("week_start", { ascending: false }).limit(12);
-    return res.json({ package: packageRow || null, plans: plans || [], submissions: submissions || [], payouts: payouts || [], weekStart, weeklyReward: weekly });
+    const { data: payment } = packageRow ? await auth.client.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").eq("package_id", packageRow.id).maybeSingle() : { data: null };
+    return res.json({ package: packageRow || null, payment: payment || null, plans: plans || [], submissions: submissions || [], payouts: payouts || [], weekStart, weeklyReward: weekly });
   });
 
   app.post("/api/influencers/purchase", async (req, res) => {
@@ -76,6 +115,36 @@ export function registerInfluencerRoutes(app: Express) {
     const { data, error } = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
     if (error) return res.status(503).json({ error: error.code === "23505" ? "Ya tienes una solicitud abierta." : "No se pudo registrar la solicitud." });
     return res.status(201).json({ package: data });
+  });
+
+  app.post("/api/payments/nowpayments/influencer", async (req, res) => {
+    const auth = await authenticatedUser(req);
+    if ("error" in auth) return res.status(auth.status || 401).json({ error: auth.error });
+    const apiKey = process.env.NOWPAYMENTS_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: "NOWPayments no está configurado." });
+    const { planCode } = req.body || {};
+    const payCurrency = String(req.body?.payCurrency || "usdtbsc").toLowerCase();
+    if (typeof planCode !== "string" || !INFLUENCER_CURRENCIES.has(payCurrency)) return res.status(400).json({ error: "Selecciona un paquete y una red USDT válida." });
+    const { data: plan } = await auth.client.from("influencer_plans").select("code,name,price,reward_rate,weekly_cap,reward_cap").eq("code", planCode).eq("active", true).maybeSingle();
+    if (!plan) return res.status(400).json({ error: "El paquete seleccionado no está disponible." });
+    let { data: packageRow } = await auth.client.from("influencer_packages").select("id,status,plan_code").eq("user_id", auth.userId).in("status", ["pending","active","paused"]).maybeSingle();
+    if (packageRow && packageRow.status !== "pending") return res.status(409).json({ error: "Ya tienes un paquete Influencers activo o pausado." });
+    if (packageRow && packageRow.plan_code !== plan.code) return res.status(409).json({ error: "Tu solicitud pendiente corresponde a otro paquete. Administración debe cancelarla antes de cambiar el plan." });
+    if (!packageRow) {
+      const created = await auth.client.from("influencer_packages").insert({ user_id: auth.userId, plan_code: plan.code, price: plan.price, reward_rate: plan.reward_rate, weekly_cap: plan.weekly_cap, reward_cap: plan.reward_cap }).select("id,status,plan_code").single();
+      if (created.error || !created.data) return res.status(409).json({ error: "No se pudo reservar el paquete Influencers." });
+      packageRow = created.data;
+    }
+    const { data: existing } = await auth.client.from("influencer_payments").select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").eq("package_id", packageRow.id).maybeSingle();
+    if (existing) return res.json({ payment: existing, reused: true });
+    const orderId = `INFLUENCER-${crypto.randomUUID()}`;
+    const response = await fetch(`${NOWPAYMENTS_API_URL}/payment`, { method:"POST", headers:{ "x-api-key":apiKey,"Content-Type":"application/json" }, body:JSON.stringify({ price_amount:Number(plan.price), price_currency:"usd", pay_currency:payCurrency, order_id:orderId, order_description:`BitNode Influencers ${plan.code}`, ipn_callback_url:`${requestOrigin(req)}/api/payments/nowpayments/ipn`, is_fixed_rate:true }) });
+    const provider = await response.json().catch(() => ({}));
+    if (!response.ok || !provider.payment_id || !provider.pay_address || !provider.pay_amount || String(provider.pay_currency || "").toLowerCase() !== payCurrency) return res.status(502).json({ error: "NOWPayments no confirmó los datos de pago USDT esperados." });
+    const payment = { order_id:orderId, package_id:packageRow.id, user_id:auth.userId, provider_payment_id:String(provider.payment_id), price_amount:Number(plan.price), pay_amount:Number(provider.pay_amount), pay_currency:payCurrency, pay_address:String(provider.pay_address), provider_status:String(provider.payment_status || "waiting") };
+    const { data, error } = await auth.client.from("influencer_payments").insert(payment).select("order_id,provider_payment_id,price_amount,pay_amount,pay_currency,pay_address,status,provider_status,actually_paid,created_at,completed_at").single();
+    if (error || !data) return res.status(500).json({ error: "El pago fue creado, pero no pudo registrarse. No envíes fondos y contacta a soporte." });
+    return res.status(201).json({ payment:data });
   });
 
   app.post("/api/influencers/evidence-url", async (req, res) => {

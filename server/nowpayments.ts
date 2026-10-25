@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { depositCashback, depositCashbackTransactionId, isDepositCashbackActive } from "@shared/depositCashback";
 import { processSaraIaIpn } from "./saraIa.js";
+import { processInfluencerIpn } from "./influencers.js";
 
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 export const SUPPORTED_DEPOSIT_CURRENCIES = new Set(["usdttrc20", "usdtbsc"]);
@@ -133,6 +134,17 @@ export function registerNowPaymentsRoutes(app: Express) {
       } catch (error) {
         console.error("[SARA IA] IPN processing failed", error);
         return res.status(500).json({ error: "No se pudo procesar el pago de SARA IA." });
+      }
+    }
+    if (orderId.startsWith("INFLUENCER-")) {
+      try {
+        const result = await processInfluencerIpn(admin, body);
+        if (!result.handled) return res.status(404).json({ error: "Orden no encontrada." });
+        if (result.error) return res.status(500).json({ error: result.error });
+        return res.json({ received:Boolean(result.ok) });
+      } catch (error) {
+        console.error("[INFLUENCERS] IPN processing failed", error);
+        return res.status(500).json({ error:"No se pudo procesar el pago Influencers." });
       }
     }
     const providerStatus = body.payment_status ? String(body.payment_status) : "unknown";

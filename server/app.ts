@@ -33,7 +33,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ limit: "64kb", extended: true }));
   app.use("/api", createApiRateLimiter());
   app.use(
-    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia"],
+    ["/api/deposits", "/api/withdrawals", "/api/contracts", "/api/commissions", "/api/payments/nowpayments/sara-ia", "/api/payments/nowpayments/influencer"],
     createFinancialRateLimiter()
   );
 
