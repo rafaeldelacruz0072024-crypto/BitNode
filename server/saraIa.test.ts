@@ -1,10 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import { hasActiveSaraNode, processSaraIaIpn, saraIaHasLaunched } from "./saraIa";
+import {
+  hasActiveSaraNode,
+  processSaraIaIpn,
+  saraIaHasLaunched,
+  saraIaRepurchaseAllowed,
+} from "./saraIa";
 
 describe("SARA IA Monday launch", () => {
   it("blocks purchases before Monday midnight in Santo Domingo", () => {
     expect(saraIaHasLaunched(Date.parse("2026-10-05T03:59:59Z"))).toBe(false);
     expect(saraIaHasLaunched(Date.parse("2026-10-05T04:00:00Z"))).toBe(true);
+  });
+});
+
+describe("SARA IA 30-day repurchase rule", () => {
+  const now = Date.parse("2026-10-28T12:00:00-04:00");
+
+  it("blocks repurchase while the current 30-day period is active", () => {
+    expect(saraIaRepurchaseAllowed("2026-10-29T12:00:00-04:00", now)).toBe(false);
+  });
+
+  it("allows repurchase exactly at expiry or when no subscription exists", () => {
+    expect(saraIaRepurchaseAllowed("2026-10-28T12:00:00-04:00", now)).toBe(true);
+    expect(saraIaRepurchaseAllowed(null, now)).toBe(true);
   });
 });
 

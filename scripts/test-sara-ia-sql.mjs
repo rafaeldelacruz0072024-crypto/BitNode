@@ -47,6 +47,8 @@ try {
   await db.exec(migration.replace('create extension if not exists pg_cron with schema pg_catalog;', '').replaceAll('now()', 'public.test_now()'));
   const thirtyDays = await readFile(new URL('../supabase/migrations/20261003000934_sara_ia_30_calendar_days.sql', import.meta.url), 'utf8');
   await db.exec(thirtyDays.replaceAll('now()', 'public.test_now()'));
+  const repurchaseRule = await readFile(new URL('../supabase/migrations/20261028125246_enforce_sara_ia_repurchase_after_expiry.sql', import.meta.url), 'utf8');
+  await db.exec(repurchaseRule.replaceAll('now()', 'public.test_now()'));
   const run = async () => (await db.query('select bitnode_private.run_sara_ia_daily() result')).rows[0].result;
   assert.equal((await run()).status,'before_launch');
   await assert.rejects(db.exec(`insert into sara_ia_payments(order_id,user_id,pay_currency) values('early','${uid}','usdtbsc')`), /lunes 5/);
@@ -66,13 +68,19 @@ try {
   await db.exec(`update test_clock set at='2026-10-07 10:00-04'; update contracts set status='completed';`);
   assert.equal((await run()).completed,0);
   await assert.rejects(db.exec(`insert into sara_ia_payments(order_id,user_id,pay_currency) values('no-node','${uid}','usdtbsc')`), /21 días activo/);
-  await db.exec(`update contracts set status='active';
+  await db.exec(`update contracts set status='active'; update test_clock set at='2026-11-05 00:00-04';
     insert into sara_ia_payments(order_id,user_id,pay_currency,provider_payment_id,expected_pay_amount)
     values('paid','${uid}','usdtbsc','provider',25);
     select complete_sara_ia_payment('paid','provider','usdtbsc',25,25);`);
   const expiry = (await db.query('select paid_through_at::text expiry from sara_ia_subscriptions')).rows[0].expiry;
-  assert.equal(Number((await db.query(`select extract(epoch from (paid_through_at-timestamptz '2026-11-05'))/86400 days from sara_ia_subscriptions`)).rows[0].days),30);
+  assert.equal(Number((await db.query(`select extract(epoch from (paid_through_at-public.test_now()))/86400 days from sara_ia_subscriptions`)).rows[0].days),30);
   await db.exec(`select complete_sara_ia_payment('paid','provider','usdtbsc',25,25)`);
+  assert.equal((await db.query('select paid_through_at::text expiry from sara_ia_subscriptions')).rows[0].expiry,expiry);
+  await db.exec(`update test_clock set at='2026-11-06 00:00-04';
+    insert into sara_ia_payments(order_id,user_id,pay_currency,provider_payment_id,expected_pay_amount)
+    values('early-repurchase','${uid}','usdtbsc','provider-early',25);
+    select complete_sara_ia_payment('early-repurchase','provider-early','usdtbsc',25,25);`);
+  assert.equal((await db.query(`select status from sara_ia_payments where order_id='early-repurchase'`)).rows[0].status,'review');
   assert.equal((await db.query('select paid_through_at::text expiry from sara_ia_subscriptions')).rows[0].expiry,expiry);
   await db.exec(`update test_clock set at='2027-01-31 12:00-04';
     insert into sara_ia_payments(order_id,user_id,pay_currency,provider_payment_id,expected_pay_amount)
@@ -87,5 +95,5 @@ try {
   assert.equal((await run()).status,'weekend');
   await db.exec('set role authenticated');
   await assert.rejects(run(),/permission denied/);
-  console.log('PASS: migration compilation; Monday launch; expired partial cycle; 4/4; duplicate prevention; failure retry; 21-day rule; renewal/IPN idempotency; weekend and permissions. Canonical task RPC and cron are mocked, not production-verified.');
+  console.log('PASS: migration compilation; Monday launch; expired partial cycle; 4/4; duplicate prevention; failure retry; 21-day rule; 30-day repurchase gate; renewal/IPN idempotency; weekend and permissions. Canonical task RPC and cron are mocked, not production-verified.');
 } finally { await db.close(); }

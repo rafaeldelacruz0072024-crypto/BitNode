@@ -8,6 +8,10 @@ const apiKey = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1";
 export const SARA_IA_LAUNCH_AT = "2026-10-05T00:00:00-04:00";
 export const saraIaHasLaunched = (at = Date.now()) => at >= Date.parse(SARA_IA_LAUNCH_AT);
+export const saraIaRepurchaseAllowed = (
+  paidThroughAt: string | null | undefined,
+  at = Date.now()
+) => !paidThroughAt || new Date(paidThroughAt).getTime() <= at;
 const validSaraCurrency = (value: unknown) => {
   const currency = String(value || "").toLowerCase();
   return currency === "usdttrc20" || currency === "usdtbsc" ? currency : null;
@@ -137,6 +141,22 @@ export function registerSaraIaRoutes(app: Express) {
           return res.status(409).json({
             error:
               "Regla de oro: necesitas un nodo de 21 días activo para contratar SARA IA.",
+          });
+
+        const { data: currentSubscription, error: subscriptionError } = await admin
+          .from("sara_ia_subscriptions")
+          .select("paid_through_at")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (subscriptionError)
+          return res.status(503).json({
+            error: "No se pudo verificar la vigencia actual de SARA IA.",
+          });
+        if (!saraIaRepurchaseAllowed(currentSubscription?.paid_through_at))
+          return res.status(409).json({
+            error:
+              "La recompra de SARA IA se habilita al finalizar los 30 días vigentes.",
+            paidThroughAt: currentSubscription?.paid_through_at,
           });
 
         const orderId = `SARA-${crypto.randomUUID()}`;

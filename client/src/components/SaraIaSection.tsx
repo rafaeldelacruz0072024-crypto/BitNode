@@ -136,6 +136,7 @@ export function SaraIaSection() {
 
   const daysRemaining = saraDaysRemaining(status?.paidThroughAt, countdownNow);
   const isActive = Boolean(status?.active && daysRemaining !== null && daysRemaining > 0);
+  const repurchaseLocked = Boolean(status?.subscriptionPaid);
   const latestPayment = status?.payments?.[0];
 
   return (
@@ -226,7 +227,7 @@ export function SaraIaSection() {
                 id="sara-network"
                 className="sara-select"
                 value={payCurrency}
-                disabled={!launchTimeReached || busy}
+                disabled={!launchTimeReached || busy || repurchaseLocked}
                 onChange={event => setPayCurrency(event.target.value)}
               >
                 <option value="usdtbsc">USDT · BEP20</option>
@@ -235,18 +236,18 @@ export function SaraIaSection() {
               <button
                 className="sara-primary"
                 type="button"
-                disabled={!launchTimeReached || busy || !status?.hasActive21DayNode || !status?.launched}
+                disabled={!launchTimeReached || busy || repurchaseLocked || !status?.hasActive21DayNode || !status?.launched}
                 aria-describedby={!launchTimeReached ? "sara-launch-notice" : undefined}
                 onClick={() => void createPayment()}
               >
                 {busy ? <LoaderCircle className="sara-spin" /> : <Sparkles />}
-                {!launchTimeReached ? "Comprar SARA IA · Disponible el lunes" : busy ? "Preparando pago…" : status?.subscriptionPaid ? "Renovar SARA IA · $25/30 días" : "Comprar SARA IA · $25/30 días"}
+                {!launchTimeReached ? "Comprar SARA IA · Disponible el lunes" : busy ? "Preparando pago…" : repurchaseLocked ? "Recompra disponible al vencer" : "Comprar SARA IA · $25/30 días"}
               </button>
             </>
           )}
           {isActive && (
             <p className="sara-manual-renew">
-              <Clock3 /> Renovación manual: suma 30 días con USDT por NOWPayments.
+              <Clock3 /> La recompra se habilita cuando finalicen los 30 días vigentes.
             </p>
           )}
           <p className="sara-note">
