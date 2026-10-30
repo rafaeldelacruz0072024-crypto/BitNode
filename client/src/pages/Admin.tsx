@@ -1068,6 +1068,19 @@ type AdminWithdrawal = {
   node_roi_spent?: number | string | null;
 };
 
+type PendingPayoutSummary = {
+  count: number;
+  pending: number;
+  approved: number;
+  gross: number;
+  fees: number;
+  net: number;
+};
+
+const emptyPendingPayoutSummary: PendingPayoutSummary = {
+  count: 0, pending: 0, approved: 0, gross: 0, fees: 0, net: 0,
+};
+
 function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> }) {
   const [withdrawalQuery, setWithdrawalQuery] = useState("");
   const [withdrawalStatus, setWithdrawalStatus] = useState("");
@@ -1075,6 +1088,7 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
   const [withdrawalFrom, setWithdrawalFrom] = useState("");
   const [withdrawalTo, setWithdrawalTo] = useState("");
   const [rows, setRows] = useState<AdminWithdrawal[]>([]);
+  const [pendingSummary, setPendingSummary] = useState<PendingPayoutSummary>(emptyPendingPayoutSummary);
   const invalidDates = Boolean(withdrawalFrom && withdrawalTo && withdrawalFrom > withdrawalTo);
   const filteredWithdrawals = rows.filter(row => {
     const day = row.created_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(row.created_at)) : "";
@@ -1118,6 +1132,9 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(body.error || "No se pudo cargar la cola de retiros."));
       setRows(Array.isArray(body.withdrawals) ? body.withdrawals : []);
+      setPendingSummary(body.pendingSummary && typeof body.pendingSummary === "object"
+        ? { ...emptyPendingPayoutSummary, ...body.pendingSummary }
+        : emptyPendingPayoutSummary);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo cargar la cola de retiros.");
     } finally {
@@ -1167,6 +1184,16 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
         </button>
       </div>
       <p className="config-note">Aprueba la solicitud, realiza el envío desde tu wallet externa y luego marca el retiro como pagado. El panel no transfiere criptomonedas automáticamente.</p>
+      <section className="withdrawal-pending-summary" aria-label="Balance pendiente de retiros">
+        <div className="withdrawal-pending-primary">
+          <span>Balance pendiente a pagar</span>
+          <strong>{money(pendingSummary.net)}</strong>
+          <small>Se actualiza al marcar cada retiro como pagado o rechazado.</small>
+        </div>
+        <div><span>Solicitado</span><strong>{money(pendingSummary.gross)}</strong><small>Antes de fees</small></div>
+        <div><span>Fees</span><strong>{money(pendingSummary.fees)}</strong><small>Descontados del envío</small></div>
+        <div><span>Operaciones</span><strong>{pendingSummary.count}</strong><small>{pendingSummary.pending} pendientes · {pendingSummary.approved} aprobadas</small></div>
+      </section>
       <div className="admin-toolbar">
         <label className="admin-search"><Search size={16} /><input aria-label="Buscar retiros" placeholder="Usuario, ID o wallet" value={withdrawalQuery} onChange={e => setWithdrawalQuery(e.target.value)} /></label>
         <label>Estado <select aria-label="Estado de retiro" value={withdrawalStatus} onChange={e => setWithdrawalStatus(e.target.value)}><option value="">Todos</option>{["pending", "approved", "completed", "rejected"].map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}</select></label>

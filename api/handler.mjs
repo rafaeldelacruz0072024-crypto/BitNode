@@ -883,6 +883,22 @@ async function withdrawalWindow(client) {
   return data?.value && typeof data.value === "object" && data.value.enabled === true;
 }
 var cleanReference = (value) => String(value || "").trim().replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 120);
+function pendingPayoutSummary(rows) {
+  const payable = rows.filter((row) => row.status === "pending" || row.status === "approved");
+  return payable.reduce((summary, row) => {
+    const gross = Math.abs(Number(row.amount) || 0);
+    const fee = Math.abs(Number(row.fee) || 0);
+    const storedNet = Number(row.net_amount);
+    const net = Number.isFinite(storedNet) && storedNet > 0 ? storedNet : Math.max(0, gross - fee);
+    summary.count += 1;
+    summary.gross += gross;
+    summary.fees += fee;
+    summary.net += net;
+    if (row.status === "approved") summary.approved += 1;
+    else summary.pending += 1;
+    return summary;
+  }, { count: 0, pending: 0, approved: 0, gross: 0, fees: 0, net: 0 });
+}
 function registerAdminWithdrawalRoutes(app2) {
   app2.get("/api/admin/audit-log", async (req, res) => {
     try {
@@ -987,7 +1003,17 @@ function registerAdminWithdrawalRoutes(app2) {
         created_at: row.requested_at,
         payable_at: row.payable_at
       }));
-      return res.status(200).json({ withdrawals: [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at))) });
+      const withdrawals = [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
+      const { data: pendingWithdrawals, error: pendingError } = await admin4.client.from("transactions").select("amount,fee,net_amount,status").eq("type", "withdraw").in("status", ["pending", "approved"]).limit(1e3);
+      if (pendingError) return res.status(500).json({ error: "No se pudo calcular el balance pendiente de retiros." });
+      const { data: pendingCapital, error: pendingCapitalError } = await admin4.client.from("finite_node_capital_choices").select("amount,fee,net_amount,status").eq("action", "claim").in("status", ["pending", "approved"]).limit(1e3);
+      if (pendingCapitalError && pendingCapitalError.code !== "PGRST205") {
+        return res.status(500).json({ error: "No se pudo calcular el balance pendiente de capital." });
+      }
+      return res.status(200).json({
+        withdrawals,
+        pendingSummary: pendingPayoutSummary([...pendingWithdrawals || [], ...pendingCapital || []])
+      });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
       return res.status(503).json({ error: "El m\xF3dulo de retiros no est\xE1 disponible." });
