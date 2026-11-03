@@ -1064,6 +1064,7 @@ type AdminWithdrawal = {
   created_at: string | null;
   payable_at?: string | null;
   origin_label?: string;
+  display_date?: string | null;
   direct_commission_spent?: number | string | null;
   weekly_bonus_spent?: number | string | null;
   node_roi_spent?: number | string | null;
@@ -1092,7 +1093,7 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
   const [pendingSummary, setPendingSummary] = useState<PendingPayoutSummary>(emptyPendingPayoutSummary);
   const invalidDates = Boolean(withdrawalFrom && withdrawalTo && withdrawalFrom > withdrawalTo);
   const filteredWithdrawals = rows.filter(row => {
-    const day = row.created_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(row.created_at)) : "";
+    const day = row.display_date || (row.created_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(row.created_at)) : "");
     return !invalidDates && matchesAdminSearch([row.id, row.username, row.user_id, row.wallet], withdrawalQuery)
       && (!withdrawalStatus || row.status === withdrawalStatus)
       && (!withdrawalNetwork || row.network === withdrawalNetwork)
@@ -1223,7 +1224,7 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
                 nodeRoiSpent: row.node_roi_spent,
               });
             return <tr key={row.id}>
-              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small><span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>{row.origin_label || (origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo")}{!row.origin_label && origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}</span></td>
+              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{row.display_date ? new Intl.DateTimeFormat("es", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${row.display_date}T12:00:00Z`)) : dateLabel(row.created_at)}</small><span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>{row.origin_label || (origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo")}{!row.origin_label && origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}</span></td>
               <td><strong>{money(net)}</strong><small>Solicitado {money(amount)} · Fee {money(Number(row.fee) || 0)}</small></td>
               <td>
                 <span>{row.network || "—"}</span>

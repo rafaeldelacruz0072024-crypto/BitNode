@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { recordAdminOperation } from "./adminAudit.js";
-import { payableWithdrawal } from "./adminPayables.js";
+import { orderWithdrawalQueue, payableWithdrawal } from "./adminPayables.js";
 
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
@@ -167,7 +167,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         provider_status: "retiro_capital_nodo", created_at: row.requested_at, payable_at: row.payable_at,
       }));
       let { data: payables, error: payableError } = await admin.client.from("admin_payables")
-        .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id")
+        .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id,display_date,queue_after_id")
         .order("created_at", { ascending: false });
       if (payableError?.code === "42703") {
         const legacy = await admin.client.from("admin_payables")
@@ -180,8 +180,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
       }
       const payableRows = (payables || []).map(payableWithdrawal);
-      const withdrawals = [...(data || []), ...claims, ...payableRows].sort((a, b) =>
-        Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
+      const withdrawals = orderWithdrawalQueue([...(data || []), ...claims, ...payableRows]);
       const { data: pendingWithdrawals, error: pendingError } = await admin.client.from("transactions")
         .select("amount,fee,net_amount,status").eq("type", "withdraw").in("status", ["pending", "approved"]).limit(1000);
       if (pendingError) return res.status(500).json({ error: "No se pudo calcular el balance pendiente de retiros." });

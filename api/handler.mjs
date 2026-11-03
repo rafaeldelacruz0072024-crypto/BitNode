@@ -856,6 +856,17 @@ async function recordAdminOperation(client, entry) {
 }
 
 // server/adminPayables.ts
+function orderWithdrawalQueue(rows) {
+  const ordered = [...rows].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
+  for (const row of rows) {
+    if (!row.id.startsWith("PAYABLE-") || !row.queue_after_id || row.status !== "pending") continue;
+    const anchor = ordered.find((item) => item.id === row.queue_after_id && item.status === "pending" && !item.id.startsWith("PAYABLE-"));
+    if (!anchor) continue;
+    ordered.splice(ordered.indexOf(row), 1);
+    ordered.splice(ordered.indexOf(anchor) + 1, 0, row);
+  }
+  return ordered;
+}
 function payableWithdrawal(row) {
   return {
     ...row,
@@ -1019,7 +1030,7 @@ function registerAdminWithdrawalRoutes(app2) {
         created_at: row.requested_at,
         payable_at: row.payable_at
       }));
-      let { data: payables, error: payableError } = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id").order("created_at", { ascending: false });
+      let { data: payables, error: payableError } = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id,display_date,queue_after_id").order("created_at", { ascending: false });
       if (payableError?.code === "42703") {
         const legacy = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference").order("created_at", { ascending: false });
         payables = legacy.data;
@@ -1029,7 +1040,7 @@ function registerAdminWithdrawalRoutes(app2) {
         return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
       }
       const payableRows = (payables || []).map(payableWithdrawal);
-      const withdrawals = [...data || [], ...claims, ...payableRows].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
+      const withdrawals = orderWithdrawalQueue([...data || [], ...claims, ...payableRows]);
       const { data: pendingWithdrawals, error: pendingError } = await admin4.client.from("transactions").select("amount,fee,net_amount,status").eq("type", "withdraw").in("status", ["pending", "approved"]).limit(1e3);
       if (pendingError) return res.status(500).json({ error: "No se pudo calcular el balance pendiente de retiros." });
       const { data: pendingCapital, error: pendingCapitalError } = await admin4.client.from("finite_node_capital_choices").select("amount,fee,net_amount,status").eq("action", "claim").in("status", ["pending", "approved"]).limit(1e3);

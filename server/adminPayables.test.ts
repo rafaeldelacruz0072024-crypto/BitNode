@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { payableWithdrawal } from "./adminPayables";
+import { orderWithdrawalQueue, payableWithdrawal } from "./adminPayables";
 import { pendingPayoutSummary } from "./adminWithdrawals";
 
 describe("administrative payable queue", () => {
@@ -15,5 +15,14 @@ describe("administrative payable queue", () => {
   it("uses the administrative label without creating commissions or changing the payable", () => {
     expect(payableWithdrawal({ ...row, display_label: "Comisiones del miércoles", sponsor_id: "sponsor" }))
       .toMatchObject({ origin_label: "Comisiones del miércoles", sponsor_id: "sponsor", net_amount: "310.00", direct_commission_spent: 0, weekly_bonus_spent: 0 });
+  });
+  it("places only the designated pending payable after its target without changing timestamps", () => {
+    const anchor = { id: "WDR-target", created_at: "2026-10-28T12:00:00Z", status: "pending" };
+    const regular = { id: "WDR-other", created_at: "2026-10-30T12:00:00Z", status: "pending" };
+    const payable = payableWithdrawal({ ...row, queue_after_id: anchor.id, display_date: "2026-10-30" });
+    expect(orderWithdrawalQueue([anchor, payable, regular]).map(item => item.id)).toEqual([regular.id, anchor.id, payable.id]);
+    expect(payable.created_at).toBe(row.created_at);
+    expect(payable.display_date).toBe("2026-10-30");
+    expect(orderWithdrawalQueue([regular, payable]).map(item => item.id)).toEqual([payable.id, regular.id]);
   });
 });
