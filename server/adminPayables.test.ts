@@ -12,4 +12,8 @@ describe("administrative payable queue", () => {
   it("removes paid or rejected obligations from the pending total", () => {
     expect(pendingPayoutSummary([payableWithdrawal({ ...row, status: "completed" }), payableWithdrawal({ ...row, status: "rejected" })]).net).toBe(0);
   });
+  it("uses the administrative label without creating commissions or changing the payable", () => {
+    expect(payableWithdrawal({ ...row, display_label: "Comisiones del miércoles", sponsor_id: "sponsor" }))
+      .toMatchObject({ origin_label: "Comisiones del miércoles", sponsor_id: "sponsor", net_amount: "310.00", direct_commission_spent: 0, weekly_bonus_spent: 0 });
+  });
 });

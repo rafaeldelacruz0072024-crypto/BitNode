@@ -862,9 +862,9 @@ function payableWithdrawal(row) {
     id: `PAYABLE-${row.id}`,
     amount: -Math.abs(Number(row.amount)),
     user_id: null,
-    label: "Retiro",
+    label: row.display_label || "Retiro",
     provider_status: "manual_review",
-    origin_label: "Retiro",
+    origin_label: row.display_label || "Retiro",
     direct_commission_spent: 0,
     weekly_bonus_spent: 0,
     node_roi_spent: 0
@@ -1019,7 +1019,12 @@ function registerAdminWithdrawalRoutes(app2) {
         created_at: row.requested_at,
         payable_at: row.payable_at
       }));
-      const { data: payables, error: payableError } = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference").order("created_at", { ascending: false });
+      let { data: payables, error: payableError } = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id").order("created_at", { ascending: false });
+      if (payableError?.code === "42703") {
+        const legacy = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference").order("created_at", { ascending: false });
+        payables = legacy.data;
+        payableError = legacy.error;
+      }
       if (payableError && !["42P01", "PGRST205"].includes(payableError.code)) {
         return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
       }

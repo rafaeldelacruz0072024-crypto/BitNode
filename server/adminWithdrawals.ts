@@ -166,9 +166,16 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         status: row.status, network: "BNB Chain", wallet: row.wallet,
         provider_status: "retiro_capital_nodo", created_at: row.requested_at, payable_at: row.payable_at,
       }));
-      const { data: payables, error: payableError } = await admin.client.from("admin_payables")
-        .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference")
+      let { data: payables, error: payableError } = await admin.client.from("admin_payables")
+        .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id")
         .order("created_at", { ascending: false });
+      if (payableError?.code === "42703") {
+        const legacy = await admin.client.from("admin_payables")
+          .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference")
+          .order("created_at", { ascending: false });
+        payables = legacy.data as typeof payables;
+        payableError = legacy.error;
+      }
       if (payableError && !["42P01", "PGRST205"].includes(payableError.code)) {
         return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
       }
