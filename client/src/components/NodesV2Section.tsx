@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, CalendarDays, Layers3, LockKeyhole } from "lucide-react";
-import { NODES_V2, nodePercent, nodeCycleProjection, isNodeV2 } from "@shared/nodesV2";
+import { FOUNDER_PLAN_ID, NODES_V2, nodePercent, nodeCycleProjection, isNodeV2 } from "@shared/nodesV2";
 import { supabase } from "@/lib/supabaseClient";
 import { money, type LocalUserState } from "@/lib/localUserStore";
 import { NodeCycleProgress } from "./NodeCycleProgress";
 import "./nodes-v2.css";
 
-export type NodeV2Catalog = { preview: boolean; plans: Array<(typeof NODES_V2)[number] & { enabled: boolean }> };
+export type NodeV2Catalog = { preview: boolean; plans: Array<(typeof NODES_V2)[number] & { enabled: boolean; eligible?: boolean }> };
 export function useNodeV2Catalog(userId?: string) {
   const [data, setData] = useState<NodeV2Catalog | null>(null);
   const [error, setError] = useState("");
@@ -56,20 +56,22 @@ export function NodesV2Section({ user, catalog, error, activate, busy, refresh }
   }
   if (!catalog) return <div className="generic-panel"><h2>Nodos 2.0</h2><p role="status">{error || "Los Nodos 2.0 todavía no están disponibles para esta cuenta."}</p></div>;
   return <section className="nodes-v2" aria-label="Nodos 2.0">
-    <header className="nodes-v2-hero"><div><span className="dash-eyebrow">UNA NUEVA GENERACIÓN</span><h2>Nodos <em>2.0</em></h2><p>Tres plazos. Rendimiento variable. Un ciclo a tu medida.</p></div><Layers3 size={70} aria-hidden="true" /></header>
+    <header className="nodes-v2-hero"><div><span className="dash-eyebrow">UNA NUEVA GENERACIÓN</span><h2>Nodos <em>2.0</em></h2><p>Tres plazos y un plan especial Founder. Un ciclo a tu medida.</p></div><Layers3 size={70} aria-hidden="true" /></header>
     {catalog.preview && <p className="nodes-v2-preview"><LockKeyhole size={17} /> Vista previa para administración · compras deshabilitadas hasta el lanzamiento.</p>}
     <div className="nodes-v2-metrics"><div><span>NODOS 2.0 ACTIVOS</span><strong>{active.length}</strong></div><div><span>CAPITAL ACTIVO</span><strong>{money(active.reduce((sum, c) => sum + c.amount, 0))}</strong></div><div><span>BALANCE DISPONIBLE</span><strong>{money(user.balance)}</strong></div></div>
     <div className="nodes-v2-grid">{catalog.plans.map(plan => {
-      const raw = amounts[plan.id] ?? "1000";
+      const isFounder = plan.id === FOUNDER_PLAN_ID;
+      const raw = amounts[plan.id] ?? (isFounder ? "2500" : "1000");
       const amount = Number(raw);
       const projection = nodeCycleProjection(plan, amount);
-      return <article className="nodes-v2-card" key={plan.id}>
+      return <article className={`nodes-v2-card${isFounder ? " nodes-v2-founder" : ""}`} key={plan.id}>
         <span className="nodes-v2-term"><CalendarDays size={16} /> {plan.days} DÍAS HÁBILES</span>
-        <h3>Nodo {plan.days}</h3><strong className="nodes-v2-rate">{nodePercent(plan.rateMin)}%–{nodePercent(plan.rateMax)}%<small>diario · lunes a viernes</small></strong>
-        <div className="nodes-v2-cycle"><span>Rendimiento por ciclo</span><b>{nodePercent(plan.rateMin * plan.days)}%–{nodePercent(plan.rateMax * plan.days)}%</b></div>
+        <h3>{isFounder ? "Nodo Founder" : `Nodo ${plan.days}`}</h3><strong className="nodes-v2-rate">{isFounder ? "2% fijo" : `${nodePercent(plan.rateMin)}%–${nodePercent(plan.rateMax)}%`}<small>diario · lunes a viernes</small></strong>
+        {isFounder && <p className="nodes-v2-founder-note">Exclusivo para socios ya registrados antes de incorporar Founder. Inversión mayor de 2,000 USDT. No disponible para nuevos registros.</p>}
+        <div className="nodes-v2-cycle"><span>Rendimiento por ciclo</span><b>{isFounder ? `${nodePercent(plan.rateMin * plan.days)}%` : `${nodePercent(plan.rateMin * plan.days)}%–${nodePercent(plan.rateMax * plan.days)}%`}</b></div>
         <label>Monto del nodo (USDT)<input type="number" min={plan.min} step="0.01" inputMode="decimal" value={raw} onChange={event => setAmounts(current => ({ ...current, [plan.id]: event.target.value }))} /></label>
-        <p className="nodes-v2-projection">Rendimiento estimado del ciclo<strong>{money(projection.min)}–{money(projection.max)}</strong><small>Capital base {money(Number.isFinite(amount) ? Math.max(0, amount) : 0)} · sin capitalización.</small></p>
-        <button className="dash-primary" disabled={!plan.enabled || busy || !Number.isFinite(amount) || amount < plan.min || amount > user.balance} onClick={() => activate({ id: plan.id, name: plan.name, rate: `${nodePercent(plan.rateMin)}% – ${nodePercent(plan.rateMax)}%`, duration: `${plan.days} días hábiles + capital de vuelta`, min: plan.min }, amount)}>{!plan.enabled ? "Próximamente" : busy ? "Procesando…" : "Crear nodo con mi balance"}<ArrowUpRight size={17} /></button>
+        <p className="nodes-v2-projection">Rendimiento estimado del ciclo<strong>{isFounder ? money(projection.min) : `${money(projection.min)}–${money(projection.max)}`}</strong><small>Capital base {money(Number.isFinite(amount) ? Math.max(0, amount) : 0)} · sin capitalización.</small></p>
+        <button className="dash-primary" disabled={!plan.enabled || busy || !Number.isFinite(amount) || amount < plan.min || amount > user.balance} onClick={() => activate({ id: plan.id, name: plan.name, rate: isFounder ? "2% fijo" : `${nodePercent(plan.rateMin)}% – ${nodePercent(plan.rateMax)}%`, duration: `${plan.days} días hábiles + capital de vuelta`, min: plan.min }, amount)}>{plan.eligible === false ? "Exclusivo para socios anteriores" : !plan.enabled ? "Próximamente" : busy ? "Procesando…" : "Crear nodo con mi balance"}<ArrowUpRight size={17} /></button>
       </article>;
     })}</div>
     <p className="nodes-v2-rules">Los días avanzan al completar las cuatro tareas en días hábiles, hora de Ciudad de México. El capital se libera al completar el ciclo. El ROI conserva la ventana de retiro del miércoles. Si incumples las tareas, aplican las reglas de reinicio vigentes. Las proyecciones son rangos de cálculo, no una garantía de rendimiento.</p>

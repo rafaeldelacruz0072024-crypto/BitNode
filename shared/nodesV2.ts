@@ -1,7 +1,9 @@
+export const FOUNDER_PLAN_ID = "v2-founder";
 export const NODES_V2 = [
   { id: "v2-10d", name: "Nodo 2.0 · 10 días", days: 10, rateMin: .005, rateMax: .007, min: 10 },
   { id: "v2-17d", name: "Nodo 2.0 · 17 días", days: 17, rateMin: .008, rateMax: .011, min: 10 },
   { id: "v2-33d", name: "Nodo 2.0 · 33 días", days: 33, rateMin: .013, rateMax: .021, min: 10 },
+  { id: FOUNDER_PLAN_ID, name: "Nodo Founder", days: 33, rateMin: .02, rateMax: .02, min: 2000.01 },
 ] as const;
 export type NodeV2Plan = typeof NODES_V2[number];
 export const isNodeV2 = (planId?: string | null) => NODES_V2.some(plan => plan.id === planId);

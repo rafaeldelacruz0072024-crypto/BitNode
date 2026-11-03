@@ -1,6 +1,6 @@
 # Nodos 2.0
 
-The new generation has separate plan IDs: `v2-10d`, `v2-17d`, `v2-33d`.
+The new generation has separate plan IDs: `v2-10d`, `v2-17d`, `v2-33d`, `v2-founder`.
 Legacy plan IDs, rates, active states, contracts and balances are preserved.
 
 | Business days | Daily range | Simple cycle ROI | ROI on 1,000 USDT |
@@ -8,6 +8,22 @@ Legacy plan IDs, rates, active states, contracts and balances are preserved.
 | 10 | 0.50%-0.70% | 5%-7% | 50-70 USDT |
 | 17 | 0.80%-1.10% | 13.60%-18.70% | 136-187 USDT |
 | 33 | 1.30%-2.10% | 42.90%-69.30% | 429-693 USDT |
+
+## Nodo Founder
+
+Founder uses the 33-business-day cycle and the same tasks, principal release,
+Wednesday withdrawal and reinvestment rules, at a fixed 2% per validated day
+(66% simple cycle ROI). The amount must be strictly greater than 2,000 USDT;
+with two-decimal amounts the minimum is 2,000.01 USDT.
+
+Eligibility is a closed snapshot of existing Auth registrations at the time the
+Founder migration runs. It does not require a currently active legacy node.
+Later registrations are excluded even if they subsequently buy a legacy node.
+The cohort is not writable by users or by the API service role.
+
+The server hides Founder from ineligible users, and the database rejects creation
+or reinvestment for an ineligible user independently of the UI. The plan starts
+inactive and follows the unreleased V2 setting; no purchases are enabled.
 
 ROI uses the original capital, without compounding. The V2 rate resolver does
 not inherit legacy monthly ROI policies. V1 continues using its existing resolver.

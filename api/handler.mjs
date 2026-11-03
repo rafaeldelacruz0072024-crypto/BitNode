@@ -2688,10 +2688,12 @@ function registerPromotionRoutes(app2) {
 import { createClient as createClient12 } from "@supabase/supabase-js";
 
 // shared/nodesV2.ts
+var FOUNDER_PLAN_ID = "v2-founder";
 var NODES_V2 = [
   { id: "v2-10d", name: "Nodo 2.0 \xB7 10 d\xEDas", days: 10, rateMin: 5e-3, rateMax: 7e-3, min: 10 },
   { id: "v2-17d", name: "Nodo 2.0 \xB7 17 d\xEDas", days: 17, rateMin: 8e-3, rateMax: 0.011, min: 10 },
-  { id: "v2-33d", name: "Nodo 2.0 \xB7 33 d\xEDas", days: 33, rateMin: 0.013, rateMax: 0.021, min: 10 }
+  { id: "v2-33d", name: "Nodo 2.0 \xB7 33 d\xEDas", days: 33, rateMin: 0.013, rateMax: 0.021, min: 10 },
+  { id: FOUNDER_PLAN_ID, name: "Nodo Founder", days: 33, rateMin: 0.02, rateMax: 0.02, min: 2000.01 }
 ];
 
 // server/nodesV2.ts
@@ -2707,19 +2709,22 @@ function registerNodesV2Routes(app2) {
       const client = createClient12(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
       const auth = await client.auth.getUser(accessToken);
       if (auth.error || !auth.data.user) return res.status(401).json({ error: "Sesi\xF3n inv\xE1lida." });
-      const [profile, plans, release] = await Promise.all([
+      const [profile, plans, release, founder] = await Promise.all([
         client.from("profiles").select("role").eq("id", auth.data.user.id).single(),
         client.from("plans").select("id,active,rate_min,rate_max,duration_days,min_amount").in("id", NODES_V2.map((p) => p.id)),
-        client.from("platform_settings").select("value").eq("key", "nodes_v2_release").maybeSingle()
+        client.from("platform_settings").select("value").eq("key", "nodes_v2_release").maybeSingle(),
+        client.rpc("get_node_founder_eligibility", { p_user_id: auth.data.user.id })
       ]);
       if (profile.error || plans.error || release.error) throw new Error("Catalog unavailable");
       const enabled = release.data?.value?.enabled === true;
       const isAdmin = profile.data?.role === "admin";
       if (!enabled && !isAdmin) return res.status(404).json({ error: "Los Nodos 2.0 a\xFAn no est\xE1n disponibles." });
-      return res.json({ preview: !enabled, plans: NODES_V2.map((plan) => {
+      const founderEligible = !founder.error && founder.data === true;
+      return res.json({ preview: !enabled, plans: NODES_V2.filter((plan) => plan.id !== FOUNDER_PLAN_ID || founderEligible || isAdmin).map((plan) => {
         const stored = plans.data?.find((p) => p.id === plan.id);
         const matches = stored && Number(stored.rate_min) === plan.rateMin && Number(stored.rate_max) === plan.rateMax && Number(stored.duration_days) === plan.days && Number(stored.min_amount) === plan.min;
-        return { ...plan, enabled: Boolean(enabled && matches && stored.active) };
+        const eligible = plan.id !== FOUNDER_PLAN_ID || founderEligible;
+        return { ...plan, eligible, enabled: Boolean(enabled && eligible && matches && stored.active) };
       }) });
     } catch {
       return res.status(503).json({ error: "No se pudo verificar el cat\xE1logo de Nodos 2.0." });

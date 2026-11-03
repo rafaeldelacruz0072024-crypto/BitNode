@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NODES_V2 } from "../shared/nodesV2";
-const state = vi.hoisted(() => ({ admin: true, enabled: false, rate: .005, auth: true }));
+const state = vi.hoisted(() => ({ admin: true, enabled: false, rate: .005, auth: true, founder: false, founderError: false }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({
   auth: { getUser: async () => ({ data: { user: state.auth ? { id: "user" } : null }, error: null }) },
+  rpc: async () => ({ data:state.founder,error:state.founderError ? {code:"PGRST202"} : null }),
   from: (table: string) => ({ select: () => ({
     eq: () => ({
       single: async () => ({ data: { role: state.admin ? "admin" : "user" }, error: null }),
@@ -15,7 +16,7 @@ import { registerNodesV2Routes } from "./nodesV2";
 describe("Nodos 2.0 catalog access", () => {
   let handler: Function;
   beforeEach(() => {
-    Object.assign(state, { admin:true, enabled:false, rate:.005, auth:true });
+    Object.assign(state, { admin:true, enabled:false, rate:.005, auth:true, founder:false,founderError:false });
     process.env.SUPABASE_URL="https://example.supabase.co"; process.env.SUPABASE_SERVICE_ROLE_KEY="test";
     registerNodesV2Routes({ get: (_path: string, fn: Function) => { handler=fn; } } as never);
   });
@@ -38,5 +39,15 @@ describe("Nodos 2.0 catalog access", () => {
   it("requires an explicit release and exact stored terms to enable a plan", async () => {
     state.admin=false; state.enabled=true; state.rate=.05;
     const {body}=await run(); expect(body.plans[0].enabled).toBe(false); expect(body.plans[1].enabled).toBe(true);
+  });
+  it("hides Founder from new registrations even after release", async () => {
+    state.admin=false; state.enabled=true;
+    expect((await run()).body.plans.some((p:any)=>p.id==='v2-founder')).toBe(false);
+  });
+  it("enables Founder only for the server-confirmed registration cohort", async () => {
+    state.admin=false; state.enabled=true; state.founder=true;
+    expect((await run()).body.plans.find((p:any)=>p.id==='v2-founder')).toMatchObject({enabled:true,min:2000.01,rateMin:.02,rateMax:.02});
+    state.founderError=true;
+    expect((await run()).body.plans.some((p:any)=>p.id==='v2-founder')).toBe(false);
   });
 });

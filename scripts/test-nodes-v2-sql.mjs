@@ -14,9 +14,9 @@ try {
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create schema bitnode_private;
     create function auth.uid() returns uuid language sql stable as $$select '${user}'::uuid$$;
-    create table auth.users(id uuid primary key,raw_app_meta_data jsonb default '{}');
+    create table auth.users(id uuid primary key,raw_app_meta_data jsonb default '{}',created_at timestamptz default now());
     create table public.profiles(id uuid primary key,username text,role text);
-    insert into auth.users values('${user}','{"withdrawal_wallet_bep20":"0x0000000000000000000000000000000000000001"}');
+    insert into auth.users(id,raw_app_meta_data) values('${user}','{"withdrawal_wallet_bep20":"0x0000000000000000000000000000000000000001"}');
     insert into public.profiles values('${user}','test','user');
     create table public.plans(id text primary key,name text,slug text unique,rate_min numeric,rate_max numeric,cadence text,duration_days integer,min_amount numeric,principal_returned boolean,active boolean,created_at timestamptz default now());
     insert into public.plans(id,name,slug,rate_min,rate_max,cadence,duration_days,min_amount,principal_returned,active)
@@ -36,6 +36,13 @@ try {
   const legacyPlan=await scalar("select to_jsonb(p)::text from plans p where id='21d'");
   const oldLegacyRate=await scalar("select bitnode_private.monthly_daily_rate(21,'2026-11-03')");
   await db.exec(await readFile(new URL('../supabase/migrations/20261103172422_nodes_v2_catalog_and_rules.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103220006_nodes_v2_founder.sql',import.meta.url),'utf8'));
+  assert.equal(await scalar(`select public.get_node_founder_eligibility('${user}')`),true);
+  const newcomer='00000000-0000-0000-0000-000000000002';
+  await q("insert into auth.users(id,created_at) values($1,'2020-01-01')",[newcomer]);
+  await q("insert into profiles values($1,'new','user')",[newcomer]);
+  assert.equal(await scalar(`select public.get_node_founder_eligibility('${newcomer}')`),false);
+  assert.equal(await scalar("select has_function_privilege('authenticated','public.get_node_founder_eligibility(uuid)','execute')"),false);
   assert.equal(await scalar("select (to_jsonb(p)-'node_version')::text from plans p where id='21d'"),legacyPlan);
   assert.equal(await scalar("select bitnode_private.plan_daily_rate('21d',21,'2026-11-03')"),oldLegacyRate);
   assert.equal(await scalar('select count(*)::int from plans where node_version=2 and active'),0);
@@ -43,6 +50,12 @@ try {
   await db.exec("update plans set active=true where node_version=2");
   await assert.rejects(q(`insert into contracts(id,user_id,plan_id,amount,status) values('blocked-flag',$1,'v2-10d',1000,'active')`,[user]),/no están habilitados/);
   assert.equal(await scalar('select count(*)::int from contracts'),0);
+  await db.exec("update platform_settings set value='{\"enabled\":true}' where key='nodes_v2_release'");
+  await assert.rejects(q("insert into contracts(id,user_id,plan_id,amount,status) values('new-founder',$1,'v2-founder',2500,'active')",[newcomer]),/exclusivo/);
+  await assert.rejects(q("insert into contracts(id,user_id,plan_id,amount,status) values('founder-low',$1,'v2-founder',2000,'active')",[user]),/mayor de 2,000/);
+  await assert.rejects(q("insert into contracts(id,user_id,plan_id,amount,status) values('founder-nan',$1,'v2-founder','NaN','active')",[user]),/mayor de 2,000/);
+  await q("insert into contracts(id,user_id,plan_id,amount,status) values('founder-min',$1,'v2-founder',2000.01,'pending')",[user]);
+  await db.exec("update contracts set status='cancelled' where id='founder-min'");
   await assert.rejects(q("update plans set rate_max=.08 where id='v2-33d'"),/retroactivamente/);
   await assert.rejects(q("update plans set node_version=2 where id='21d'"),/generación/);
   assert.equal(await scalar("select bitnode_private.add_mexico_business_days('2026-11-06 12:00:00-06',10)::text"),'2026-11-20 18:00:00+00');
@@ -59,7 +72,7 @@ try {
   await db.exec(clockedTasks);
   await at('2026-11-03T18:00:00Z');
   await db.exec("update platform_settings set value='{\"enabled\":true}' where key='nodes_v2_release'; update plans set active=true where node_version=2;");
-  await q("insert into contracts(id,user_id,plan_id,amount,status) values('new10',$1,'v2-10d',1000,'active'),('new17',$1,'v2-17d',1000,'active'),('new33',$1,'v2-33d',1000,'active'),('old21',$1,'21d',1000,'active')",[user]);
+  await q("insert into contracts(id,user_id,plan_id,amount,status) values('new10',$1,'v2-10d',1000,'active'),('new17',$1,'v2-17d',1000,'active'),('new33',$1,'v2-33d',1000,'active'),('old21',$1,'21d',1000,'active'),('founder',$1,'v2-founder',2500,'active')",[user]);
   await assert.rejects(q("update contracts set plan_id='v2-10d' where id='old21'"),/convertir/);
   for(let day=0;day<33;day++) {
     const clock=new Date('2026-11-03T18:00:00Z'); let remaining=day;
@@ -72,7 +85,7 @@ try {
     } else await assert.rejects(tasks(),/active node/);
   }
   const all=(await q("select c.id,c.status,count(r.id)::int days,sum(r.amount)::float8 roi from contracts c join contract_cycle_rewards r on r.contract_id=c.id group by c.id,c.status")).rows;
-  for(const [id,days,min,max] of [['new10',10,50,70],['new17',17,136,187],['new33',33,429,693],['old21',21,840,840]]) {
+  for(const [id,days,min,max] of [['new10',10,50,70],['new17',17,136,187],['new33',33,429,693],['old21',21,840,840],['founder',33,1650,1650]]) {
     const row=all.find(r=>r.id===id); assert.equal(row.status,'completed'); assert.equal(row.days,days); assert.ok(row.roi>=min-0.00001&&row.roi<=max+0.00001);
     assert.equal(await scalar(`select count(*)::int from transactions where id='PRINCIPAL-${id}'`),1);
   }
@@ -90,8 +103,11 @@ try {
   const claim=(await q("select public.choose_finite_node_capital($1,'new17','claim') result",[user])).rows[0].result;
   assert.equal(claim.status,'pending');
   assert.equal(Number(await scalar("select net_amount from finite_node_capital_choices where contract_id='new17'")),950);
+  const founderChoice=(await q("select public.choose_finite_node_capital($1,'founder','reinvest') result",[user])).rows[0].result;
+  assert.equal(founderChoice.status,'reinvested');
+  assert.equal(await scalar("select plan_id from contracts where id='REINVEST-founder'"),'v2-founder');
   await at('2026-12-26T18:00:00Z');
   await assert.rejects(tasks(),/lunes a viernes/);
-  console.log('PASS: legacy terms and ROI, V2 launch gate, immutable terms, business days, 10/17/33 full cycles, bounds, idempotency, principal, Wednesday buckets, reinvestment and weekends.');
+  console.log('PASS: legacy terms and ROI, V2 launch gate, closed Founder registration cohort, >2000 boundary, fixed 2%/33-day cycle, 10/17/33 cycles, bounds, idempotency, principal, Wednesday buckets, reinvestment and weekends.');
 } catch(error) { console.error(error.message,error.where || ''); process.exitCode=1; }
 finally { await db.close(); }
