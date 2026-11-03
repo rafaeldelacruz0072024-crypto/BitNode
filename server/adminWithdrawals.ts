@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { recordAdminOperation } from "./adminAudit.js";
+import { payableWithdrawal } from "./adminPayables.js";
 
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
@@ -165,7 +166,14 @@ export function registerAdminWithdrawalRoutes(app: Express) {
         status: row.status, network: "BNB Chain", wallet: row.wallet,
         provider_status: "retiro_capital_nodo", created_at: row.requested_at, payable_at: row.payable_at,
       }));
-      const withdrawals = [...(data || []), ...claims].sort((a, b) =>
+      const { data: payables, error: payableError } = await admin.client.from("admin_payables")
+        .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference")
+        .order("created_at", { ascending: false });
+      if (payableError && !["42P01", "PGRST205"].includes(payableError.code)) {
+        return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
+      }
+      const payableRows = (payables || []).map(payableWithdrawal);
+      const withdrawals = [...(data || []), ...claims, ...payableRows].sort((a, b) =>
         Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
       const { data: pendingWithdrawals, error: pendingError } = await admin.client.from("transactions")
         .select("amount,fee,net_amount,status").eq("type", "withdraw").in("status", ["pending", "approved"]).limit(1000);
@@ -177,7 +185,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       }
       return res.status(200).json({
         withdrawals,
-        pendingSummary: pendingPayoutSummary([...(pendingWithdrawals || []), ...(pendingCapital || [])]),
+        pendingSummary: pendingPayoutSummary([...(pendingWithdrawals || []), ...(pendingCapital || []), ...payableRows]),
       });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
@@ -192,6 +200,16 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       const id = String(req.body?.id || "").trim().slice(0, 160);
       const action = String(req.body?.action || "").trim();
       if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acción de retiro no es válida." });
+      if (id.startsWith("PAYABLE-")) {
+        const { data, error } = await admin.client.rpc("manage_admin_payable", {
+          p_id: id.slice("PAYABLE-".length), p_action: action,
+          p_admin_id: admin.userId, p_reference: cleanReference(req.body?.reference) || null,
+        });
+        if (error) return res.status(error.code === "P0001" ? 409 : 500).json({
+          error: error.code === "P0001" ? error.message : "No se pudo actualizar el pago.",
+        });
+        return res.status(200).json({ id, status: data.status });
+      }
       if (id.startsWith("CAPITAL-CLAIM-")) {
         const reference = cleanReference(req.body?.reference);
         const { data, error } = await admin.client.rpc("manage_finite_node_claim", {

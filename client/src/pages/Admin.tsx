@@ -1063,6 +1063,7 @@ type AdminWithdrawal = {
   provider_status: string | null;
   created_at: string | null;
   payable_at?: string | null;
+  origin_label?: string;
   direct_commission_spent?: number | string | null;
   weekly_bonus_spent?: number | string | null;
   node_roi_spent?: number | string | null;
@@ -1222,7 +1223,7 @@ function WithdrawalsSection({ onCompleted }: { onCompleted: () => Promise<void> 
                 nodeRoiSpent: row.node_roi_spent,
               });
             return <tr key={row.id}>
-              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small><span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>{origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo"}{origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}</span></td>
+              <td><strong>{row.username || row.user_id?.slice(0, 12) || "—"}</strong><small>{dateLabel(row.created_at)}</small><span className={`withdrawal-source-badge source-${origin?.source || "capital"}`}>{row.origin_label || (origin ? withdrawalSourceLabel[origin.source] : "Capital de nodo")}{!row.origin_label && origin?.source === "mixed" && <small>Directa {money(origin.direct)} · Miércoles {money(origin.wednesday)}</small>}</span></td>
               <td><strong>{money(net)}</strong><small>Solicitado {money(amount)} · Fee {money(Number(row.fee) || 0)}</small></td>
               <td>
                 <span>{row.network || "—"}</span>

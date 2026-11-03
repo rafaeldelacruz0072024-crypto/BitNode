@@ -855,6 +855,22 @@ async function recordAdminOperation(client, entry) {
   }
 }
 
+// server/adminPayables.ts
+function payableWithdrawal(row) {
+  return {
+    ...row,
+    id: `PAYABLE-${row.id}`,
+    amount: -Math.abs(Number(row.amount)),
+    user_id: null,
+    label: "Retiro",
+    provider_status: "manual_review",
+    origin_label: "Retiro",
+    direct_commission_spent: 0,
+    weekly_bonus_spent: 0,
+    node_roi_spent: 0
+  };
+}
+
 // server/adminWithdrawals.ts
 function serviceClient() {
   const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
@@ -1003,7 +1019,12 @@ function registerAdminWithdrawalRoutes(app2) {
         created_at: row.requested_at,
         payable_at: row.payable_at
       }));
-      const withdrawals = [...data || [], ...claims].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
+      const { data: payables, error: payableError } = await admin4.client.from("admin_payables").select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference").order("created_at", { ascending: false });
+      if (payableError && !["42P01", "PGRST205"].includes(payableError.code)) {
+        return res.status(500).json({ error: "No se pudo cargar la cola administrativa de pagos." });
+      }
+      const payableRows = (payables || []).map(payableWithdrawal);
+      const withdrawals = [...data || [], ...claims, ...payableRows].sort((a, b) => Date.parse(String(b.created_at)) - Date.parse(String(a.created_at)));
       const { data: pendingWithdrawals, error: pendingError } = await admin4.client.from("transactions").select("amount,fee,net_amount,status").eq("type", "withdraw").in("status", ["pending", "approved"]).limit(1e3);
       if (pendingError) return res.status(500).json({ error: "No se pudo calcular el balance pendiente de retiros." });
       const { data: pendingCapital, error: pendingCapitalError } = await admin4.client.from("finite_node_capital_choices").select("amount,fee,net_amount,status").eq("action", "claim").in("status", ["pending", "approved"]).limit(1e3);
@@ -1012,7 +1033,7 @@ function registerAdminWithdrawalRoutes(app2) {
       }
       return res.status(200).json({
         withdrawals,
-        pendingSummary: pendingPayoutSummary([...pendingWithdrawals || [], ...pendingCapital || []])
+        pendingSummary: pendingPayoutSummary([...pendingWithdrawals || [], ...pendingCapital || [], ...payableRows])
       });
     } catch (error) {
       console.error("[admin-withdrawals]", error);
@@ -1026,6 +1047,18 @@ function registerAdminWithdrawalRoutes(app2) {
       const id = String(req.body?.id || "").trim().slice(0, 160);
       const action = String(req.body?.action || "").trim();
       if (!id || !["approve", "mark_paid", "reject"].includes(action)) return res.status(400).json({ error: "La acci\xF3n de retiro no es v\xE1lida." });
+      if (id.startsWith("PAYABLE-")) {
+        const { data, error } = await admin4.client.rpc("manage_admin_payable", {
+          p_id: id.slice("PAYABLE-".length),
+          p_action: action,
+          p_admin_id: admin4.userId,
+          p_reference: cleanReference(req.body?.reference) || null
+        });
+        if (error) return res.status(error.code === "P0001" ? 409 : 500).json({
+          error: error.code === "P0001" ? error.message : "No se pudo actualizar el pago."
+        });
+        return res.status(200).json({ id, status: data.status });
+      }
       if (id.startsWith("CAPITAL-CLAIM-")) {
         const reference = cleanReference(req.body?.reference);
         const { data, error } = await admin4.client.rpc("manage_finite_node_claim", {
