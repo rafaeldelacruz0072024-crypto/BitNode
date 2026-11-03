@@ -37,6 +37,11 @@ try {
   const oldLegacyRate=await scalar("select bitnode_private.monthly_daily_rate(21,'2026-11-03')");
   await db.exec(await readFile(new URL('../supabase/migrations/20261103172422_nodes_v2_catalog_and_rules.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103220006_nodes_v2_founder.sql',import.meta.url),'utf8'));
+  await db.exec('revoke all on function public.get_withdrawal_availability(uuid,timestamptz) from public,anon,authenticated; grant execute on function public.get_withdrawal_availability(uuid,timestamptz) to service_role');
+  const withdrawalMigration=await readFile(new URL('../supabase/migrations/20260915223037_mexico_wednesday_withdrawal_buckets.sql',import.meta.url),'utf8');
+  const validationStart=withdrawalMigration.indexOf('create or replace function public.validate_withdrawal_request(');
+  await db.exec(withdrawalMigration.slice(validationStart,withdrawalMigration.indexOf('$$;',validationStart)+3));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103225512_update_v2_rates_and_mexico_withdrawal_hours.sql',import.meta.url),'utf8'));
   assert.equal(await scalar(`select public.get_node_founder_eligibility('${user}')`),true);
   const newcomer='00000000-0000-0000-0000-000000000002';
   await q("insert into auth.users(id,created_at) values($1,'2020-01-01')",[newcomer]);
@@ -59,7 +64,7 @@ try {
   await assert.rejects(q("update plans set rate_max=.08 where id='v2-33d'"),/retroactivamente/);
   await assert.rejects(q("update plans set node_version=2 where id='21d'"),/generación/);
   assert.equal(await scalar("select bitnode_private.add_mexico_business_days('2026-11-06 12:00:00-06',10)::text"),'2026-11-20 18:00:00+00');
-  for(const [id,min,max] of [['v2-10d',.005,.007],['v2-17d',.008,.011],['v2-33d',.013,.021]]) {
+  for(const [id,min,max] of [['v2-10d',.005,.007],['v2-17d',.009,.013],['v2-33d',.015,.022]]) {
     const rates=(await q('select bitnode_private.plan_daily_rate($1,null,current_date)::float8 rate from generate_series(1,1000)',[id])).rows;
     assert.ok(rates.every(row=>row.rate>=min && row.rate<=max));
   }
@@ -85,7 +90,7 @@ try {
     } else await assert.rejects(tasks(),/active node/);
   }
   const all=(await q("select c.id,c.status,count(r.id)::int days,sum(r.amount)::float8 roi from contracts c join contract_cycle_rewards r on r.contract_id=c.id group by c.id,c.status")).rows;
-  for(const [id,days,min,max] of [['new10',10,50,70],['new17',17,136,187],['new33',33,429,693],['old21',21,840,840],['founder',33,1650,1650]]) {
+  for(const [id,days,min,max] of [['new10',10,50,70],['new17',17,153,221],['new33',33,495,726],['old21',21,840,840],['founder',33,1650,1650]]) {
     const row=all.find(r=>r.id===id); assert.equal(row.status,'completed'); assert.equal(row.days,days); assert.ok(row.roi>=min-0.00001&&row.roi<=max+0.00001);
     assert.equal(await scalar(`select count(*)::int from transactions where id='PRINCIPAL-${id}'`),1);
   }
@@ -95,6 +100,15 @@ try {
   const openWindow=await scalar(`select public.get_withdrawal_availability('${user}','2026-12-23 12:00:00-06')`);
   assert.equal(openWindow.weeklyWindowOpen,true);
   assert.equal(Number(openWindow.lockedNodeRoi),0);
+  for(const [time,expected] of [['08:59:59',false],['09:00:00',true],['13:59:59',true],['14:00:00',false],['15:00:00',false]]) {
+    const availability=await scalar(`select public.get_withdrawal_availability('${user}','2026-12-23 ${time}-06')`);
+    assert.equal(availability.weeklyWindowOpen,expected,`Mexico boundary ${time}`);
+    if(expected) assert.equal(new Date(availability.weeklyWindowClosesAt).toISOString(),'2026-12-23T20:00:00.000Z');
+    else assert.ok(Number(availability.lockedNodeRoi)>0);
+  }
+  const afterClose=await scalar(`select public.get_withdrawal_availability('${user}','2026-12-23 14:00:00-06')`);
+  assert.equal(new Date(afterClose.nextWeeklyWindowAt).toISOString(),'2026-12-30T15:00:00.000Z');
+  assert.equal(await scalar("select has_function_privilege('authenticated','public.get_withdrawal_availability(uuid,timestamptz)','execute')"),false);
   await at('2026-12-21T18:00:00Z');
   const choice=(await q("select public.choose_finite_node_capital($1,'new10','reinvest') result",[user])).rows[0].result;
   assert.equal(choice.status,'reinvested');

@@ -2691,8 +2691,8 @@ import { createClient as createClient12 } from "@supabase/supabase-js";
 var FOUNDER_PLAN_ID = "v2-founder";
 var NODES_V2 = [
   { id: "v2-10d", name: "Nodo 2.0 \xB7 10 d\xEDas", days: 10, rateMin: 5e-3, rateMax: 7e-3, min: 10 },
-  { id: "v2-17d", name: "Nodo 2.0 \xB7 17 d\xEDas", days: 17, rateMin: 8e-3, rateMax: 0.011, min: 10 },
-  { id: "v2-33d", name: "Nodo 2.0 \xB7 33 d\xEDas", days: 33, rateMin: 0.013, rateMax: 0.021, min: 10 },
+  { id: "v2-17d", name: "Nodo 2.0 \xB7 17 d\xEDas", days: 17, rateMin: 9e-3, rateMax: 0.013, min: 10 },
+  { id: "v2-33d", name: "Nodo 2.0 \xB7 33 d\xEDas", days: 33, rateMin: 0.015, rateMax: 0.022, min: 10 },
   { id: FOUNDER_PLAN_ID, name: "Nodo Founder", days: 33, rateMin: 0.02, rateMax: 0.02, min: 2000.01 }
 ];
 

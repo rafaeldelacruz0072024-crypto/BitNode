@@ -1519,7 +1519,7 @@ function DailyReconciliationSection() {
   const filteredMovementCount = visibleDays.reduce((total, day) => total + incomeCountForMethod(day.incoming, incomeMethod), 0);
   return <article className="admin-card admin-card-full">
     <div className="card-heading"><div><p className="admin-kicker">CONTABILIDAD / HORA DE CIUDAD DE MÉXICO</p><h2>Cuadre diario</h2></div><button className="admin-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Actualizar cuadre"><RefreshCw size={16} /></button></div>
-    <div className="admin-toolbar"><label>Fecha <input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>{report?.isWednesday && <span className="card-status">Miércoles · ventana semanal 08:00–15:00</span>}</div>
+    <div className="admin-toolbar"><label>Fecha <input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>{report?.isWednesday && <span className="card-status">Miércoles · ventana semanal 09:00–14:00</span>}</div>
     <p>Entradas externas, créditos internos, comisiones y retiros se muestran separados para evitar sumar dos veces el mismo dinero.</p>
     <div className="payment-method-legend" aria-label="Clasificación de métodos de pago"><span className="payment-method payment-method--crypto"><b>Cripto confirmado</b> Pagos verificados por la pasarela</span><span className="payment-method payment-method--manual"><b>Activación manual</b> Créditos ingresados por administración</span><span className="payment-method payment-method--other"><b>Otros depósitos</b> Ingresos sin un origen confirmado</span></div>
     <div className="admin-toolbar admin-day-filters"><label>Desde <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label><label>Hasta <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label><label>Vista <select value={periodView} onChange={event => setPeriodView(event.target.value as "daily" | "weekly")}><option value="daily">Cuadre diario</option><option value="weekly">Cuadre semanal</option></select></label><label>Día de semana <select value={weekday} onChange={event => setWeekday(event.target.value)}><option value="all">Todos los días</option>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label><label>Método de pago <select value={incomeMethod} onChange={event => setIncomeMethod(event.target.value as IncomeMethod)}>{(Object.keys(incomeMethodLabels) as IncomeMethod[]).map(method => <option key={method} value={method}>{incomeMethodLabels[method]}</option>)}</select></label></div>
@@ -1857,7 +1857,7 @@ function ConfigurationSection({
       const body = await response.json().catch(() => ({})) as { enabled?: boolean; error?: string };
       if (!response.ok) throw new Error(body.error || "No se pudo actualizar la ventana.");
       setWithdrawalWindow(body.enabled === true);
-      setWindowMessage(body.enabled ? "Control global activo: comisión directa tras 24 horas; bonos y ROI de plazo fijo, miércoles 8:00–15:00 de Ciudad de México." : "Control global suspendido: las nuevas solicitudes están bloqueadas.");
+      setWindowMessage(body.enabled ? "Control global activo: comisión directa tras 24 horas; bonos y ROI de plazo fijo, miércoles 9:00–14:00 de Ciudad de México." : "Control global suspendido: las nuevas solicitudes están bloqueadas.");
     } catch (error) { setWindowMessage(error instanceof Error ? error.message : "No se pudo actualizar la ventana."); }
     finally { setWindowBusy(false); }
   }
@@ -1878,7 +1878,7 @@ function ConfigurationSection({
           <div><p className="admin-kicker">WITHDRAWAL CONTROL</p><h2>Control global de retiros</h2></div>
           <span className={`card-status ${withdrawalWindow ? "is-open" : ""}`}><i className={`runtime-dot ${withdrawalWindow ? "ready" : "idle"}`} /> {withdrawalWindow ? "ACTIVO" : "SUSPENDIDO"}</span>
         </div>
-        <p className="config-note">Este control puede suspender todas las solicitudes. Con el control activo, comisión directa: tras 24 horas; bonos binario/rango y ROI de nodos de plazo fijo: miércoles 8:00–15:00 de Ciudad de México. El pago se procesa manualmente hasta en 48 horas.</p>
+        <p className="config-note">Este control puede suspender todas las solicitudes. Con el control activo, comisión directa: tras 24 horas; bonos binario/rango y ROI de nodos de plazo fijo: miércoles 9:00–14:00 de Ciudad de México. El pago se procesa manualmente hasta en 48 horas.</p>
         <button className="admin-user-save" type="button" onClick={() => void toggleWithdrawalWindow()} disabled={windowBusy}>{windowBusy ? "Actualizando…" : withdrawalWindow ? "Suspender retiros" : "Activar retiros"}</button>
         {windowMessage && <p className="config-note" role="status">{windowMessage}</p>}
       </article>

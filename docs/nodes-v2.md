@@ -6,8 +6,8 @@ Legacy plan IDs, rates, active states, contracts and balances are preserved.
 | Business days | Daily range | Simple cycle ROI | ROI on 1,000 USDT |
 | --- | --- | --- | --- |
 | 10 | 0.50%-0.70% | 5%-7% | 50-70 USDT |
-| 17 | 0.80%-1.10% | 13.60%-18.70% | 136-187 USDT |
-| 33 | 1.30%-2.10% | 42.90%-69.30% | 429-693 USDT |
+| 17 | 0.90%-1.30% | 15.30%-22.10% | 153-221 USDT |
+| 33 | 1.50%-2.20% | 49.50%-72.60% | 495-726 USDT |
 
 ## Nodo Founder
 
@@ -46,7 +46,7 @@ activating the chosen V2 plans. This change does not launch the product.
 - Projected end dates count business days. Actual completion depends on tasks;
   missing tasks can postpone completion under the existing reset/recovery rules.
 - Principal is released once after 10/17/33 validated days.
-- Finite ROI stays in the Wednesday withdrawal bucket, 08:00-15:00 Mexico time.
+- Finite ROI stays in the Wednesday withdrawal bucket, 09:00-14:00 Mexico time.
 - Capital claims, fees, idempotency and reinvestment use the existing routines.
 - Commission rates and funding-origin restrictions are not changed.
 - SARA IA eligibility continues to require an active 21-day node.

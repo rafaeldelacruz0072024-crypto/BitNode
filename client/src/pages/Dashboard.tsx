@@ -2458,19 +2458,19 @@ function WithdrawalForm({
             <div>{directSecondsLeft > 0 ? `Próxima comisión disponible en ${directCountdown}` : "Plazo cumplido; actualizando disponibilidad…"}</div>
           ) : <div>Sin comisión directa pendiente de las 24 horas.</div>}
           {availability.migrationReady ? <>
-            <strong>Ventana de bonos y ROI · miércoles 8:00–15:00 (Ciudad de México)</strong>
+            <strong>Ventana de bonos y ROI · miércoles 9:00–14:00 (Ciudad de México)</strong>
             <div>{availability.weeklyWindowOpen ? "ABIERTA" : "CERRADA"} · {weeklySecondsLeft > 0 ? `${availability.weeklyWindowOpen ? "Cierra" : "Abre"} en ${weeklyCountdown}` : "Actualizando horario…"}</div>
             <div>Bono binario/rango: {money(availability.weeklyBonusUnspent)} · ROI nodos 7/14/21: {money(availability.finiteNodeRoiUnspent)}</div>
             <div>ROI Nodo Diario acreditado históricamente: {money(availability.dailyNodeRoiCredited)} · No exige miércoles.</div>
             {!availability.globalWindowEnabled && <div>Retiro global suspendido por administración.</div>}
-          </> : <div>La ventana 8:00–15:00 de Ciudad de México está pendiente de aplicar en Supabase. Sigue vigente la regla anterior hasta entonces.</div>}
+          </> : <div>La ventana 9:00–14:00 de Ciudad de México está pendiente de aplicar en Supabase. Sigue vigente la regla anterior hasta entonces.</div>}
           <div>Disponible para retiro ahora: {money(availability.migrationReady && !availability.globalWindowEnabled ? 0 : availability.withdrawableBalance)}</div>
         </div>}
         {!availability && !availabilityError && <small className="withdrawal-schedule-note">Consultando la comisión directa…</small>}
         {!availability && availabilityError && <small className="withdrawal-schedule-note">{availabilityError}</small>}
         <p className="withdrawal-schedule-note">
           {availability?.migrationReady
-            ? "Comisión directa: disponible 24 horas después de acreditarse, sin esperar al miércoles. Bonos binario/rango y ROI de nodos 7/14/21: miércoles de 8:00 a 15:00, hora de Ciudad de México. El ROI del Nodo Diario se puede retirar al acreditarse. Retiro mínimo: 10 USDT. El capital de los nodos de plazo fijo se libera al completar sus días."
+            ? "Comisión directa: disponible 24 horas después de acreditarse, sin esperar al miércoles. Bonos binario/rango y ROI de nodos 7/14/21: miércoles de 9:00 a 14:00, hora de Ciudad de México. El ROI del Nodo Diario se puede retirar al acreditarse. Retiro mínimo: 10 USDT. El capital de los nodos de plazo fijo se libera al completar sus días."
             : "La actualización de retiros a horario de Ciudad de México aún no está confirmada en Supabase. El backend conserva las reglas anteriores hasta aplicar la migración."}
         </p>
         <p className="withdrawal-processing-note">Método único: USDT BEP20. Al confirmar la solicitud, el monto queda reservado. Si el retiro es rechazado, vuelve a estar disponible. Procesamiento manual de hasta 48 horas.</p>
