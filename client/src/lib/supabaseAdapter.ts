@@ -1,6 +1,7 @@
 /* Persistencia remota protegida por Supabase Auth; si no hay sesión o configuración, el dashboard conserva su fallback local. */
 import { Contract, Movement } from "./localUserStore";
 import { supabase } from "./supabaseClient";
+import { nodeVersion } from "@shared/nodesV2";
 
 export type TransactionPayload = Movement & {
   userId: string;
@@ -177,6 +178,8 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
     const durationDays = Number(plan.duration_days);
     return {
       id: String(row.id),
+      planId: String(row.plan_id || ""),
+      version: nodeVersion(String(row.plan_id || "")),
       name: String(plan.name || row.plan_id || "Nodo"),
       rate: `${formatPercent(plan.rate_min)} – ${formatPercent(plan.rate_max)}`,
       amount: Number(row.amount),

@@ -8,6 +8,9 @@ import AuthPage from "@/pages/AuthPage";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { InfluencerSection } from "./components/InfluencerSection";
+import { NodesV2Section } from "./components/NodesV2Section";
+import { initialLocalUser } from "./lib/localUserStore";
+import { NODES_V2 } from "@shared/nodesV2";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 
@@ -21,6 +24,7 @@ function Router() {
       <Route path={"/r/:referralCode/:side"} component={AuthPage} />
       <Route path={"/auth"} component={AuthPage} />
       {import.meta.env.DEV && <Route path={"/__preview/influencers"}><main style={{maxWidth:1500,margin:"0 auto",padding:24}}><InfluencerSection preview /></main></Route>}
+      {import.meta.env.DEV && <Route path={"/__preview/nodes-v2"}><main style={{maxWidth:1400,margin:"0 auto",padding:24}}><NodesV2Section user={initialLocalUser} catalog={{ preview: true, plans: NODES_V2.map(plan => ({ ...plan, enabled: false })) }} error="" busy={false} activate={() => {}} refresh={() => {}} /></main></Route>}
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

@@ -23,6 +23,7 @@ import { registerAdminAccountView } from "./adminAccountView.js";
 import { registerAdminSaraSales } from "./adminSaraSales.js";
 import { registerPromotionRoutes } from "./promotions.js";
 import { registerInfluencerRoutes } from "./influencers.js";
+import { registerNodesV2Routes } from "./nodesV2.js";
 
 export function createApp(): Express {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp(): Express {
   registerSaraIaRoutes(app);
   registerWithdrawalRoutes(app);
   registerFiniteNodeCapitalRoutes(app);
+  registerNodesV2Routes(app);
   registerCommissionRoutes(app);
   registerSecureCommissionRoutes(app);
   registerDepositRoutes(app);

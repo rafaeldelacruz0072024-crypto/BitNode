@@ -23,6 +23,7 @@ import { registerFiniteNodeCapitalRoutes } from "../finiteNodeCapital";
 import { registerEmailSecurityRoutes } from "../emailSecurity";
 import { registerPromotionRoutes } from "../promotions";
 import { registerInfluencerRoutes } from "../influencers";
+import { registerNodesV2Routes } from "../nodesV2";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -60,6 +61,7 @@ async function startServer() {
   registerNowPaymentsRoutes(app);
   registerWithdrawalRoutes(app);
   registerFiniteNodeCapitalRoutes(app);
+  registerNodesV2Routes(app);
   registerCommissionRoutes(app);
   registerDepositRoutes(app);
   registerAdminWithdrawalRoutes(app);

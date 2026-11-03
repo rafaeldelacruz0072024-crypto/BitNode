@@ -1,6 +1,8 @@
 /* Modelo local BitNode: adaptador temporal para reemplazar después con Supabase/tRPC. */
 export type Contract = {
   id: string;
+  planId?: string;
+  version?: 1 | 2;
   name: string;
   rate: string;
   amount: number;

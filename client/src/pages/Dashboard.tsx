@@ -21,6 +21,7 @@ import {
   Gem,
   Home,
   LogOut,
+  Layers3,
   Menu,
   Megaphone,
   Plus,
@@ -40,6 +41,8 @@ import { MarketingMaterials } from "@/components/MarketingMaterials";
 import { PromotionsSection } from "@/components/PromotionsSection";
 import { InfluencerSection } from "@/components/InfluencerSection";
 import { LatamLoginFlyer } from "@/components/LatamLoginFlyer";
+import { NodesV2Section, useNodeV2Catalog } from "@/components/NodesV2Section";
+import { isNodeV2 } from "@shared/nodesV2";
 import { BinaryTree } from "@/components/BinaryTree";
 import {
   Contract,
@@ -432,6 +435,7 @@ const nav = [
   ["Promociones y novedades", "/dashboard/promotions", Sparkles],
   ["Influencers", "/dashboard/influencers", Megaphone],
   ["Mis nodos", "/dashboard/nodes", Box],
+  ["Nodos 2.0", "/dashboard/nodes-v2", Layers3],
   ["Predicciones de mercado", "/dashboard/predictions", Activity],
   ["Mi red", "/dashboard/network", Users],
   ["Depositar", "/dashboard/deposit", Plus],
@@ -576,6 +580,7 @@ export default function Dashboard() {
     return () => window.clearInterval(timer);
   }, []);
   const authUserId = authUser?.id;
+  const nodeV2Catalog = useNodeV2Catalog(authUserId);
   const cycleNotifications = useCycleNotifications(authUserId);
   useEffect(() => {
     if (!authUserId || !isDepositCashbackActive()) return;
@@ -818,7 +823,7 @@ export default function Dashboard() {
           ? `${item.name} ya estaba activado.`
           : `${item.name} creado usando tu balance disponible.`
       );
-      navigate("/dashboard/nodes");
+      navigate(isNodeV2(item.id) ? "/dashboard/nodes-v2" : "/dashboard/nodes");
     } catch (error) {
       showNotice(
         error instanceof Error
@@ -876,7 +881,7 @@ export default function Dashboard() {
   if (authLoading)
     return <div className="auth-loading">Verificando sesión…</div>;
   if (!authUserId) return null;
-  const content = section === "predictions" ? <MarketPredictions /> : isHome ? (
+  const content = section === "nodes-v2" ? <NodesV2Section user={user} catalog={nodeV2Catalog.data} error={nodeV2Catalog.error} activate={activate} busy={activatingNode} refresh={() => window.location.reload()} /> : section === "predictions" ? <MarketPredictions /> : isHome ? (
     <HomePanel
       user={user}
       commissionSummary={commissionSummary}
@@ -986,7 +991,7 @@ export default function Dashboard() {
           <BrandMark className="brand-mark" />
         </div>
         <div className="dash-nav" id="dashboard-navigation">
-          {nav.map(([label, href, Icon]) => (
+          {nav.filter(([, href]) => href !== "/dashboard/nodes-v2" || Boolean(nodeV2Catalog.data)).map(([label, href, Icon]) => (
             <Link
               key={href}
               href={href}
@@ -1442,9 +1447,10 @@ function SectionPanel({
     );
   if (section === "nodes")
     return (() => {
-      const activeContracts = user.contracts.filter(c => c.status === "active");
-      const pendingContracts = user.contracts.filter(c => c.status === "pending");
-      const archivedContracts = user.contracts.filter(c => c.status !== "active" && c.status !== "pending");
+      const generationContracts = user.contracts.filter(c => !isNodeV2(c.planId));
+      const activeContracts = generationContracts.filter(c => c.status === "active");
+      const pendingContracts = generationContracts.filter(c => c.status === "pending");
+      const archivedContracts = generationContracts.filter(c => c.status !== "active" && c.status !== "pending");
       const orderedContracts = [...activeContracts, ...pendingContracts, ...archivedContracts];
       const flexibleCapital = activeContracts
         .filter(c => c.name === "Nodo Diario")
@@ -1470,7 +1476,7 @@ function SectionPanel({
           </div>
         </div>
         <div className="dash-card local-ledger">
-          {user.contracts.length ? (
+          {generationContracts.length ? (
             orderedContracts.map((c, index) => (
               (() => {
                 const archived = c.status !== "active" && c.status !== "pending";
