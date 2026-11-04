@@ -1505,24 +1505,22 @@ function SectionPanel({
                   <strong>{money(c.amount)}</strong>
                   {c.status === "completed" && c.name !== "Nodo Diario" && /^(7|14|21) días/.test(c.duration) && c.capitalChoiceReady && !c.capitalChoice && (
                     <div className="node-capital-choice-actions">
-                      {(["claim", "reinvest"] as const).map(action => <button key={action} className="node-capital-withdraw" type="button" onClick={async () => {
-                        const prompt = action === "claim"
-                          ? "¿Reclamar este capital? Se reservará para retiro y el administrador podrá pagarlo después de 24 horas. Se aplica el 5% de comisión, mínimo 1 USDT."
-                          : `Promoción de reinversión: recibirás un 5% de capital promocional en el nuevo nodo. Capital reinvertido: ${money(c.amount)} · bono: ${money(Math.round(Number(c.amount) * 5) / 100)} · nuevo capital: ${money(Number(c.amount) + Math.round(Number(c.amount) * 5) / 100)}. ¿Continuar?`;
+                      <button className="node-capital-withdraw" type="button" onClick={async () => {
+                        const prompt = "¿Reclamar este capital? Se reservará para retiro y el administrador podrá pagarlo después de 24 horas. Se aplica el 5% de comisión, mínimo 1 USDT.";
                         if (!window.confirm(prompt)) return;
                         try {
                           const session = (await supabase?.auth.getSession())?.data.session;
                           if (!session) throw new Error("Sesión requerida.");
                           const response = await fetch("/api/nodes/capital-choice", {
                             method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-                            body: JSON.stringify({ contractId: c.id, action }),
+                            body: JSON.stringify({ contractId: c.id, action: "claim" }),
                           });
                           const result = await response.json().catch(() => ({}));
                           if (!response.ok) throw new Error(String(result.error || "No se pudo asignar el capital."));
-                          showNotice(action === "claim" ? "Retiro de capital solicitado. El pago queda disponible para el administrador después de 24 horas." : `Capital reinvertido. Se agregó ${money(Math.round(Number(c.amount) * 5) / 100)} como bono promocional al nuevo nodo.`);
+                          showNotice("Retiro de capital solicitado. El pago queda disponible para el administrador después de 24 horas.");
                           window.location.reload();
                         } catch (error) { showNotice(error instanceof Error ? error.message : "No se pudo asignar el capital."); }
-                      }}>{action === "claim" ? "Reclamar capital" : "Reinvertir +5%"}</button>)}
+                      }}>Reclamar capital</button>
                     </div>
                   )}
                   {c.capitalChoice && <small>{c.capitalChoice.action === "reinvest" ? "Capital reinvertido" :

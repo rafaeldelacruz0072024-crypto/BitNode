@@ -2445,6 +2445,12 @@ function registerFiniteNodeCapitalRoutes(app2) {
       const client = createClient10(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data: auth, error: authError } = await client.auth.getUser(token4);
       if (authError || !auth.user) return res.status(401).json({ error: "Sesi\xF3n inv\xE1lida." });
+      if (action === "reinvest") {
+        const { data: contract, error: error2 } = await client.from("contracts").select("plan_id").eq("id", contractId).eq("user_id", auth.user.id).maybeSingle();
+        if (error2) throw error2;
+        if (contract && !contract.plan_id.startsWith("v2-"))
+          return res.status(409).json({ error: "Los Nodos 1.0 no se pueden renovar al finalizar su ciclo." });
+      }
       const { data, error } = await client.rpc("choose_finite_node_capital", {
         p_user_id: auth.user.id,
         p_contract_id: contractId,
