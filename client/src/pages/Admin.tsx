@@ -733,7 +733,7 @@ export function UsersSection({
                     Monitorear cuenta
                   </button>
                   <button className="admin-refresh" type="button" onClick={() => { setSupportId(user.id); setMonitorId(""); setSelectedId(""); }}>
-                    Ver cuenta (soporte)
+                    Entrar a la cuenta (solo lectura)
                   </button>
                   <button className="admin-refresh" type="button" onClick={() => selectUser(user)}>
                     Gestionar
