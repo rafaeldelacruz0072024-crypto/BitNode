@@ -1051,6 +1051,7 @@ export default function Dashboard() {
         </header>
         <main className="dash-content">
           {isHome && <DashboardPromotions onSelect={key => {
+            if (key === "nodes-v2") { navigate("/dashboard/nodes-v2"); return; }
             if (key === "support") { window.dispatchEvent(new Event("bitnode:open-support")); return; }
             if (key === "marketing") { navigate("/dashboard/marketing"); return; }
             if (key === "promotions") { navigate("/dashboard/promotions"); return; }

@@ -4,6 +4,14 @@ import "./dashboard-promotions.css";
 
 const slides = [
   {
+    key: "nodes-v2",
+    label: "BITNODE · NODOS 2.0",
+    title: "Conoce la nueva generación de nodos",
+    description: "Elige ciclos de 10, 17 o 33 días hábiles.",
+    note: "ROI de lunes a viernes · Completa tus 4 tareas diarias · Rendimiento variable.",
+    action: "Ver Nodos 2.0",
+  },
+  {
     key: "promotions",
     label: "PRE-POSICIONAMIENTO LATAM",
     title: "Tu esfuerzo te lleva a Cartagena",
@@ -48,7 +56,7 @@ export function DashboardPromotions({
   onSelect,
 }: {
   onSelect: (
-    key: "support" | "sara" | "reinvestment" | "marketing" | "promotions"
+    key: "support" | "sara" | "reinvestment" | "marketing" | "promotions" | "nodes-v2"
   ) => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -161,7 +169,15 @@ export function DashboardPromotions({
                       <ChevronRight size={18} />
                     </button>
                   </div>
-                  <div className="promotion-art" aria-hidden="true">
+                  {item.key === "nodes-v2" ? (
+                    <div className="promotion-node-plans" aria-label="Tasas diarias de Nodos 2.0">
+                      <img src="/bitnode-logo.png" alt="BitNode" width={72} height={72} />
+                      <div><strong>10 días</strong><span>0.50%–0.70%</span></div>
+                      <div><strong>17 días</strong><span>0.90%–1.30%</span></div>
+                      <div><strong>33 días</strong><span>1.50%–2.20%</span></div>
+                      <small>Por día hábil · Según el plan</small>
+                    </div>
+                  ) : <div className="promotion-art" aria-hidden="true">
                     <img
                       src={artwork[item.key]}
                       alt=""
@@ -175,7 +191,7 @@ export function DashboardPromotions({
                       loading={position === index ? "eager" : "lazy"}
                       decoding="async"
                     />
-                  </div>
+                  </div>}
                 </>
               )}
             </div>
