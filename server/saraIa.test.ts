@@ -26,17 +26,21 @@ describe("SARA IA 30-day repurchase rule", () => {
   });
 });
 
-describe("SARA IA 21-day golden rule", () => {
+describe("SARA IA eligible active nodes", () => {
   it.each([
     [{ status: "active", duration: 7, enabled: true }, false],
     [{ status: "active", duration: 14, enabled: true }, false],
     [{ status: "completed", duration: 21, enabled: true }, false],
     [{ status: "active", duration: 21, enabled: false }, false],
     [{ status: "active", duration: 21, enabled: true }, true],
+    [{ status: "active", duration: 10, enabled: true, version: 2 }, true],
+    [{ status: "active", duration: 17, enabled: true, version: 2 }, true],
+    [{ status: "active", duration: 33, enabled: true, version: 2 }, true],
   ])("requires the matching active 21-day plan: %j", async (node, eligible) => {
     const filters: Record<string, unknown> = {};
     const query = {
       select: vi.fn(() => query),
+      or: vi.fn(() => query),
       eq: (key: string, value: unknown) => {
         filters[key] = value;
         return query;
@@ -45,7 +49,7 @@ describe("SARA IA 21-day golden rule", () => {
       maybeSingle: async () => ({
         data:
           node.status === filters.status &&
-          node.duration === filters["plans.duration_days"] &&
+          (node.duration === 21 || ("version" in node && node.version === 2)) &&
           node.enabled === filters["plans.active"]
             ? { id: "NODE-21" }
             : null,
@@ -58,12 +62,14 @@ describe("SARA IA 21-day golden rule", () => {
       "id,plans!inner(duration_days,active)"
     );
     expect(filters.user_id).toBe("user-1");
+    expect(query.or).toHaveBeenCalledWith("duration_days.eq.21,node_version.eq.2", { referencedTable: "plans" });
   });
 
   it("fails closed when node eligibility cannot be verified", async () => {
     const query = {
       select: () => query,
       eq: () => query,
+      or: () => query,
       limit: () => query,
       maybeSingle: async () => ({
         data: null,
@@ -72,7 +78,7 @@ describe("SARA IA 21-day golden rule", () => {
     };
     await expect(
       hasActiveSaraNode({ from: () => query } as never, "user-1")
-    ).rejects.toThrow("No se pudo verificar tu nodo de 21 días");
+    ).rejects.toThrow("No se pudo verificar tu nodo elegible");
   });
 });
 

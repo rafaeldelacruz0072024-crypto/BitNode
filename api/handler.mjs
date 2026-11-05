@@ -600,8 +600,8 @@ function bearer(req) {
   return value.startsWith("Bearer ") ? value.slice(7) : null;
 }
 async function hasActiveSaraNode(admin4, userId) {
-  const { data, error } = await admin4.from("contracts").select("id,plans!inner(duration_days,active)").eq("user_id", userId).eq("status", "active").eq("plans.duration_days", 21).eq("plans.active", true).limit(1).maybeSingle();
-  if (error) throw new Error("No se pudo verificar tu nodo de 21 d\xEDas.");
+  const { data, error } = await admin4.from("contracts").select("id,plans!inner(duration_days,active)").eq("user_id", userId).eq("status", "active").or("duration_days.eq.21,node_version.eq.2", { referencedTable: "plans" }).eq("plans.active", true).limit(1).maybeSingle();
+  if (error) throw new Error("No se pudo verificar tu nodo elegible.");
   return Boolean(data);
 }
 async function authenticatedUser(req) {
@@ -673,7 +673,7 @@ function registerSaraIaRoutes(app2) {
           return res.status(400).json({ error: "Elige USDT por TRC20 o BEP20." });
         if (!await hasActiveSaraNode(admin4, user.id))
           return res.status(409).json({
-            error: "Regla de oro: necesitas un nodo de 21 d\xEDas activo para contratar SARA IA."
+            error: "Necesitas un nodo de 21 d\xEDas o un Nodo 2.0 activo para contratar SARA IA."
           });
         const { data: currentSubscription, error: subscriptionError } = await admin4.from("sara_ia_subscriptions").select("paid_through_at").eq("user_id", user.id).maybeSingle();
         if (subscriptionError)

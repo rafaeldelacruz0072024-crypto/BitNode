@@ -39,11 +39,11 @@ export async function hasActiveSaraNode(
     .select("id,plans!inner(duration_days,active)")
     .eq("user_id", userId)
     .eq("status", "active")
-    .eq("plans.duration_days", 21)
+    .or("duration_days.eq.21,node_version.eq.2", { referencedTable: "plans" })
     .eq("plans.active", true)
     .limit(1)
     .maybeSingle();
-  if (error) throw new Error("No se pudo verificar tu nodo de 21 días.");
+  if (error) throw new Error("No se pudo verificar tu nodo elegible.");
   return Boolean(data);
 }
 
@@ -140,7 +140,7 @@ export function registerSaraIaRoutes(app: Express) {
         if (!(await hasActiveSaraNode(admin, user.id)))
           return res.status(409).json({
             error:
-              "Regla de oro: necesitas un nodo de 21 días activo para contratar SARA IA.",
+              "Necesitas un nodo de 21 días o un Nodo 2.0 activo para contratar SARA IA.",
           });
 
         const { data: currentSubscription, error: subscriptionError } = await admin

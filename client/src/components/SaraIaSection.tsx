@@ -152,7 +152,7 @@ export function SaraIaSection() {
           <h2>Las cuatro tareas de tus nodos, de lunes a viernes.</h2>
           <p>
             SARA IA completa automáticamente las tareas diarias mientras tu
-            suscripción esté pagada y tengas un nodo de 21 días activo. Se
+            suscripción esté pagada y tengas un nodo de 21 días o Nodo 2.0 activo. Se
             aplica el mismo ciclo y las mismas reglas del sistema.
           </p>
           <div className="sara-points">
@@ -191,7 +191,7 @@ export function SaraIaSection() {
               : daysRemaining === 0
                 ? "SARA IA vencida · tareas manuales"
               : status?.subscriptionPaid
-                ? "Servicio suspendido · requiere nodo de 21 días"
+                ? "Servicio suspendido · requiere nodo elegible"
                 : "No activa"}
           </div>
           {daysRemaining !== null && <div className="sara-days-remaining" role="status">
@@ -212,9 +212,8 @@ export function SaraIaSection() {
           )}
           {status && !status.hasActive21DayNode && (
             <p className="sara-warning">
-              Regla de oro: SARA IA está disponible únicamente con un nodo de 21
-              días activo. Si ese nodo termina o se desactiva, SARA suspende las
-              tareas hasta que tengas otro nodo de 21 días activo.
+              Regla de oro: SARA IA está disponible únicamente con un nodo de 21 días o Nodo 2.0 activo. Si ese nodo termina o se desactiva, SARA suspende las
+              tareas hasta que tengas otro nodo de 21 días o Nodo 2.0 activo.
             </p>
           )}
           {!launchTimeReached && <p id="sara-launch-notice" className="sara-warning">Disponible el lunes 5 de octubre de 2026 a las 12:00 a. m., hora de Santo Domingo. La compra permanece desactivada hasta entonces.</p>}
@@ -331,7 +330,7 @@ export function SaraIaSection() {
       )}
       <p className="sara-footnote">
         La primera tarea continúa sujeta a la espera inicial de 24 horas. Si el
-        ciclo no está disponible o no hay nodo de 21 días activo, SARA IA no
+        ciclo no está disponible o no hay nodo de 21 días o Nodo 2.0 activo, SARA IA no
         ejecutará tareas fuera de las reglas vigentes.
       </p>
     </main>
