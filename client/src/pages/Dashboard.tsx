@@ -881,7 +881,7 @@ export default function Dashboard() {
   if (authLoading)
     return <div className="auth-loading">Verificando sesión…</div>;
   if (!authUserId) return null;
-  const content = section === "nodes-v2" ? <NodesV2Section user={user} catalog={nodeV2Catalog.data} error={nodeV2Catalog.error} activate={activate} busy={activatingNode} refresh={() => window.location.reload()} /> : section === "predictions" ? <MarketPredictions /> : isHome ? (
+  const content = section === "nodes-v2" || section === "activate" ? <NodesV2Section user={user} catalog={nodeV2Catalog.data} error={nodeV2Catalog.error} activate={activate} busy={activatingNode} refresh={() => window.location.reload()} /> : section === "predictions" ? <MarketPredictions /> : isHome ? (
     <HomePanel
       user={user}
       commissionSummary={commissionSummary}
