@@ -29,14 +29,6 @@ const slides = [
     action: "SARA IA",
   },
   {
-    key: "reinvestment",
-    label: "PROMOCIÓN DE REINVERSIÓN",
-    title: "Tu próximo ciclo, con +5%",
-    description: "Reinvierte tu capital y recibe un 5% de capital adicional.",
-    note: "Solo el capital base suma puntos binarios; el 5% no cuenta. Sin comisión directa por reinversión.",
-    action: "Ver promoción",
-  },
-  {
     key: "marketing",
     label: "NOVEDADES · BITNODE",
     title: "Todo para compartir BitNode",
@@ -49,7 +41,6 @@ const slides = [
 const artwork = {
   promotions: "/promotions/iphone-18-pro-official.jpg",
   sara: "/sara-ia-official-avatar.png",
-  reinvestment: "/promotions/slider-reinvestment-v1.webp",
   marketing: "/promotions/slider-marketing-v1.webp",
 } as const;
 
