@@ -15,15 +15,15 @@ test('BEP-20 supply, transfers, allowances and ownership invariants', async () =
     const recipient = await user.getAddress();
     const artifact = compile();
     const factory = new ContractFactory(artifact.abi, artifact.evm.bytecode.object, treasury);
-    // Fixture only: this quantity does not define the production tokenomics.
-    const supply = parseUnits('1000', 18);
-    const token = await factory.deploy('BTN', supply, owner);
+    const supply = parseUnits('11000000', 18);
+    const token = await factory.deploy('BTN', owner);
     await token.waitForDeployment();
     assert.equal(await token.name(), 'BitNode');
     assert.equal(await token.symbol(), 'BTN');
     assert.equal(await token.decimals(), 18n);
     assert.equal(await token.getOwner(), owner);
     assert.equal(await token.totalSupply(), supply);
+    assert.equal(await token.INITIAL_SUPPLY(), supply);
     assert.equal(await token.balanceOf(owner), supply);
     await (await token.transfer(recipient, 100n)).wait();
     assert.equal(await token.balanceOf(recipient), 100n);
@@ -39,10 +39,26 @@ test('BEP-20 supply, transfers, allowances and ownership invariants', async () =
     assert.equal(await token.getOwner(), recipient);
     assert.equal(await token.totalSupply(), supply);
     assert.equal(await token.balanceOf(owner) + await token.balanceOf(recipient), supply);
+    // Neither an unrelated wallet nor the owner may burn another wallet's tokens without allowance.
+    await assert.rejects(async () => (await token.burnFrom(recipient, 1n)).wait());
+    await assert.rejects(async () => (await token.connect(user).burn(61n)).wait());
+    await (await token.connect(user).burn(10n)).wait();
+    assert.equal(await token.totalSupply(), supply - 10n);
+    assert.equal(await token.balanceOf(recipient), 50n);
+    await (await token.connect(user).approve(await spender.getAddress(), 20n)).wait();
+    await assert.rejects(async () => (await token.connect(spender).burnFrom(recipient, 21n)).wait());
+    const burned = await (await token.connect(spender).burnFrom(recipient, 20n)).wait();
+    const transfer = burned.logs.map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
+      .find(log => log?.name === 'Transfer');
+    assert.equal(transfer.args.to, ZeroAddress);
+    assert.equal(transfer.args.value, 20n);
+    assert.equal(await token.allowance(recipient, await spender.getAddress()), 0n);
+    assert.equal(await token.totalSupply(), supply - 30n);
+    assert.equal(await token.balanceOf(owner) + await token.balanceOf(recipient), supply - 30n);
+    assert.equal(await token.INITIAL_SUPPLY(), supply);
     assert.ok(!artifact.abi.some(item => item.type === 'function' && /mint|seize|setTax|upgrade/i.test(item.name)));
-    await assert.rejects(async () => (await factory.deploy('BTN', 0n, owner)).waitForDeployment());
-    await assert.rejects(async () => (await factory.deploy('', supply, owner)).waitForDeployment());
-    await assert.rejects(async () => (await factory.deploy('BTN', supply, ZeroAddress)).waitForDeployment());
+    await assert.rejects(async () => (await factory.deploy('', owner)).waitForDeployment());
+    await assert.rejects(async () => (await factory.deploy('BTN', ZeroAddress)).waitForDeployment());
   } finally {
     await rpc.disconnect();
   }

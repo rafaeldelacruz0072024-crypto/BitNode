@@ -8,6 +8,9 @@ Estado: implementación local. Sin despliegue en BNB Smart Chain ni conexión a 
 - Red objetivo: BNB Smart Chain, estándar BEP-20.
 - Uso: beneficios y recompensas.
 - 18 decimales; transferencias, allowances y `getOwner()`.
+- Emisión inicial única: **11,000,000 tokens**, fijada en el contrato.
+- Quema voluntaria mediante `burn`, o `burnFrom` con autorización del titular. Reduce permanentemente el saldo y `totalSupply`. Los tokens quemados no se pueden volver a emitir.
+- No hay quema automática ni porcentaje de quema en las transferencias.
 
 ## Propuesta técnica, pendiente de decisión comercial
 
@@ -19,7 +22,7 @@ Estado: implementación local. Sin despliegue en BNB Smart Chain ni conexión a 
 
 ## Pendiente para lanzar
 
-1. Confirmar símbolo, cantidad total y distribución de recompensas/reserva/equipo.
+1. Confirmar símbolo y distribución de recompensas/reserva/equipo.
 2. Indicar una dirección pública de tesorería; las firmas se realizan desde wallet, nunca con claves enviadas al chat.
 3. Definir qué acción gana tokens, cuánto, presupuesto y condiciones de canje. Esto debe preceder a cualquier integración con el ledger.
 4. Probar despliegue y transferencias en BSC Testnet, verificar el contrato y revisar el código antes del despliegue real.
@@ -28,8 +31,8 @@ Estado: implementación local. Sin despliegue en BNB Smart Chain ni conexión a 
 
 Desde este directorio: `npm ci --ignore-scripts`, `npm test`, `npm run compile`.
 Las dependencias y el lockfile están separados de la aplicación. Las pruebas usan Ganache local, sin BNB real ni RPC externo.
-Los 1,000 tokens del test son un fixture y no representan la emisión comercial.
-El constructor recibe `symbol`, `supplyBaseUnits`, `treasury`. Para convertir unidades enteras: `parseUnits(cantidadComoTexto, 18)`; no usar números de coma flotante.
+Las pruebas verifican la emisión exacta de 11 millones, quema propia, quema autorizada y rechazo de quemas sin permiso o sin saldo. `INITIAL_SUPPLY` conserva la emisión inicial; `totalSupply` refleja el suministro restante tras quemas.
+El constructor recibe `symbol`, `treasury`; la emisión no es configurable. Para convertir unidades enteras en transferencias o quemas: `parseUnits(cantidadComoTexto, 18)`; no usar números de coma flotante.
 
 ## Integración siguiente
 
