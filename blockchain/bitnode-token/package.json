@@ -1,0 +1,8 @@
+{
+  "name": "bitnode-bep20",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/token.test.mjs", "compile": "node compile.mjs" },
+  "dependencies": { "@openzeppelin/contracts": "5.6.1" },
+  "devDependencies": { "ethers": "6.17.0", "ganache": "7.9.2", "solc": "0.8.38" }
+}
