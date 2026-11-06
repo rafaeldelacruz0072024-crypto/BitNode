@@ -82,7 +82,7 @@ function App() {
   }
   const unit = token?.symbol || 'BTN';
   return <div className="shell">
-    <aside><a className="brand" href="#" onClick={e => { e.preventDefault(); setTab('Wallet'); }}><span className="brandmark">B</span>bitnode<span className="dot">.</span></a><div className="workspace">TOKEN WORKSPACE</div>
+    <aside><a className="brand" href="#" onClick={e => { e.preventDefault(); setTab('Wallet'); }}><img src="/bitnode-logo.png" alt="BitNode"/></a><div className="workspace">TOKEN WORKSPACE</div>
       <nav>{[['Wallet','◈'],['Suministro','▥'],['Actividad','↗'],['Configuración','⚙']].map(([label,icon]) => <button key={label} className={tab === label ? 'active' : ''} onClick={() => setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
       <div className="aside-bottom"><span className="status-dot"/> Desarrollo local<p>BitNode BEP-20<br/>Beneficios y recompensas</p></div>
     </aside>
@@ -107,5 +107,6 @@ function App() {
 function Supply({token}) { return <section className="panel supply-detail"><div className="section-label">SUMINISTRO DEL TOKEN <span>{token ? 'CONSULTADO EN CADENA' : 'PENDIENTE DE CONSULTA'}</span></div><div className="supply-heading"><h3>La quema reduce el suministro.</h3><span>{token ? token.percent + '% quemado' : 'Emisión máxima: 11 millones'}</span></div><div className="supply-bar"><div style={{width:token ? `${100-token.percent}%` : '0%'}}/></div><div className="legend"><span><i/> Suministro total {token ? displayUnits(token.supply) : '—'}</span><span>Quemado {token ? displayUnits(token.burned) : '—'}</span></div></section>; }
 function Activity() { return <section className="panel activity"><div className="section-label">ACTIVIDAD RECIENTE <span>HISTORIAL</span></div><div className="table-head"><span>OPERACIÓN</span><span>MONTO</span><span>ESTADO</span></div><div className="empty"><span>↗</span><h3>Sin movimientos consultados</h3><p>El historial indexado se conectará cuando se despliegue el contrato.<br/>Esta vista no representa un historial vacío de tu wallet.</p></div></section>; }
 createRoot(document.getElementById('root')).render(<App/>);
+
 
 
