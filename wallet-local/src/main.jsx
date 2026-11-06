@@ -4,6 +4,7 @@ import { BrowserProvider, Contract } from 'ethers';
 import QRCode from 'qrcode';
 import { ABI, INITIAL_SUPPLY, NETWORKS, displayUnits, tokenMetrics, validateAddress } from './wallet.js';
 import './style.css';
+import { DeployTestnet } from './DeployTestnet.jsx';
 import { Overview, DemoProgram, Transparency } from './Hub.jsx';
 
 function App() {
@@ -101,7 +102,8 @@ function App() {
         </>}
         {tab === 'Suministro' && <><Supply token={token}/><section className="panel info"><h2>Una emisión. Sin nuevas emisiones.</h2><p>El contrato crea 11 millones de tokens en la tesorería al desplegarse. Cada quema voluntaria reduce el suministro total. Los tokens quemados no vuelven a emitirse.</p><p>El suministro total no equivale al circulante. La distribución de reservas y recompensas aún está pendiente de definir.</p><p>La quema se implementó en el contrato; firmar quemas desde esta interfaz se habilitará tras verificar su despliegue.</p></section></>}
         {tab === 'Actividad' && <Activity/>}
-        {tab === 'Configuración' && <section className="panel info"><h2>Contrato de BitNode</h2><p>Configura la dirección pública cuando el contrato esté desplegado. Se consulta en la red seleccionada en tu wallet. Esta configuración se elimina al recargar la página.</p><form onSubmit={configure}><label htmlFor="contract">Dirección del contrato BEP-20</label><input id="contract" placeholder="0x…" value={contractInput} onChange={e => setContractInput(e.target.value)}/><button className="primary" disabled={busy}>Guardar y consultar</button></form><p>BTN es el símbolo provisional. El nombre, símbolo, emisión y saldos se consultan directamente al contrato. Comprobar sus metadatos no sustituye verificar la dirección oficial.</p></section>}
+        {tab === 'Configuración' && <section className="panel info"><h2>Contrato de BitNode</h2><p>Configura la dirección pública cuando el contrato esté desplegado. Se consulta en la red seleccionada en tu wallet. Esta configuración se elimina al recargar la página.</p><form onSubmit={configure}><label htmlFor="contract">Dirección del contrato BEP-20</label><input id="contract" placeholder="0x…" value={contractInput} onChange={e => setContractInput(e.target.value)}/><button className="primary" disabled={busy}>Guardar y consultar</button></form><p>BTN es el símbolo confirmado. El nombre, símbolo, emisión y saldos se consultan directamente al contrato. Comprobar sus metadatos no sustituye verificar la dirección oficial.</p></section>}
+        {tab === 'Configuración' && <DeployTestnet/>}
         <footer>BitNode Wallet <span>Sin precio de mercado ni conversión a USDT configurados.</span></footer>
       </div>
     </main>
@@ -111,6 +113,8 @@ function App() {
 function Supply({token}) { return <section className="panel supply-detail"><div className="section-label">SUMINISTRO DEL TOKEN <span>{token ? 'CONSULTADO EN CADENA' : 'PENDIENTE DE CONSULTA'}</span></div><div className="supply-heading"><h3>La quema reduce el suministro.</h3><span>{token ? token.percent + '% quemado' : 'Emisión máxima: 11 millones'}</span></div><div className="supply-bar"><div style={{width:token ? `${100-token.percent}%` : '0%'}}/></div><div className="legend"><span><i/> Suministro total {token ? displayUnits(token.supply) : '—'}</span><span>Quemado {token ? displayUnits(token.burned) : '—'}</span></div></section>; }
 function Activity() { return <section className="panel activity"><div className="section-label">ACTIVIDAD RECIENTE <span>HISTORIAL</span></div><div className="table-head"><span>OPERACIÓN</span><span>MONTO</span><span>ESTADO</span></div><div className="empty"><span>↗</span><h3>Sin movimientos consultados</h3><p>El historial indexado se conectará cuando se despliegue el contrato.<br/>Esta vista no representa un historial vacío de tu wallet.</p></div></section>; }
 createRoot(document.getElementById('root')).render(<App/>);
+
+
 
 
 

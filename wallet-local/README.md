@@ -28,3 +28,9 @@ Validación actual: build, pruebas unitarias y navegación/validación visual lo
 Resumen, recompensas, catálogo de beneficios con filtros y transparencia. La demo permite enviar una participación, simular aprobación/rechazo y consumir 100 puntos ficticios en un canje. Los puntos no son BTN ni USDT; no crean derechos a beneficios. No persisten al recargar y no se transfieren a una wallet. La aprobación doble y el canje repetido se bloquean dentro de esta sesión de demostración.
 
 Las propuestas de descuento SARA IA, materiales y experiencias no son ofertas publicadas. Faltan importes, distribución, presupuesto y reglas de quema. El historial y las operaciones reales siguen sin habilitarse.
+
+## Despliegue confirmado para pruebas
+
+Símbolo BTN; BSC Testnet (97); tesorería y propietario `0x5Ae91FC77d53C7c7Baa4568d178Fb0B824b0A20f`. En Configuración se puede estimar la transacción y solicitar la firma desde esa wallet. Se bloquean otras redes y cuentas. El despliegue requiere BNB de prueba y firma del usuario. Después se conserva el hash localmente y se verifica el recibo y la emisión mediante lecturas en cadena. Preparar la pantalla no significa haber desplegado.
+
+Para regenerar el bytecode tras cambiar el contrato: desde `blockchain/bitnode-token`, ejecutar `node prepare-testnet.mjs` y revisar el diff del artefacto público antes de usarlo.
