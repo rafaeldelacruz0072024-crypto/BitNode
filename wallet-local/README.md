@@ -22,3 +22,9 @@ El contrato no está desplegado. No hay precio, canje, compras, envíos, firma d
 La app no convierte ni modifica balances USDT de BitNode. La futura integración requiere fijar chain ID y contrato oficiales en configuración revisada, reutilizar estos componentes y conectar un indexador con paginación/reorganizaciones y reconciliación. La wallet externa sigue siendo quien firma, con confirmación expresa del usuario.
 
 Validación actual: build, pruebas unitarias y navegación/validación visual local. Sin prueba con wallet real ni transacciones on-chain.
+
+## Centro del token (prototipo local)
+
+Resumen, recompensas, catálogo de beneficios con filtros y transparencia. La demo permite enviar una participación, simular aprobación/rechazo y consumir 100 puntos ficticios en un canje. Los puntos no son BTN ni USDT; no crean derechos a beneficios. No persisten al recargar y no se transfieren a una wallet. La aprobación doble y el canje repetido se bloquean dentro de esta sesión de demostración.
+
+Las propuestas de descuento SARA IA, materiales y experiencias no son ofertas publicadas. Faltan importes, distribución, presupuesto y reglas de quema. El historial y las operaciones reales siguen sin habilitarse.

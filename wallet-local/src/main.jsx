@@ -4,9 +4,10 @@ import { BrowserProvider, Contract } from 'ethers';
 import QRCode from 'qrcode';
 import { ABI, INITIAL_SUPPLY, NETWORKS, displayUnits, tokenMetrics, validateAddress } from './wallet.js';
 import './style.css';
+import { Overview, DemoProgram, Transparency } from './Hub.jsx';
 
 function App() {
-  const [tab, setTab] = useState('Wallet');
+  const [tab, setTab] = useState('Resumen');
   const [account, setAccount] = useState('');
   const [network, setNetwork] = useState(null);
   const [native, setNative] = useState(null);
@@ -82,13 +83,16 @@ function App() {
   }
   const unit = token?.symbol || 'BTN';
   return <div className="shell">
-    <aside><a className="brand" href="#" onClick={e => { e.preventDefault(); setTab('Wallet'); }}><img src="/bitnode-logo.png" alt="BitNode"/></a><div className="workspace">TOKEN WORKSPACE</div>
-      <nav>{[['Wallet','◈'],['Suministro','▥'],['Actividad','↗'],['Configuración','⚙']].map(([label,icon]) => <button key={label} className={tab === label ? 'active' : ''} onClick={() => setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
+    <aside><a className="brand" href="#" onClick={e => { e.preventDefault(); setTab('Resumen'); }}><img src="/bitnode-logo.png" alt="BitNode"/></a><div className="workspace">TOKEN WORKSPACE</div>
+      <nav>{[['Resumen','⌂'],['Wallet','◈'],['Recompensas','✧'],['Beneficios','◇'],['Suministro','▥'],['Transparencia','◎'],['Actividad','↗'],['Configuración','⚙']].map(([label,icon]) => <button key={label} className={tab === label ? 'active' : ''} onClick={() => setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
       <div className="aside-bottom"><span className="status-dot"/> Desarrollo local<p>BitNode BEP-20<br/>Beneficios y recompensas</p></div>
     </aside>
     <main><header><span>BitNode / <b>{tab}</b></span><div><span className="network">● {NETWORKS[network]?.name || 'BEP-20'}</span><button className="connect" disabled={busy} onClick={() => account ? (clear(), setMessage('Wallet desconectada de esta interfaz.')) : load(true)}>{busy ? 'Consultando…' : account ? `${account.slice(0,6)}…${account.slice(-4)} · Salir` : 'Conectar wallet'} ↗</button></div></header>
       <div className="page"><div className="page-title"><div><h1>{tab === 'Wallet' ? 'Mi wallet' : tab}</h1><p>Tu conexión al ecosistema BitNode.</p></div><span className="local-label">LOCAL · SIN CUSTODIA</span></div>
         {message && <div className="notice" role="status">{message}</div>}
+        {tab === 'Resumen' && <Overview token={token} navigate={setTab}/>} 
+        <div hidden={!['Recompensas','Beneficios'].includes(tab)}><DemoProgram view={tab}/></div> 
+        {tab === 'Transparencia' && <Transparency token={token} network={network} address={contractAddress} navigate={setTab}/>} 
         {tab === 'Wallet' && <>
           <div className="top-grid"><section className="balance panel"><div className="section-label">BALANCE DE BITNODE <span>↗</span></div><h2>{token ? displayUnits(token.owned) : account ? 'Por consultar' : 'Sin conectar'}{token && <small> {unit}</small>}</h2><p>{account ? account : 'Conecta tu wallet para consultar tus activos en BNB Chain.'}</p><div className="actions"><button className="primary" disabled={!account || !NETWORKS[network]} onClick={receive}>↓ Recibir</button><button disabled={!account} onClick={copy}>⧉ Copiar dirección</button><button aria-label="Actualizar saldos" disabled={!account || busy} onClick={() => load()}>↻</button></div><div className="balance-footer">{updated ? `Última consulta ${updated}` : 'Las claves permanecen en tu wallet.'}<span>BNB CHAIN ↗</span></div></section>
           <section className="supply-card panel"><div className="section-label">EMISIÓN INICIAL <span>◈</span></div><h2>11,000,000</h2><p>Tokens BitNode · Emisión única</p><div className="supply-divider"/><div className="pending"><span className="status-dot"/>{contractAddress ? 'Contrato configurado localmente' : 'Contrato pendiente de despliegue'}</div><button className="text-button" onClick={() => setTab('Suministro')}>Explorar suministro <span>↗</span></button></section></div>
@@ -107,6 +111,8 @@ function App() {
 function Supply({token}) { return <section className="panel supply-detail"><div className="section-label">SUMINISTRO DEL TOKEN <span>{token ? 'CONSULTADO EN CADENA' : 'PENDIENTE DE CONSULTA'}</span></div><div className="supply-heading"><h3>La quema reduce el suministro.</h3><span>{token ? token.percent + '% quemado' : 'Emisión máxima: 11 millones'}</span></div><div className="supply-bar"><div style={{width:token ? `${100-token.percent}%` : '0%'}}/></div><div className="legend"><span><i/> Suministro total {token ? displayUnits(token.supply) : '—'}</span><span>Quemado {token ? displayUnits(token.burned) : '—'}</span></div></section>; }
 function Activity() { return <section className="panel activity"><div className="section-label">ACTIVIDAD RECIENTE <span>HISTORIAL</span></div><div className="table-head"><span>OPERACIÓN</span><span>MONTO</span><span>ESTADO</span></div><div className="empty"><span>↗</span><h3>Sin movimientos consultados</h3><p>El historial indexado se conectará cuando se despliegue el contrato.<br/>Esta vista no representa un historial vacío de tu wallet.</p></div></section>; }
 createRoot(document.getElementById('root')).render(<App/>);
+
+
 
 
 
