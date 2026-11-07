@@ -168,6 +168,7 @@ export function registerAdminWithdrawalRoutes(app: Express) {
       }));
       let { data: payables, error: payableError } = await admin.client.from("admin_payables")
         .select("id,username,amount,fee,net_amount,wallet,network,status,created_at,reference,display_label,sponsor_id,display_date,queue_after_id")
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (payableError?.code === "42703") {
         const legacy = await admin.client.from("admin_payables")
