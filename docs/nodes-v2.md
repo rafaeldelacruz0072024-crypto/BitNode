@@ -46,7 +46,7 @@ activating the chosen V2 plans. This change does not launch the product.
 - Projected end dates count business days. Actual completion depends on tasks;
   missing tasks can postpone completion under the existing reset/recovery rules.
 - Principal is released once after 10/17/33 validated days.
-- Finite ROI stays in the Wednesday withdrawal bucket, 09:00-14:00 Mexico time.
+- Finite ROI stays in the Wednesday withdrawal bucket, 09:00-12:00 Mexico time.
 - Capital claims, fees, idempotency and reinvestment use the existing routines.
 - Commission rates and funding-origin restrictions are not changed.
 - SARA IA eligibility continues to require an active 21-day node.
