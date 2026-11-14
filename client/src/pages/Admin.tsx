@@ -138,6 +138,7 @@ type NodeControlRow = {
 };
 
 type NodeControlData = {
+  active: NodeControlRow[];
   pendingReset: NodeControlRow[];
   resetLastWeek: NodeControlRow[];
   complying: NodeControlRow[];
@@ -846,6 +847,40 @@ function NodeControlSection() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [releaseMessage, setReleaseMessage] = useState("");
+  const [releasing, setReleasing] = useState(false);
+  const [query, setQuery] = useState("");
+
+  async function releaseCapital(row: NodeControlRow) {
+    const reason = window.prompt(
+      `Cerrar el nodo ${row.id} de ${row.username} y acreditar ${money(row.amount ?? 0)} de capital. Escribe el motivo para confirmar.`,
+    )?.trim();
+    if (reason === undefined) return;
+    if (reason.length < 5 || reason.length > 500) {
+      setReleaseMessage("Escribe un motivo de 5 a 500 caracteres.");
+      return;
+    }
+    setReleasing(true);
+    setReleaseMessage("");
+    try {
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Sesión administrativa requerida.");
+      const response = await fetch("/api/admin/node-control/release-capital", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contractId: row.id, reason }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "No se pudo liberar el capital.");
+      setReleaseMessage(`Capital acreditado a ${row.username}. Nodo cerrado.`);
+      await load();
+    } catch (cause) {
+      setReleaseMessage(cause instanceof Error ? cause.message : "No se pudo liberar el capital.");
+    } finally {
+      setReleasing(false);
+    }
+  }
+
   async function load() {
     setLoading(true); setError("");
     try {
@@ -864,6 +899,7 @@ function NodeControlSection() {
   if (error) return <div className="admin-data-error" role="alert">{error}<button onClick={() => void load()}>Reintentar</button></div>;
   if (!data) return null;
 
+  const activeNodes = (data.active ?? []).filter(row => matchesAdminSearch([row.username, row.id], query));
   const groups: Array<[string, string, NodeControlRow[], string]> = [
     ["Pendientes de reinicio", "El plazo de 24 horas venció con menos de 4 tareas. Se reiniciarán al procesarse el ciclo.", data.pendingReset, "pending"],
     ["Reiniciados en los últimos 7 días", `Reinicios registrados desde ${dateLabel(data.period.started_at)} por incumplimiento de tareas diarias.`, data.resetLastWeek, "reset"],
@@ -884,6 +920,21 @@ function NodeControlSection() {
       <article><span>EN CUMPLIMIENTO</span><strong>{data.totals.complying}</strong></article>
       <article><span>COMPLETADOS</span><strong>{data.totals.completed}</strong></article>
     </div>
+    <article className="admin-card admin-card-full">
+      <div className="card-heading"><div><h2>Capital de nodos activos</h2><p className="config-note">Liberar el capital acredita el principal al saldo del usuario y cierra el nodo.</p></div></div>
+      <label>Buscar usuario o contrato <input value={query} onChange={event => setQuery(event.target.value)} /></label>
+      {releaseMessage && <p role="status">{releaseMessage}</p>}
+      {!activeNodes.length ? <EmptyState title="Sin nodos activos" detail="No hay nodos activos para esta búsqueda." /> : (
+        <DataTable label="Capital de nodos activos">
+          <thead><tr><th>Usuario</th><th>Nodo</th><th>Capital</th><th>Acción</th></tr></thead>
+          <tbody>{activeNodes.map(row => <tr key={row.id}>
+            <td>{row.username}</td><td>{row.plan_name}<small>{row.id}</small></td>
+            <td>{money(row.amount ?? 0)}</td>
+            <td><button type="button" className="admin-refresh" disabled={releasing} onClick={() => void releaseCapital(row)}>Liberar capital</button></td>
+          </tr>)}</tbody>
+        </DataTable>
+      )}
+    </article>
     {groups.map(([title, copy, rows, kind]) => <article className="admin-card admin-card-full" key={title}>
       <div className="card-heading"><div><p className="admin-kicker">TASK CONTROL / {kind.toUpperCase()}</p><h2>{title}</h2><p className="config-note">{copy}</p></div><span className="card-status">{rows.length} registros</span></div>
       {!rows.length ? <EmptyState title="Sin registros" detail="No hay nodos en este estado." /> : <DataTable label={title}><thead><tr><th>Usuario</th><th>Nodo</th><th>Capital</th><th>Jornada</th><th>Tareas</th><th>Fecha límite / evento</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || `${row.contract_id}-${index}`}><td><strong>{row.username}</strong>{row.reason === "missed_24h_window" && <small>Incumplió ventana de 24 h</small>}</td><td>{row.plan_name}<small>{row.contract_id || row.id}</small></td><td>{row.amount == null ? "—" : money(row.amount)}</td><td>{row.cycle_day ?? row.cycle_day_before ?? 0}</td><td>{row.completed_tasks ?? row.completed_tasks_before?.length ?? 0} / 4</td><td>{dateLabel(row.reset_at || row.deadline_at || row.ends_at)}</td></tr>)}</tbody></DataTable>}
