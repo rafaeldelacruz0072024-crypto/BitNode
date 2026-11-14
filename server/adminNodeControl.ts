@@ -46,6 +46,25 @@ export function classifyNodeTaskCycles(contracts: ContractRow[], cycleRows: Cycl
 }
 
 export function registerAdminNodeControlRoutes(app: Express) {
+  app.post("/api/admin/node-control/release-capital", async (req, res) => {
+    const admin = await authenticatedAdmin(req);
+    if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
+    const { contractId, reason } = req.body ?? {};
+    if (typeof contractId !== "string" || !contractId.trim() ||
+        typeof reason !== "string" || reason.trim().length < 5 || reason.trim().length > 500) {
+      return res.status(400).json({ error: "Selecciona un nodo y escribe un motivo de 5 a 500 caracteres." });
+    }
+    const { data, error } = await admin.client.rpc("admin_release_active_node_capital", {
+      p_admin_id: admin.userId,
+      p_contract_id: contractId.trim(),
+      p_reason: reason.trim(),
+    });
+    if (error) return res.status(error.code === "P0001" ? 409 : 503).json({
+      error: error.code === "P0001" ? error.message : "No se pudo liberar el capital.",
+    });
+    return res.json(data);
+  });
+
   app.get("/api/admin/node-control", async (req, res) => {
     const admin = await authenticatedAdmin(req);
     if ("error" in admin) return res.status(admin.status ?? 500).json({ error: admin.error });
@@ -88,6 +107,7 @@ export function registerAdminNodeControlRoutes(app: Express) {
       plan_name: plans.get(contracts.find(contract => contract.id === row.contract_id)?.plan_id || "") || "Nodo",
     }));
     return res.json({
+      active: contracts.filter(contract => contract.status === "active").map(format),
       pendingReset,
       resetLastWeek: resetRows,
       complying,
